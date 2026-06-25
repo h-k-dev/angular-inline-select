@@ -1,0 +1,547 @@
+// =============================================================================
+// angular-inline-text — shared (global) styles
+// =============================================================================
+// These classes target elements that render outside component encapsulation
+// (CDK overlay panels) or projected content, so they must be included globally:
+//
+//   @use 'path/to/angular-inline-select/src/lib/styles/inline-text';
+//
+// Requires the Angular Material system variables (--mat-sys-*) from mat.theme().
+
+// -----------------------------------------------------------------------------
+// ELEMENT: The Input Field
+// -----------------------------------------------------------------------------
+.iusta-editable {
+  border: none;
+  padding: 0;
+  margin: 0;
+  background-color: transparent;
+  text-decoration-color: transparent;
+
+  outline: none;
+  position: relative;
+
+  // content layer sits above ::after (-1) without magic "1"
+  z-index: 0;
+
+  // Fallback width for browsers without field-sizing support
+  width: max-content; // best-effort auto width based on content (where supported)
+  field-sizing: content; // overrides where supported
+  min-width: 0; // keep it usable even if max-content behaves oddly
+  max-width: 100%;
+
+  &:disabled {
+    cursor: default;
+  }
+
+  // M3 Typography: Body Large
+  font-weight: var(--mat-sys-body-large-weight, 400);
+  line-height: var(--mat-sys-body-large-line-height, 1.5);
+  letter-spacing: var(--mat-sys-body-large-tracking, 0.03125rem);
+
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+
+  // ---------------------------------------------------------------------------
+  // Focus state: hide underline immediately (keep your focus sizing)
+  // ---------------------------------------------------------------------------
+  .iusta-editable-wrapper:focus-within &,
+  .iusta-editable-wrapper.is-editing & {
+    color: var(--mat-sys-on-surface);
+    caret-color: var(--mat-sys-primary);
+
+    field-sizing: fixed;
+    width: 100%;
+    max-width: 100%;
+
+    // Helps in flex rows so it can actually take available space
+    flex: 1 1 auto;
+
+    transition:
+      filter var(--iusta-t-fast, 0.28s) var(--iusta-ease-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      opacity var(--iusta-t-fast, 0.28s) var(--iusta-ease-standard, cubic-bezier(0.4, 0, 0.2, 1));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Static Modifier Logic (Overrides field-sizing)
+  // ---------------------------------------------------------------------------
+  .iusta-editable-wrapper--static & {
+    width: 100%;
+    max-width: 100%;
+    field-sizing: fixed;
+    flex: 1 1 auto;
+  }
+
+  // MODIFIER: Truncation
+  &--truncate {
+    display: block;
+    width: 100%;
+    field-sizing: fixed;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // MODIFIER: Persistent (marker class for wrapper's :has() selector)
+  &--persistent {
+    // marker
+  }
+
+  &--filled {
+    color: var(--iusta-editable-color, #428bca);
+  }
+
+  &--empty {
+    --_iusta-editable-empty-opacity: 0.3875;
+
+    color: inherit;
+
+    &:disabled {
+      opacity: 1;
+      -webkit-text-fill-color: currentColor;
+    }
+  }
+
+  &::placeholder {
+    font-style: italic;
+    opacity: var(--_iusta-editable-empty-opacity);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iusta-editable {
+    transition: none;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// BLOCK: Editable Wrapper (The Container)
+// -----------------------------------------------------------------------------
+.iusta-editable-wrapper {
+  // Shared animation tokens (M3-ish)
+  --iusta-editable-editing-background: color-mix(in srgb, var(--iusta-editable-color, #428bca) 5%, transparent);
+  --iusta-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --iusta-ease-emphasized: cubic-bezier(0, 0, 0.2, 1);
+  --iusta-t-fast: 0.2s;
+  --iusta-t-slow: 0.32s;
+
+  --iusta-editable-outline-inset-top-bottom: -0.5rem;
+  --iusta-editable-outline-inset-left-right: -0.75rem;
+
+  --iusta-editable-focus-min: var(--iusta-editable-focus-min-value, 310px);
+  --iusta-editable-shortcut-optical-offset: -1px;
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--iusta-editable-radius, 0.25rem);
+
+  // Create local stacking context so ::after can sit behind content safely
+  isolation: isolate;
+
+  transition:
+    width var(--iusta-t-slow) var(--iusta-ease-standard),
+    flex-grow var(--iusta-t-slow) var(--iusta-ease-standard);
+
+  // ---------------------------------------------------------------------------
+  // SIZING LOGIC
+  // ---------------------------------------------------------------------------
+
+  // 1. Dynamic Behavior (Default): content-sized unless static
+  &:not(&--static) {
+    width: auto;
+    min-width: 4ch;
+    max-width: 100%;
+  }
+
+  // 2. Static Behavior (Modifier): always full width
+  &--static {
+    width: 100%;
+    flex: 1 1 auto;
+  }
+
+  // 3. Active/Editing Behavior (Overrides everything)
+  &:focus-within,
+  &.is-editing {
+    // Always expand to the parent's available width (shell controls max)
+    width: 100%;
+
+    // Lift wrapper cap while editing
+    max-inline-size: 100%;
+
+    // Prefer at least 310px, but never overflow small parents
+    min-inline-size: min(var(--iusta-editable-focus-min), 100%);
+
+    // Helps in flex rows so it can actually take available space
+    flex: 1 1 auto;
+
+    // Focus/active transition: quicker
+    transition:
+      width var(--iusta-t-fast) var(--iusta-ease-emphasized),
+      flex-grow var(--iusta-t-fast) var(--iusta-ease-emphasized);
+
+    z-index: 1001; // Match CDK overlay z-index
+  }
+
+  /**
+   * BEM MODIFIER: Standard grow
+   */
+  &--standard-grow {
+    &:focus-within {
+      width: 100%;
+      max-inline-size: 100%;
+      min-inline-size: min(var(--iusta-editable-focus-min), 100%);
+      flex: 1 1 auto;
+
+      transition:
+        width var(--iusta-t-fast) var(--iusta-ease-emphasized),
+        flex-grow var(--iusta-t-fast) var(--iusta-ease-emphasized);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // SHAPE: visual border/background (pseudo-element)
+  // ---------------------------------------------------------------------------
+  &::after {
+    content: '';
+    position: absolute;
+    inset: var(--iusta-editable-outline-inset-top-bottom) var(--iusta-editable-outline-inset-left-right);
+    pointer-events: none;
+
+    z-index: -1;
+
+    border-bottom: 0.125rem solid var(--iusta-editable-outline-color, var(--iusta-editable-color, #428bca));
+    border-radius: calc(var(--iusta-editable-radius, 0.25rem)) calc(var(--iusta-editable-radius, 0.25rem)) 0 0;
+
+    background: var(--iusta-editable-editing-background);
+  }
+
+  // ---------------------------------------------------------------------------
+  // DEFAULT BEHAVIOR: Fade in on focus (unless persistent)
+  // ---------------------------------------------------------------------------
+  &:not(:has(.iusta-editable--persistent)) {
+    &::after {
+      opacity: 0;
+      transition: none;
+    }
+
+    &:focus-within::after,
+    &.is-editing::after {
+      opacity: 1;
+      transition:
+        opacity 0.18s ease,
+        border-color var(--iusta-t-fast) var(--iusta-ease-emphasized);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // PERSISTENT BEHAVIOR: Always visible, color-only changes
+  // ---------------------------------------------------------------------------
+  &:has(.iusta-editable--persistent) {
+    &::after {
+      opacity: 1;
+
+      transition:
+        border-color var(--iusta-t-fast) var(--iusta-ease-standard),
+        border-width var(--iusta-t-fast) var(--iusta-ease-standard),
+        background-color var(--iusta-t-fast) var(--iusta-ease-standard);
+    }
+
+    &:focus-within::after,
+    &.is-editing::after {
+      transition:
+        border-color var(--iusta-t-fast) var(--iusta-ease-emphasized),
+        border-width var(--iusta-t-fast) var(--iusta-ease-emphasized),
+        background-color var(--iusta-t-fast) var(--iusta-ease-emphasized);
+    }
+  }
+
+  // Shared focus/edit styles (apply to ALL variants)
+  &:focus-within::after,
+  &.is-editing::after {
+    border-bottom-color: var(--mat-sys-primary);
+  }
+
+  // ---------------------------------------------------------------------------
+  // MODIFIER: Outline variant
+  // ---------------------------------------------------------------------------
+  &--outline {
+    &::after {
+      inset: -0.5rem -0.75rem;
+      border: 1px solid var(--iusta-editable-outline-color, var(--iusta-editable-color, #428bca));
+      border-radius: 4px;
+      background: transparent;
+    }
+
+    // Default outline: fade behavior (unless persistent)
+    &:not(:has(.iusta-editable--persistent)) {
+      &::after {
+        opacity: 0;
+        transition: none;
+      }
+
+      &:focus-within::after,
+      &.is-editing::after {
+        opacity: 1;
+
+        transition:
+          opacity var(--iusta-t-fast) var(--iusta-ease-emphasized),
+          border-color var(--iusta-t-fast) var(--iusta-ease-emphasized),
+          border-width var(--iusta-t-fast) var(--iusta-ease-emphasized);
+      }
+    }
+
+    // Persistent outline: always visible, subtle default color
+    &:has(.iusta-editable--persistent) {
+      &::after {
+        opacity: 1;
+        border-color: var(--iusta-editable-outline-color, var(--mat-sys-outline-variant, #c4c7c5));
+
+        transition:
+          border-color var(--iusta-t-fast) var(--iusta-ease-standard),
+          border-width var(--iusta-t-fast) var(--iusta-ease-standard),
+          background-color var(--iusta-t-fast) var(--iusta-ease-standard);
+      }
+    }
+
+    // Shared outline focus/edit styles
+    &:focus-within::after,
+    &.is-editing::after {
+      border-color: var(--mat-sys-primary);
+      background: var(--mat-sys-surface);
+    }
+  }
+
+  &.invalid:focus-within::after {
+    background: var(--mat-sys-surface);
+    border-color: var(--mat-sys-error);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Shortcut action (clear value)
+  // ---------------------------------------------------------------------------
+
+  &__shortcut {
+    align-self: center;
+
+    // Default: hidden on desktop
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+
+    transition:
+      opacity 0.15s var(--iusta-ease-standard),
+      visibility 0.15s var(--iusta-ease-standard);
+  }
+
+  // Reveal on intent (desktop + keyboard)
+  &:hover &__shortcut,
+  &:focus-within &__shortcut {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  // Touch / coarse pointer: always visible
+  @media (hover: none), (pointer: coarse) {
+    &__shortcut {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transition: none;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iusta-editable-wrapper {
+    transition: none;
+  }
+
+  .iusta-editable-wrapper::after {
+    transition: none;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// ELEMENT: Clear button (replacement for the aria-grid icon button)
+// -----------------------------------------------------------------------------
+.iusta-editable-clear {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+
+  display: inline-grid;
+  place-items: center;
+
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0;
+
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mat-sys-error, #dc3545);
+
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in srgb, var(--mat-sys-error, #dc3545) 10%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 1.5px solid var(--mat-sys-error, #dc3545);
+    outline-offset: 1px;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// BLOCK: The Main Overlay Panel content
+// -----------------------------------------------------------------------------
+.editable-panel__inner {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+
+  padding: 8px 12px;
+}
+
+// -----------------------------------------------------------------------------
+// ELEMENT: Actions Row
+// -----------------------------------------------------------------------------
+.editable-panel__inner-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  &--revert {
+    display: flex;
+    align-items: flex-start;
+  }
+
+  &--accept {
+    display: flex;
+    align-items: center;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// ELEMENT: Shared Message (Error / Hint)
+// -----------------------------------------------------------------------------
+.editable-panel__inner-message {
+  width: 100%;
+  word-break: break-word;
+
+  font-family: var(--mat-sys-body-small-font, inherit);
+  font-size: var(--mat-sys-body-small-size, 0.75rem);
+  font-weight: var(--mat-sys-body-small-weight, 400);
+  line-height: var(--mat-sys-body-small-line-height, 1rem);
+  letter-spacing: var(--mat-sys-body-small-tracking, 0.025rem);
+
+  margin-left: -0.15rem;
+  padding-left: 0;
+
+  text-align: left;
+
+  animation: message-enter 0.2s var(--iusta-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
+
+  &--error {
+    color: var(--mat-sys-error, #dc3545);
+  }
+
+  &--warning {
+    color: var(--mat-sys-outline, #6b7280); // neutral warning tone
+  }
+}
+
+@keyframes message-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// BLOCK: Overlay panel + card (rendered in the CDK overlay container)
+// -----------------------------------------------------------------------------
+.iusta-editable-panel {
+  background: transparent;
+
+  // 1. Shared Colors
+  --_surface-color: var(
+    --iusta-sys-dropdown-background-color,
+    var(--mat-autocomplete-background-color, var(--mat-sys-surface-container, #fff))
+  );
+  --_border-color: color-mix(in srgb, var(--iusta-sys-on-surface, #000) 20%, var(--iusta-sys-surface-container, #fff));
+
+  // 2. Shadows
+  --_shadow-def:
+    0.5px 0.5px 1px hsl(0deg 0% 0% / 0.05), 1px 1px 2px hsl(0deg 0% 0% / 0.05), 2px 2px 4px hsl(0deg 0% 0% / 0.05),
+    4px 4px 6px hsl(0deg 0% 0% / 0.04);
+
+  // 3. Animation Defaults (Downwards)
+  --anim-origin: top center;
+  --anim-start-y: -4px;
+
+  // 4. Shape Defaults (Bottom Rounded)
+  --_radius: 0 0 var(--mat-sys-corner-large, 16px) var(--mat-sys-corner-large, 16px);
+  --_border-width: 0 1px 1px 1px; // Top Right Bottom Left
+
+  /* TOP variant: Opens upwards */
+  &.__top {
+    --anim-origin: bottom center;
+    --anim-start-y: 4px;
+
+    // Rounded Top
+    --_radius: var(--mat-sys-corner-large, 16px) var(--mat-sys-corner-large, 16px) 0 0;
+    --_border-width: 1px 1px 0 1px;
+  }
+}
+
+.iusta-editable-card {
+  width: 100%;
+  box-sizing: border-box;
+
+  // Background
+  background-color: var(--_surface-color, var(--mat-sys-surface-container, #fff));
+
+  // Shadow
+  box-shadow: var(--_shadow-def);
+
+  // Borders
+  border-style: solid;
+  border-color: var(--_border-color, var(--mat-sys-outline-variant, #c4c7c5));
+  border-width: var(--_border-width, 1px);
+  border-radius: var(--_radius, 0.5rem);
+}
+
+// -----------------------------------------------------------------------------
+// ANIMATION: overlay panel enter
+// -----------------------------------------------------------------------------
+@keyframes iusta-dynamic-enter {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, var(--anim-start-y, 0), 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.dropdown-animation-enter {
+  transform-origin: var(--anim-origin, top center);
+
+  animation: iusta-dynamic-enter 0.15s cubic-bezier(0.86, 0, 0.14, 1);
+  will-change: opacity, transform;
+}

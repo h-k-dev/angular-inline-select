@@ -1,0 +1,53 @@
+@let previous = this.previous();
+
+<m-editable-wrapper
+  #wrapper
+  (accepted)="accept()"
+  (declined)="localForm().reset(previous)"
+  (detached)="handleDetach()"
+  [appearance]="appearance()"
+  (copied)="handleCopied()"
+>
+  @if (isSingleLine()) {
+    <input
+      #singleLineInput
+      [mEditableOverlayControl]="{ showSignal: showForm }"
+      #overlayControl="editableOverlayControl"
+      [formField]="localForm"
+      [placeholder]="placeholder()"
+      mRestrictCharacters
+      autocomplete="off"
+      [strategy]="restrictionStrategy()"
+    />
+  } @else {
+    <textarea
+      #multiLineInput
+      class="iusta-editable-text-area iusta-editable-text-area--no-manual-resize"
+      mTextareaAutosize
+      #autosize="mTextareaAutosize"
+      (resized)="wrapper.updateOverlayPosition()"
+      [mEditableOverlayControl]="{ showSignal: showForm }"
+      #overlayControl="editableOverlayControl"
+      [formField]="localForm"
+      [placeholder]="placeholder()"
+      rows="1"
+      autocomplete="off"
+      mRestrictCharacters
+      [strategy]="restrictionStrategy()"
+    ></textarea>
+  }
+
+  @if (!localForm().required()) {
+    <button
+      class="iusta-editable-clear iusta-editable-wrapper__shortcut"
+      style="margin-left: 8px"
+      [style.visibility]="isEmpty() ? 'hidden' : 'visible'"
+      aria-label="Clear value"
+      type="button"
+      (mousedown)="$event.preventDefault(); $event.stopPropagation()"
+      (click)="clearValue($event)"
+    >
+      <mat-icon inline aria-hidden="true">close</mat-icon>
+    </button>
+  }
+</m-editable-wrapper>

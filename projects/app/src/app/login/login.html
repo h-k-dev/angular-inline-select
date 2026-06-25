@@ -1,0 +1,19 @@
+<h2 mat-dialog-title>Sign In</h2>
+<mat-dialog-content>
+  <p>Pick a display name — it becomes the toolbar title.</p>
+  <form id="login-form">
+    <angular-inline-text
+      [isSingleLine]="true"
+      [value]="displayName()"
+      (savedModelChange)="displayName.set($event)"
+      placeholder="Your name…"
+      [normalizeValue]="true"
+    />
+  </form>
+</mat-dialog-content>
+
+<mat-dialog-actions class="login-actions">
+  <button class="login-button" mat-flat-button [disabled]="!displayName()" [mat-dialog-close]="displayName()">
+    Sign In
+  </button>
+</mat-dialog-actions>

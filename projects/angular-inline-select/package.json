@@ -1,0 +1,15 @@
+{
+  "name": "angular-inline-select",
+  "version": "0.0.1",
+  "peerDependencies": {
+    "@angular/common": "^22.0.3",
+    "@angular/core": "^22.0.3",
+    "@angular/forms": "^22.0.3",
+    "@angular/cdk": "^22.0.2",
+    "@angular/material": "^22.0.2"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "sideEffects": false
+}

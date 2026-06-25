@@ -1,0 +1,65 @@
+<ng-content />
+
+<ng-template
+  [cdkConnectedOverlay]="overlayConfig()"
+  [cdkConnectedOverlayOpen]="isOpen()"
+  [cdkConnectedOverlayDisableClose]="isDirty()"
+  (overlayOutsideClick)="handleOutsideClick($event)"
+  (detach)="handleDetach()"
+  (attach)="handleAttach()"
+  (backdropClick)="handleBackdropClick()"
+>
+  <div
+    #panel
+    class="iusta-editable-card editable-panel__inner"
+    [animate.enter]="'dropdown-animation-enter'"
+    cdkTrapFocus
+    [cdkTrapFocusAutoCapture]="false"
+    (click)="handleBackdropClick()"
+    (keyup.escape)="handleDecline()"
+    tabindex="0"
+  >
+    @for (error of control().errors(); track error.kind) {
+      <div class="editable-panel__inner-message editable-panel__inner-message--error">
+        {{ error.message ?? 'Invalid value' }}
+      </div>
+    }
+
+    @if (isDirty() && !isInvalid()) {
+      <div class="editable-panel__inner-message editable-panel__inner-message--warning">
+        <mat-icon inline>warning</mat-icon>
+        {{ warningMessage() }}
+      </div>
+    }
+
+    @if (isDirty()) {
+      <div class="editable-panel__inner-actions">
+        <div class="editable-panel__inner-actions--revert">
+          @if (currentValue()) {
+            <button
+              mat-icon-button
+              [style.marginLeft]="'-1rem'"
+              (keydown)="$event.stopPropagation()"
+              (mousedown)="$event.stopPropagation()"
+              type="button"
+              class="editable-panel__inner-copy-btn"
+              aria-label="Copy current value"
+              [disabled]="!currentValue()"
+              (click)="copied.emit()"
+            >
+              <mat-icon>content_copy</mat-icon>
+            </button>
+          }
+        </div>
+
+        <div class="editable-panel__inner-actions--accept">
+          <m-editable-action-buttons
+            (accept)="handleAccept()"
+            (decline)="handleDecline()"
+            [disableAccept]="isInvalid()"
+          />
+        </div>
+      </div>
+    }
+  </div>
+</ng-template>
