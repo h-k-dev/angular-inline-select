@@ -1,0 +1,122 @@
+// =============================================================================
+// Shared demo-page scaffolding: example sections, cards, toggles, event log.
+// @use'd by every playground page — the toolbar/shell styles stay in app.scss.
+// =============================================================================
+
+// The toolbar is ~64px high; the examples subtract it so each one
+// fills the remaining viewport exactly.
+$toolbar-height: 64px;
+
+.example {
+  // Fill exactly the viewport below the sticky toolbar
+  min-height: calc(100svh - #{$toolbar-height});
+  box-sizing: border-box;
+
+  // When jumping via # anchors, land below the sticky toolbar
+  scroll-margin-top: $toolbar-height;
+
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 88px 24px 24px; // extra right padding clears the floating nav
+
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.example__header {
+  h2 {
+    font: var(--mat-sys-headline-medium);
+    margin: 0 0 4px;
+  }
+
+  p {
+    color: var(--mat-sys-on-surface-variant);
+    margin: 0;
+  }
+}
+
+// The body stretches so the example really fills the viewport
+.example__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.example-stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 24px;
+}
+
+.example-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+
+  padding: clamp(16px, 4vw, 48px);
+  border-radius: 0.75rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface-bright);
+
+  // When jumping via # anchors, land below the sticky toolbar
+  scroll-margin-top: $toolbar-height;
+
+  &__title {
+    font: var(--mat-sys-title-medium);
+    margin: 0;
+  }
+}
+
+.form-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.form-toggles__hint {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+  margin: 0;
+}
+
+// Emitted-events console: newest entry on top.
+.event-log {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  padding: 12px;
+  border-radius: 0.5rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface-container);
+}
+
+.event-log__entry {
+  font: var(--mat-sys-body-small);
+  font-family: monospace;
+  color: var(--mat-sys-on-surface-variant);
+
+  // The newest emission is the one being inspected — make it pop.
+  &:first-child {
+    color: var(--mat-sys-on-surface);
+  }
+}
+
+.prose {
+  font: var(--mat-sys-body-large);
+  max-width: 70ch;
+  margin: 0;
+}
+
+.prose-block {
+  display: block;
+  max-width: 70ch;
+}
+
+@media (max-width: 720px) {
+  .example {
+    padding: 16px;
+  }
+}

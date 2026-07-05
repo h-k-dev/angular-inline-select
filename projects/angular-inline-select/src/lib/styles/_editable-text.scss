@@ -1,0 +1,171 @@
+// =============================================================================
+// editable-text-* — the inline TEXT component: in-flow display element and
+// the elevated contenteditable editing surface.
+//
+// Theming contract — every visual property resolves in this order:
+//   var(--editable-text-<token>, var(--mat-sys-<token>, <hardcoded fallback>))
+//
+// Design contract:
+// - The in-flow display element NEVER changes size and, apart from the dashed
+//   underline, looks and flows exactly like the surrounding text. No grow
+//   rules, no measurement — layout shift is impossible by construction.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// HOST: <angular-inline-text>
+// -----------------------------------------------------------------------------
+.editable-text {
+  display: inline;
+}
+
+// -----------------------------------------------------------------------------
+// ELEMENT: in-flow field area (prefix + display + suffix)
+// -----------------------------------------------------------------------------
+.editable-text__field {
+  display: inline;
+
+  transition: opacity 0.15s var(--editable-ease-standard, cubic-bezier(0.4, 0, 0.2, 1));
+
+  // Dimmed as a whole — affixes included — under the scrim while editing.
+  .editable-text--editing & {
+    opacity: var(--editable-text-dim-opacity, 0.35);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// ELEMENT: affix (unit, icon — never part of the draft, aria-hidden)
+// -----------------------------------------------------------------------------
+.editable-text__affix {
+  display: inline;
+  white-space: nowrap;
+  user-select: none;
+
+  color: var(--editable-text-affix-color, var(--mat-sys-on-surface-variant, inherit));
+
+  &--prefix {
+    margin-inline-end: 0.25ch;
+  }
+
+  &--suffix {
+    margin-inline-start: 0.25ch;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// ELEMENT: in-flow display (static committed text)
+// -----------------------------------------------------------------------------
+.editable-text__display {
+  display: inline;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+  outline: none;
+
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+
+  // Per-line dashed underline that stops where the text stops (multiline-safe)
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.0625rem;
+  text-underline-offset: 0.4em;
+  text-decoration-color: var(--editable-text-underline-color, var(--mat-sys-primary, #428bca));
+
+  transition: opacity 0.15s var(--editable-ease-standard, cubic-bezier(0.4, 0, 0.2, 1));
+
+  // Pristine focus affordance: solid underline, nothing moves.
+  &:focus-visible {
+    text-decoration-style: solid;
+    text-decoration-thickness: 0.125rem;
+  }
+
+  &[contenteditable='false'] {
+    cursor: default;
+  }
+
+  // Placeholder for empty content (no ::placeholder on contenteditable)
+  &:empty::before {
+    content: attr(data-placeholder);
+    font-style: italic;
+    opacity: var(--editable-text-placeholder-opacity, 0.3875);
+  }
+
+  &--filled {
+    color: var(--editable-text-color, inherit);
+  }
+
+  // Idle error state — the mat red-underline analogue: the field is invalid
+  // and the field says errors show (touched / save attempt). Color only —
+  // the dashed style stays, so the field still reads as inline-editable.
+  .editable-text--invalid & {
+    text-decoration-color: var(--editable-text-error-color, var(--mat-sys-error, #dc3545));
+  }
+
+  // The dashed affordance rests while the elevated editor is open — the
+  // whole field area dims via `.editable-text__field`.
+  .editable-text--editing & {
+    text-decoration-line: none;
+  }
+
+  // ---------------------------------------------------------------------------
+  // MODIFIER: single-line — never wraps; ellipsizes when the container is
+  // narrower than the content (e.g. fixed-layout table cells).
+  //
+  // `overflow: clip` — never `hidden`: a scroll container (hidden/auto/scroll)
+  // moves an inline-block's baseline to its bottom margin edge, which lifts
+  // the text out of the surrounding line. `clip` keeps the natural text
+  // baseline, so the field sits in running copy exactly like normal
+  // characters. The clip margin keeps the offset dashed underline visible.
+  // ---------------------------------------------------------------------------
+  &--single-line {
+    display: inline-block;
+    min-width: 0;
+    max-width: 100%;
+
+    white-space: nowrap;
+    overflow: clip;
+    overflow-clip-margin: 0.6em;
+    text-overflow: ellipsis;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// ELEMENT: elevated editing surface (inside .editable-panel)
+// -----------------------------------------------------------------------------
+.editable-text__editor {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  outline: none;
+  cursor: text;
+
+  min-height: 1.5em;
+  max-height: 60vh;
+  overflow-y: auto;
+
+  // M3 Typography: Body Large
+  font-weight: var(--mat-sys-body-large-weight, 400);
+  line-height: var(--mat-sys-body-large-line-height, 1.5);
+  letter-spacing: var(--mat-sys-body-large-tracking, 0.03125rem);
+
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--editable-text-editor-color, var(--mat-sys-on-surface, inherit));
+  caret-color: var(--editable-text-caret-color, var(--mat-sys-primary, #428bca));
+
+  &:empty::before {
+    content: attr(data-placeholder);
+    font-style: italic;
+    opacity: var(--editable-text-placeholder-opacity, 0.3875);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Reduced motion
+// -----------------------------------------------------------------------------
+@media (prefers-reduced-motion: reduce) {
+  .editable-text__display {
+    transition: none;
+  }
+}

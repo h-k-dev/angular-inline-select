@@ -1,0 +1,130 @@
+@use '../demo';
+
+/* --- Right floating nav --- */
+
+.floating-nav {
+  position: fixed;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  a {
+    display: block;
+    padding: 8px 14px;
+    border-radius: 999px;
+
+    background: var(--mat-sys-surface-container-high);
+    color: var(--mat-sys-on-surface);
+    border: 1px solid var(--mat-sys-outline-variant);
+
+    font: var(--mat-sys-label-large);
+    text-decoration: none;
+
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--mat-sys-primary-container);
+      color: var(--mat-sys-on-primary-container);
+    }
+  }
+}
+
+/* --- Examples: each fills the viewport --- */
+
+main {
+  display: flex;
+  flex-direction: column;
+
+  // Animate the manual push so the shift is gradual — ResizeObserver fires
+  // on every frame of the transition, not just once.
+  transition: margin-left 0.3s ease;
+
+  // Continuous stress test: keeps the layout shifting while an editable is
+  // open, forcing constant re-measure + overlay reposition.
+  &.oscillate {
+    animation: push-left 2s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes push-left {
+  from {
+    margin-left: 0;
+  }
+  to {
+    margin-left: 320px;
+  }
+}
+
+/* --- Layout shift tester (bottom left) --- */
+
+.shift-controls {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 20;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--mat-sys-surface-container-high);
+  border: 1px solid var(--mat-sys-outline-variant);
+
+  &__label {
+    font: var(--mat-sys-label-large);
+    color: var(--mat-sys-on-surface-variant);
+    padding-right: 4px;
+  }
+}
+
+/* --- Table example: 100 rows, scrolls inside the viewport --- */
+
+.table-scroll {
+  overflow: auto;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 0.75rem;
+  background: var(--mat-sys-surface-bright);
+}
+
+.demo-table {
+  width: 100%;
+
+  // Fixed layout: column widths never re-derive from content, so typing in an
+  // editable can't push columns around. Name ellipsizes, notes wrap in place.
+  table-layout: fixed;
+
+  .mat-column-position {
+    width: 4rem;
+  }
+
+  .mat-column-name {
+    width: 28%;
+  }
+
+  // Room for the editable's focus ring inside cells
+  td {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+}
+
+/* --- Small screens: tuck the nav to the bottom right --- */
+
+@media (max-width: 720px) {
+  .floating-nav {
+    top: auto;
+    bottom: 16px;
+    transform: none;
+    flex-direction: row;
+  }
+}

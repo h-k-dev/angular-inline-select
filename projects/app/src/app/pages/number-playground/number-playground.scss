@@ -1,0 +1,6 @@
+@use '../demo';
+
+// Optical: inline mat-icon affixes sit on the text baseline, not raised.
+mat-icon[inline] {
+  vertical-align: text-bottom;
+}

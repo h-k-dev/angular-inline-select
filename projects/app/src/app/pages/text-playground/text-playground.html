@@ -1,0 +1,162 @@
+<nav class="floating-nav" aria-label="Examples">
+  <a href="#paragraph-example">Paragraph</a>
+  <a href="#form-example">Form</a>
+  <a href="#table-example">Table</a>
+</nav>
+
+<div class="shift-controls" role="group" aria-label="Layout shift tester">
+  <span class="shift-controls__label">Push left</span>
+  <button mat-stroked-button [disabled]="oscillate()" (click)="pushMargin.set(0)">0</button>
+  <button mat-stroked-button [disabled]="oscillate()" (click)="pushMargin.set(160)">160</button>
+  <button mat-stroked-button [disabled]="oscillate()" (click)="pushMargin.set(320)">320</button>
+  <button mat-flat-button (click)="oscillate.update((v) => !v)">
+    {{ oscillate() ? 'Stop' : 'Oscillate' }}
+  </button>
+</div>
+
+<main [class.oscillate]="oscillate()" [style.marginLeft.px]="oscillate() ? null : pushMargin()">
+  <section class="example" id="paragraph-example">
+    <header class="example__header">
+      <h2>Inline text in a paragraph</h2>
+      <p>Single-line and multi-line editables embedded in running copy.</p>
+    </header>
+
+    <div class="example__body example-stack">
+      <div class="example-card">
+        <p class="prose">
+          The
+          <angular-inline-text
+            [isSingleLine]="true"
+            [value]="projectName()"
+            (savedModelChange)="projectName.set($event)"
+            placeholder="project name"
+            [normalizeValue]="true"
+          />
+          project ships editable text right inside running copy — no form fields, no mode switches. The value below is
+          a multi-line editable that autosizes while you type:
+        </p>
+
+        <angular-inline-text
+          class="prose-block"
+          [value]="summary()"
+          [normalizeValue]="summaryNormalize()"
+          (savedModelChange)="summary.set($event)"
+          placeholder="Add a description…"
+        />
+
+        <div class="form-toggles" role="group" aria-label="Normalization playground">
+          <button mat-stroked-button (click)="summaryNormalize.update((v) => !v)">
+            Normalize: {{ summaryNormalize() ? 'on' : 'off' }}
+          </button>
+          <button mat-stroked-button (click)="resetParagraphExample()">Reset example</button>
+        </div>
+
+        <p class="form-toggles__hint">
+          Normalization trims edge whitespace on save — interior spaces and line breaks always survive. Add spaces
+          around the summary, save with both settings, and reset to try again.
+        </p>
+      </div>
+
+      <div class="example-card" id="form-example">
+        <h3 class="example-card__title">Signal form + validation</h3>
+        <p class="prose">
+          Vessel
+          <angular-inline-text
+            [formField]="vesselForm.callsign"
+            [isSingleLine]="true"
+            placeholder="callsign"
+            [normalizeValue]="true"
+            ariaLabel="Vessel callsign"
+            (savedModelChange)="logEmit('savedModelChange', $event)"
+            (reverted)="logEmit('reverted', $event)"
+            (saved)="logEmit('saved', $event)"
+          >
+            <span editable-error>
+              @if (callsignMissing()) {
+                A callsign is required.
+              } @else if (callsignPatternBroken()) {
+                Callsigns look like “AUR-01” — two to four capital letters, a dash, then digits.
+              }
+            </span>
+          </angular-inline-text>
+          reports through a signal form. The error texts are projected via <code>editable-error</code> — the mat-error
+          split: the template decides what errors say, the field decides when they show. Validation follows the field
+          live while Discard rolls it back — model:
+          <code>{{ vesselModel().callsign || '∅' }}</code
+          >.
+        </p>
+
+        <div class="form-toggles" role="group" aria-label="Field state">
+          <button mat-stroked-button (click)="fieldRequired.update((v) => !v)">
+            Required: {{ fieldRequired() ? 'on' : 'off' }}
+          </button>
+          <button mat-stroked-button (click)="fieldReadonly.update((v) => !v)">
+            Readonly: {{ fieldReadonly() ? 'on' : 'off' }}
+          </button>
+          <button mat-stroked-button (click)="fieldDisabled.update((v) => !v)">
+            Disabled: {{ fieldDisabled() ? 'on' : 'off' }}
+          </button>
+          <button mat-stroked-button (click)="vesselForm().markAsTouched()">Mark touched</button>
+          <button mat-stroked-button (click)="vesselForm.callsign().reset()">Reset field</button>
+        </div>
+
+        <p class="form-toggles__hint">
+          The clear bubble only appears on hover while the field is optional — required fields must not be emptied in
+          one click. Clearing while optional and then toggling Required back on shows the idle error underline; “Mark
+          touched” reveals errors with no interaction, and “Reset field” silently discards an open draft back to the
+          baseline.
+        </p>
+
+        @if (emittedEvents().length > 0) {
+          <div class="event-log" role="log" aria-label="Emitted events">
+            @for (entry of emittedEvents(); track $index) {
+              <code class="event-log__entry">{{ entry }}</code>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="example" id="table-example">
+    <header class="example__header">
+      <h2>Inline text in a table</h2>
+      <p>
+        100 rows of mixed lengths, every name and note editable in place — long names ellipsize in
+        their fixed column, long notes wrap. The table scrolls inside the viewport.
+      </p>
+    </header>
+
+    <div class="example__body table-scroll">
+      <table mat-table [dataSource]="rows" class="demo-table">
+        <ng-container matColumnDef="position">
+          <th mat-header-cell *matHeaderCellDef>#</th>
+          <td mat-cell *matCellDef="let row">{{ row.position }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef>Name</th>
+          <td mat-cell *matCellDef="let row">
+            <angular-inline-text
+              [isSingleLine]="true"
+              [value]="row.name"
+              (savedModelChange)="row.name = $event"
+              placeholder="Name"
+              [normalizeValue]="true"
+            />
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="notes">
+          <th mat-header-cell *matHeaderCellDef>Notes</th>
+          <td mat-cell *matCellDef="let row">
+            <angular-inline-text [value]="row.notes" (savedModelChange)="row.notes = $event" placeholder="Add notes…" />
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+      </table>
+    </div>
+  </section>
+</main>

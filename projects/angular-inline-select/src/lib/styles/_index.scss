@@ -1,0 +1,13 @@
+// =============================================================================
+// angular-inline-select — global styles entry point
+//
+// Rendered outside component encapsulation (panel, scrim and bubble live in
+// the CDK overlay container), so consumers include this once, globally:
+//
+//   @use '<path-to-lib>/src/lib/styles';
+//
+// - editable       → reusable chrome (panel, scrim, bubble), --editable-* tokens
+// - editable-text  → the text component surfaces, --editable-text-* tokens
+// =============================================================================
+@use './editable';
+@use './editable-text';

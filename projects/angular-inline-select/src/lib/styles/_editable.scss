@@ -1,0 +1,200 @@
+// -----------------------------------------------------------------------------
+// SCRIM: subtle backdrop while elevated (CDK applies the fade transition)
+// -----------------------------------------------------------------------------
+.editable-scrim {
+  background: var(--editable-scrim-color, oklch(from var(--mat-sys-surface) l c h / 0.55));
+}
+
+// -----------------------------------------------------------------------------
+// PANEL: the elevated editor card
+// -----------------------------------------------------------------------------
+.editable-panel {
+  // The readable measure — a constant. No measurement, no observers.
+  width: var(
+    --editable-panel-width,
+    min(60ch, calc(100dvw - 2 * var(--mat-sys-inner-spacing, 16px)))
+  );
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--mat-sys-form-field-gap, calc(var(--spacing, 0.25rem) * 2));
+
+  // Coupled to the connected-position offsets in angular-inline-text.ts,
+  // which resolve `--mat-sys-inner-spacing` at elevation time and cancel this
+  // padding so the panel's first text line sits optically on the origin text.
+  padding: calc(var(--mat-sys-inner-spacing, 16px) * 0.75) var(--mat-sys-inner-spacing, 16px);
+
+  background: var(--editable-panel-background, var(--mat-sys-surface-container, #fff));
+  border: 1px solid
+    var(
+      --editable-panel-border-color,
+      color-mix(
+        in oklch,
+        var(--mat-sys-on-surface, #000) 20%,
+        var(--mat-sys-surface-container, #fff)
+      )
+    );
+  border-radius: var(--editable-panel-radius, var(--mat-sys-corner-large, var(--radius, 0.625rem)));
+
+  box-shadow: var(
+    --editable-panel-shadow,
+    0.5px 0.5px 1px hsl(0deg 0% 0% / 0.05),
+    1px 1px 2px hsl(0deg 0% 0% / 0.05),
+    2px 2px 4px hsl(0deg 0% 0% / 0.05),
+    4px 4px 6px hsl(0deg 0% 0% / 0.04)
+  );
+}
+
+// -----------------------------------------------------------------------------
+// ELEMENT: editor line (prefix + editor + suffix, editor takes the measure)
+// -----------------------------------------------------------------------------
+.editable-panel__line {
+  display: flex;
+  align-items: baseline;
+
+  .editable-text__editor {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  // In the panel the affixes sit beside the editor, not in running copy.
+  .editable-text__affix {
+    flex: 0 0 auto;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// ELEMENTS: panel footer (messages + actions)
+// -----------------------------------------------------------------------------
+.editable-panel__footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mat-sys-form-field-gap, calc(var(--spacing, 0.25rem) * 2));
+}
+
+.editable-panel__message {
+  word-break: break-word;
+
+  font-family: var(--mat-sys-body-small-font, inherit);
+  font-size: var(--mat-sys-body-small-size, 0.75rem);
+  font-weight: var(--mat-sys-body-small-weight, 400);
+  line-height: var(--mat-sys-body-small-line-height, 1rem);
+  letter-spacing: var(--mat-sys-body-small-tracking, 0.025rem);
+
+  animation: editable-message-enter 0.2s var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
+
+  &--error {
+    color: var(--editable-message-error-color, var(--mat-sys-error, #dc3545));
+  }
+
+  &--hint {
+    color: var(--editable-message-hint-color, var(--mat-sys-outline, #6b7280));
+  }
+}
+
+// -----------------------------------------------------------------------------
+// PROJECTED ERROR: parent-provided error/hint content (the mat-error
+// analogue), projected into the panel footer via `<span editable-error>`.
+// -----------------------------------------------------------------------------
+.editable-panel [editable-error] {
+  display: block;
+  word-break: break-word;
+
+  font-family: var(--editable-error-font, var(--mat-sys-body-small-font, inherit));
+  font-size: var(--editable-error-size, var(--mat-sys-body-small-size, 0.75rem));
+  font-weight: var(--editable-error-weight, var(--mat-sys-body-small-weight, 400));
+  line-height: var(--editable-error-line-height, var(--mat-sys-body-small-line-height, 1rem));
+  letter-spacing: var(--editable-error-tracking, var(--mat-sys-body-small-tracking, 0.025rem));
+
+  color: var(--editable-error-color, var(--mat-sys-error, #dc3545));
+
+  animation: editable-message-enter 0.2s var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
+
+  // Empty when the parent's @if gates the content away — collapse entirely.
+  &:empty {
+    display: none;
+  }
+}
+
+@keyframes editable-message-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Action buttons are intentionally unstyled: they will become injectable
+// templates. Only their placement is owned here — trailing, side by side.
+.editable-panel__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--mat-sys-form-field-gap, calc(var(--spacing, 0.25rem) * 2));
+}
+
+// -----------------------------------------------------------------------------
+// ANIMATION: panel lift
+// -----------------------------------------------------------------------------
+@keyframes editable-panel-lift {
+  0% {
+    opacity: 0;
+    transform: scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.editable-panel-enter {
+  transform-origin: top left;
+  animation: editable-panel-lift 0.15s var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
+  will-change: opacity, transform;
+}
+
+// -----------------------------------------------------------------------------
+// BUBBLE: floating quick actions beside the field (CDK overlay container)
+// -----------------------------------------------------------------------------
+.editable-bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--mat-sys-inner-spacing, 16px) / 4);
+  padding: calc(var(--mat-sys-inner-spacing, 16px) / 4);
+
+  background: var(--editable-bubble-background, var(--mat-sys-surface, #fff));
+  border: 1px solid var(--editable-bubble-border-color, var(--mat-sys-outline-variant, #c4c7c5));
+  border-radius: var(
+    --editable-bubble-radius,
+    var(--mat-sys-corner-small, calc(var(--radius, 0.625rem) * 0.6))
+  );
+
+  animation: editable-bubble-enter 0.15s var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
+}
+
+@keyframes editable-bubble-enter {
+  from {
+    opacity: 0;
+    transform: translateY(2px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Reduced motion
+// -----------------------------------------------------------------------------
+@media (prefers-reduced-motion: reduce) {
+  .editable-panel-enter,
+  .editable-panel__message,
+  .editable-panel [editable-error],
+  .editable-bubble {
+    animation: none;
+  }
+}

@@ -1,0 +1,25 @@
+<!--
+  Composition, not inheritance: the inner text control owns the session
+  machinery; this component only translates at the contract boundary.
+-->
+<angular-inline-text
+  [value]="innerValue()"
+  (valueChange)="handleInnerValue($event)"
+  [(editing)]="innerEditing"
+  [isSingleLine]="true"
+  [normalizeValue]="true"
+  [errors]="innerErrors()"
+  [invalid]="invalid()"
+  [disabled]="disabled()"
+  [readonly]="readonly()"
+  [required]="required()"
+  [touched]="touched()"
+  [placeholder]="placeholder()"
+  [ariaLabel]="ariaLabel()"
+  [prefixTemplate]="prefixTpl()"
+  [suffixTemplate]="suffixTpl()"
+  (touch)="touch.emit()"
+  (saved)="handleInnerSaved($event)"
+>
+  <ng-content select="[editable-error]" ngProjectAs="[editable-error]" />
+</angular-inline-text>

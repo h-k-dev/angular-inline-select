@@ -3,9 +3,10 @@
 // components according to the Material 3 design spec.
 @use '@angular/material' as mat;
 
-// Shared (global) styles for angular-inline-text: editable field, wrapper and
-// overlay panel classes that render outside component encapsulation.
-@use '../../angular-inline-select/src/lib/styles/inline-text';
+// Shared (global) styles for angular-inline-select: editable chrome (panel,
+// scrim, bubble) and the text component surfaces — they render in the CDK
+// overlay container, outside component encapsulation.
+@use '../../angular-inline-select/src/lib/styles';
 
 html {
   height: 100%;

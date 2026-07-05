@@ -1,0 +1,99 @@
+<main>
+  <section class="example" id="number-example">
+    <header class="example__header">
+      <h2>Inline number</h2>
+      <p>
+        <code>angular-inline-number</code> composes the text control — no inheritance — and translates numbers at the
+        contract boundary through a swappable parse/format codec.
+      </p>
+    </header>
+
+    <div class="example__body example-stack">
+      <div class="example-card">
+        <h3 class="example-card__title">Standalone [(value)]</h3>
+        <p class="prose">
+          The vessel carries
+          <angular-inline-number [(value)]="crewCount" placeholder="crew" ariaLabel="Crew count" />
+          crew members. The binding accepts a string or a number on the way in; every keystroke parses live and every
+          commit is a number — model: <code>{{ crewCount() ?? '∅' }}</code> (<code>{{ crewCountType() }}</code
+          >).
+        </p>
+      </div>
+
+      <div class="example-card" id="price-example">
+        <h3 class="example-card__title">Price + suffix</h3>
+        <p class="prose">
+          Unit price:
+          <angular-inline-number
+            [(value)]="price"
+            [format]="priceFormat"
+            placeholder="price"
+            ariaLabel="Unit price in euros"
+          >
+            <ng-template editableSuffix><mat-icon inline>euro</mat-icon></ng-template>
+          </angular-inline-number>
+          per crate. The codec formats two decimals, the <code>editableSuffix</code> template renders with the field
+          in both states — idle in the copy and inside the elevated editor — and is never part of the draft. The unit
+          lives in <code>ariaLabel</code>; the icon is decorative — model: <code>{{ price() ?? '∅' }}</code
+          >.
+        </p>
+      </div>
+
+      <div class="example-card" id="number-form-example">
+        <h3 class="example-card__title">Signal form + numeric validation</h3>
+        <p class="prose">
+          Cargo tonnage:
+          <angular-inline-number
+            #tonnage
+            [formField]="cargoForm.tonnage"
+            placeholder="tonnage"
+            ariaLabel="Cargo tonnage"
+            (savedModelChange)="logEmit('savedModelChange', $event)"
+            (saved)="logEmit('saved', $event)"
+          >
+            <span editable-error>
+              @if (tonnage.parseFailed()) {
+                Enter a number — digits, optionally a dot for decimals.
+              } @else if (tonnageMissing()) {
+                A tonnage is required.
+              } @else if (tonnageOutOfRange()) {
+                Tonnage must be between 0 and 500.
+              }
+            </span>
+          </angular-inline-number>
+          tons. Schema: <code>required</code>, <code>min(0)</code>, <code>max(500)</code> — validated live against the
+          parsed number while you type; the parse gate blocks drafts that aren't numbers at all — model:
+          <code>{{ cargoModel().tonnage ?? '∅' }}</code
+          >.
+        </p>
+
+        <div class="form-toggles" role="group" aria-label="Field state">
+          <button mat-stroked-button (click)="fieldRequired.update((v) => !v)">
+            Required: {{ fieldRequired() ? 'on' : 'off' }}
+          </button>
+          <button mat-stroked-button (click)="fieldReadonly.update((v) => !v)">
+            Readonly: {{ fieldReadonly() ? 'on' : 'off' }}
+          </button>
+          <button mat-stroked-button (click)="fieldDisabled.update((v) => !v)">
+            Disabled: {{ fieldDisabled() ? 'on' : 'off' }}
+          </button>
+          <button mat-stroked-button (click)="cargoForm().markAsTouched()">Mark touched</button>
+          <button mat-stroked-button (click)="cargoForm.tonnage().reset()">Reset field</button>
+        </div>
+
+        <p class="form-toggles__hint">
+          Try “600” (max), “-5” (min), “12abc” (parse gate — Save stays blocked), or clear while optional and toggle
+          Required back on for the idle error underline. Empty commits <code>null</code>, never a fake zero.
+        </p>
+
+        @if (emittedEvents().length > 0) {
+          <div class="event-log" role="log" aria-label="Emitted events">
+            @for (entry of emittedEvents(); track $index) {
+              <code class="event-log__entry">{{ entry }}</code>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+</main>

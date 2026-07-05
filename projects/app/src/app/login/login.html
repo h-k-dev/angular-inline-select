@@ -3,17 +3,22 @@
   <p>Pick a display name — it becomes the toolbar title.</p>
   <form id="login-form">
     <angular-inline-text
-      [isSingleLine]="true"
       [value]="displayName()"
       (savedModelChange)="displayName.set($event)"
       placeholder="Your name…"
       [normalizeValue]="true"
+      cdkInitialFocus
     />
   </form>
 </mat-dialog-content>
 
 <mat-dialog-actions class="login-actions">
-  <button class="login-button" mat-flat-button [disabled]="!displayName()" [mat-dialog-close]="displayName()">
+  <button
+    class="login-button"
+    mat-flat-button
+    [disabled]="!displayName()"
+    [mat-dialog-close]="displayName()"
+  >
     Sign In
   </button>
 </mat-dialog-actions>

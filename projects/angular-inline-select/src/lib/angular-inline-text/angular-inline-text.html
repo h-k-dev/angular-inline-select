@@ -1,53 +1,159 @@
-@let previous = this.previous();
-
-<m-editable-wrapper
-  #wrapper
-  (accepted)="accept()"
-  (declined)="localForm().reset(previous)"
-  (detached)="handleDetach()"
-  [appearance]="appearance()"
-  (copied)="handleCopied()"
->
-  @if (isSingleLine()) {
-    <input
-      #singleLineInput
-      [mEditableOverlayControl]="{ showSignal: showForm }"
-      #overlayControl="editableOverlayControl"
-      [formField]="localForm"
-      [placeholder]="placeholder()"
-      mRestrictCharacters
-      autocomplete="off"
-      [strategy]="restrictionStrategy()"
-    />
-  } @else {
-    <textarea
-      #multiLineInput
-      class="iusta-editable-text-area iusta-editable-text-area--no-manual-resize"
-      mTextareaAutosize
-      #autosize="mTextareaAutosize"
-      (resized)="wrapper.updateOverlayPosition()"
-      [mEditableOverlayControl]="{ showSignal: showForm }"
-      #overlayControl="editableOverlayControl"
-      [formField]="localForm"
-      [placeholder]="placeholder()"
-      rows="1"
-      autocomplete="off"
-      mRestrictCharacters
-      [strategy]="restrictionStrategy()"
-    ></textarea>
+<!--
+  In-flow field: affixes + the static committed text. The display is focusable
+  and caret-able, but every mutation is intercepted — the page never reflows
+  while typing. Affixes live outside the contenteditable: never part of the
+  draft, never reachable by the caret.
+-->
+<span #fieldArea class="editable-text__field">
+  @if (prefixTpl(); as prefix) {
+    <span class="editable-text__affix editable-text__affix--prefix" aria-hidden="true">
+      <ng-container *ngTemplateOutlet="prefix" />
+    </span>
   }
+  <span
+    #display
+    role="textbox"
+    class="editable-text__display"
+    [class.editable-text__display--single-line]="isSingleLine()"
+    [class.editable-text__display--filled]="!isEmpty()"
+    [textContent]="displayText()"
+    [attr.contenteditable]="editableMode()"
+    [attr.aria-multiline]="!isSingleLine()"
+    [attr.aria-label]="ariaLabel() ?? placeholder()"
+    [attr.aria-required]="required() || null"
+    [attr.aria-readonly]="readonly() || null"
+    [attr.aria-invalid]="isEmpty() && required() ? null : errorsVisible() || null"
+    [attr.aria-expanded]="editing()"
+    [attr.data-placeholder]="placeholder()"
+    spellcheck="false"
+    (beforeinput)="interceptBeforeInput($event)"
+    (paste)="interceptPaste($event)"
+    (compositionstart)="handleCompositionStart()"
+  ></span>
+  @if (suffixTpl(); as suffix) {
+    <span class="editable-text__affix editable-text__affix--suffix" aria-hidden="true">
+      <ng-container *ngTemplateOutlet="suffix" />
+    </span>
+  }
+</span>
 
-  @if (!localForm().required()) {
+<!-- Elevated editor: fixed readable measure, scrim underneath, page untouched. -->
+<ng-template
+  [cdkConnectedOverlay]="panelOverlayConfig()"
+  [cdkConnectedOverlayOpen]="editing()"
+  (attach)="handlePanelAttach()"
+  (detach)="handlePanelDetach()"
+  (backdropClick)="handleScrimClick()"
+>
+  <div
+    class="editable-panel"
+    [animate.enter]="'editable-panel-enter'"
+    cdkTrapFocus
+    [cdkTrapFocusAutoCapture]="false"
+    (keydown.escape)="cancel()"
+    (keydown.control.enter)="handleCtrlEnter()"
+  >
+    <div class="editable-panel__line">
+      @if (prefixTpl(); as prefix) {
+        <span class="editable-text__affix editable-text__affix--prefix" aria-hidden="true">
+          <ng-container *ngTemplateOutlet="prefix" />
+        </span>
+      }
+      <span
+        #editor
+        role="textbox"
+        class="editable-text__editor"
+        [attr.contenteditable]="editableMode()"
+        [attr.aria-multiline]="!isSingleLine()"
+        [attr.aria-label]="ariaLabel() ?? placeholder()"
+        [attr.aria-required]="required() || null"
+        [attr.aria-invalid]="errorsVisible() || null"
+        [attr.aria-describedby]="panelId + '-messages'"
+        [attr.data-placeholder]="placeholder()"
+        (input)="handleEditorInput()"
+        (paste)="handleEditorPaste($event)"
+        (keydown.enter)="handleEnterKey($event)"
+        (keydown.shift.enter)="handleEnterKey($event)"
+      ></span>
+      @if (suffixTpl(); as suffix) {
+        <span class="editable-text__affix editable-text__affix--suffix" aria-hidden="true">
+          <ng-container *ngTemplateOutlet="suffix" />
+        </span>
+      }
+    </div>
+
+    <div class="editable-panel__footer" [attr.id]="panelId + '-messages'">
+      <!--
+        Mat-form-field rule: the field decides WHEN errors show (touched or a
+        save attempt), the consumer only decides WHAT they say. Projected
+        [editable-error] content takes over the slot; otherwise the field
+        renders the message-carrying contract errors itself.
+      -->
+      @if (errorsVisible()) {
+        <!-- The [editable-error] element must be a direct, unconditional child
+             on the consumer side (control-flow blocks don't match attribute selectors). -->
+        <ng-content select="[editable-error]">
+          @for (error of errorMessages(); track error.kind) {
+            <div class="editable-panel__message editable-panel__message--error">
+              {{ error.message }}
+            </div>
+          }
+        </ng-content>
+      }
+
+      @if (isDirty() && !errorsVisible()) {
+        <div class="editable-panel__message editable-panel__message--hint">Unsaved changes</div>
+      }
+
+      <div class="editable-panel__actions">
+        <button
+          type="button"
+          class="action action-reset"
+          (mousedown)="$event.preventDefault(); $event.stopPropagation()"
+          (click)="cancel()"
+          aria-label="Discard"
+        >
+          Discard
+        </button>
+
+        <!-- Stays clickable while invalid: a save attempt reveals the errors (mat submit semantics) -->
+        <button
+          type="button"
+          class="action action-save"
+          (mousedown)="$event.preventDefault(); $event.stopPropagation()"
+          (click)="accept()"
+          aria-label="Save"
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  </div>
+</ng-template>
+
+<!-- Floating action bubble: CDK overlay, so it can never be clipped by table cells or dialogs -->
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="bubbleOrigin()"
+  [cdkConnectedOverlayOpen]="showBubble()"
+  [cdkConnectedOverlayPositions]="bubblePositions"
+  [cdkConnectedOverlayViewportMargin]="8"
+>
+  <div
+    class="editable-bubble"
+    role="toolbar"
+    aria-label="Field actions"
+    (mouseenter)="openBubble()"
+    (mouseleave)="scheduleCloseBubble()"
+  >
     <button
-      class="iusta-editable-clear iusta-editable-wrapper__shortcut"
-      style="margin-left: 8px"
-      [style.visibility]="isEmpty() ? 'hidden' : 'visible'"
+      class="editable-clear"
       aria-label="Clear value"
       type="button"
       (mousedown)="$event.preventDefault(); $event.stopPropagation()"
       (click)="clearValue($event)"
     >
-      <mat-icon inline aria-hidden="true">close</mat-icon>
+      clear
     </button>
-  }
-</m-editable-wrapper>
+  </div>
+</ng-template>
