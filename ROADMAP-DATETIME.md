@@ -125,7 +125,33 @@ where supported (Chrome/Edge/Android), falling back to focusing the input
 idle, it commits immediately (the flag-picker decision). `step` forwards to
 the native input's granularity.
 
-## T2 — Calendar overlay picker (required, not optional)
+## T2 — Calendar overlay picker — SHIPPED (142 tests)
+
+Shipped as specced below with TWO deliberate deviations, both documented
+precedents of this codebase:
+- **Hand-rolled APG grid, not `@angular/aria` Grid** (the budgeted
+  fallback): the popup spends most of its life as an UNFOCUSED mirror of
+  the typed draft, and the month-transition focus dance is exactly where
+  the aria pattern needs `_pattern.gridBehavior` internals-poking — the
+  slash-menu reasoning again. `AngularInlineCalendar` owns the full APG
+  keyboard map (arrows across month edges, PageUp/Down ±1 month,
+  Shift/Ctrl ±12, Home/End month bounds, Enter/Space, Escape) with roving
+  tabindex; focus restores post-render ONLY when the grid held it.
+- **`Intl` instead of `DateAdapter`** (the phone lesson, zero bundled
+  bytes): month label, weekday names, first-day-of-week via
+  `Intl.Locale.getWeekInfo()` (Monday fallback). iusta's Luxon adapter
+  stays at ITS boundary.
+
+The integration (the phone flag-picker pattern): 📅 suffix affix + CDK
+overlay; **open-on-edit without stealing focus** — the grid mirrors the
+parseable draft per keystroke (month + pending cell), unparseable drafts
+leave the last valid day standing; ArrowDown hands focus to the grid
+unless the slash menu consumed it; Escape and picks refocus the field
+BEFORE the popup collapses; a pick while editing REWRITES the live draft
+(session stays open), idle it COMMITS immediately. `showCalendar`
+input(true) opts out.
+
+## T2 — original spec (executed above)
 
 The typed draft stays primary; the calendar is the pointer affordance —
 trigger = 📅 suffix affix opening a CDK overlay (the phone flag-picker

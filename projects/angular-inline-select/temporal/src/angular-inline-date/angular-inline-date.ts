@@ -1,15 +1,22 @@
 import {
   Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
   inject,
   TemplateRef,
+  effect,
   input,
   model,
   output,
   computed,
   linkedSignal,
+  signal,
   viewChild,
   contentChild,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { OverlayModule, type ConnectedPosition } from '@angular/cdk/overlay';
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 import {
@@ -34,6 +41,7 @@ import {
 } from './date-codec';
 import { INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 import { dayToDbEntry, dayEndToDbEntry, localDayOf } from '../datetime/db-entry';
+import { AngularInlineCalendar } from './inline-calendar';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineDateSaved {
@@ -60,16 +68,37 @@ export interface InlineDateSaved {
  */
 @Component({
   selector: 'angular-inline-date',
-  imports: [AngularInlineText],
+  imports: [AngularInlineText, AngularInlineCalendar, OverlayModule, NgTemplateOutlet],
   templateUrl: './angular-inline-date.html',
   styles: `
     :host { display: inline; }
     .date-command__label { flex: 1 1 auto; text-transform: capitalize; }
     .date-command__value { color: var(--mat-sys-on-surface-variant, #5f6368); font-variant-numeric: tabular-nums; }
     .date-command__empty { padding: 4px 8px; color: var(--mat-sys-on-surface-variant, #5f6368); }
+    .date-trigger {
+      font: inherit;
+      line-height: 1;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      border-radius: var(--mat-sys-corner-extra-small, 0.25rem);
+    }
+    .date-trigger:focus-visible {
+      outline: 2px solid var(--mat-sys-primary, #4285f4);
+      outline-offset: 2px;
+    }
+    .date-calendar {
+      background: var(--mat-sys-surface-container, #fff);
+      border-radius: var(--mat-sys-corner-medium, 0.75rem);
+      box-shadow:
+        0 2px 6px rgba(0, 0, 0, 0.15),
+        0 8px 24px rgba(0, 0, 0, 0.12);
+    }
   `,
   host: {
     '[style.display]': 'hidden() ? "none" : null',
+    '(keydown)': 'handleHostKeydown($event)',
   },
 })
 export class AngularInlineDate implements FormValueControl<InlineDateValue> {
@@ -111,6 +140,9 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   /** Enables the `/today`-style slash menu. */
   showDateMenu = input(true);
 
+  /** The 📅 calendar affordance: suffix trigger + the open-on-edit popup. */
+  showCalendar = input(true);
+
   /** Reference clock — injectable for tests; a fresh `Date` per read otherwise. */
   now = input<() => Date>(() => new Date());
 
@@ -122,7 +154,14 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   private contentSuffix = contentChild(EditableSuffix);
 
   protected prefixTpl = computed(() => this.prefixTemplate() ?? this.contentPrefix()?.templateRef);
-  protected suffixTpl = computed(() => this.suffixTemplate() ?? this.contentSuffix()?.templateRef);
+  protected consumerSuffixTpl = computed(
+    () => this.suffixTemplate() ?? this.contentSuffix()?.templateRef,
+  );
+
+  /** Whether the suffix slot has anything to render (consumer affix or 📅). */
+  protected suffixActive = computed(
+    () => this.consumerSuffixTpl() !== undefined || this.showCalendar(),
+  );
 
 
   /**
@@ -249,6 +288,99 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
     const { start, end } = this.internalRange();
     return end === null || end === start ? { start: day, end: day } : { start: day, end };
+  }
+
+  // ---------------------------------------------------------------------------
+  // T2 — the calendar overlay: the typed draft stays primary, the grid is
+  // the pointer affordance. Opens on edit-session start WITHOUT stealing
+  // focus (the caret stays in the field); while open it is a live MIRROR
+  // of the draft — a parseable draft moves the month and marks the day per
+  // keystroke, draft → grid only, until a pick flows back.
+  // ---------------------------------------------------------------------------
+  #injector = inject(Injector);
+  #host = inject(ElementRef<HTMLElement>);
+
+  protected calendar = viewChild(AngularInlineCalendar);
+
+  protected calendarOpen = signal(false);
+  protected calendarOrigin = computed(() => this.#host.nativeElement);
+
+  protected calendarPositions: ConnectedPosition[] = [
+    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
+    { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
+  ];
+
+  /** The grid's pending day: the parsed draft, else the committed start. */
+  protected pendingDay = computed<IsoDate | null>(() => {
+    const draft = this.parsedDraft();
+    return typeof draft === 'string' ? draft : this.internalRange().start;
+  });
+
+  /** Open-on-edit (decided in T2): the session starting opens the popup. */
+  #openOnEdit = effect(() => {
+    if (!this.showCalendar()) return;
+    this.calendarOpen.set(this.editing());
+  });
+
+  /** The 📅 affix: the idle pointer path (a pick commits immediately). */
+  protected toggleCalendar(event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (this.calendarOpen()) {
+      this.closeCalendar();
+      return;
+    }
+
+    this.calendarOpen.set(true);
+    // Explicitly invoked — the grid may take focus (unlike open-on-edit).
+    afterNextRender(() => this.calendar()?.focusGrid(), { injector: this.#injector });
+  }
+
+  protected closeCalendar() {
+    this.calendarOpen.set(false);
+  }
+
+  /**
+   * ArrowDown in the field hands focus to the grid (the combobox-datepicker
+   * shape) — unless the slash menu already consumed the key.
+   */
+  protected handleHostKeydown(event: KeyboardEvent) {
+    if (event.key !== 'ArrowDown' || event.defaultPrevented) return;
+    if (!this.calendarOpen() || !this.editing()) return;
+
+    event.preventDefault();
+    this.calendar()?.focusGrid();
+  }
+
+  /**
+   * A pick flows back: while editing it rewrites the live draft (field
+   * refocused synchronously BEFORE the popup collapses); idle it commits
+   * immediately (the flag-picker convention).
+   */
+  protected pickDate(day: IsoDate) {
+    if (this.editing()) {
+      this.inner().focus();
+      this.handleInnerValue(day);
+      this.calendarOpen.set(false);
+      return;
+    }
+
+    const value = this.#daysToDbShape(this.#mergeDay(day), this.shape());
+    if (!dateValuesEqual(value, this.value())) {
+      this.value.set(value);
+      this.savedModelChange.emit(value);
+      this.saved.emit({ value, changed: true });
+    }
+
+    this.calendarOpen.set(false);
+    this.inner().focus();
+  }
+
+  /** Escape in the grid: refocus the field FIRST, then collapse the popup. */
+  protected escapeCalendar() {
+    this.inner().focus();
+    this.calendarOpen.set(false);
   }
 
   /** Live channel: readable drafts flow into the model as DB entries, in the bound shape. */

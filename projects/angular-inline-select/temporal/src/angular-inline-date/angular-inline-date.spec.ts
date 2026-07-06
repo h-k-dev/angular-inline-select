@@ -387,3 +387,105 @@ describe('AngularInlineDate shape-echo', () => {
     expect(h.host.sessions).toEqual([{ value: { start: db('2026-12-24') }, changed: true }]);
   });
 });
+
+// =============================================================================
+// T2 — the calendar overlay (open-on-edit, draft mirror, pick paths)
+// =============================================================================
+
+describe('AngularInlineDate calendar (T2)', () => {
+  const calendar = () => document.querySelector('angular-inline-calendar');
+  const grid = () => calendar()?.querySelector('.cal__grid') as HTMLElement | null;
+  const activeCell = () => calendar()?.querySelector('[data-active]');
+
+  it('opens on edit-session start WITHOUT stealing focus and mirrors the draft', async () => {
+    const h = setup();
+    await typeText(h, '24.12.2026');
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(calendar()).not.toBeNull();
+    // The caret stays in the field — the grid never takes focus on open.
+    expect(calendar()!.contains(document.activeElement)).toBe(false);
+    // The grid mirrors the parseable draft per keystroke.
+    expect(activeCell()?.getAttribute('data-day')).toBe('2026-12-24');
+    expect(calendar()!.querySelector('.cal__label')?.textContent).toContain('December');
+  });
+
+  it('an unparseable draft leaves the last valid day standing', async () => {
+    const h = setup();
+    await typeText(h, '24.12.2026');
+    await typeText(h, 'garbage');
+    h.fixture.detectChanges();
+
+    expect(activeCell()?.getAttribute('data-day')).toBe('2026-12-24');
+  });
+
+  it('a pick while editing rewrites the live draft and closes the popup', async () => {
+    const h = setup();
+    await typeText(h, '12.5.2026');
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    const cell = calendar()!.querySelector('[data-day="2026-05-15"]') as HTMLElement;
+    cell.click();
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(h.host.field().value()).toBe(db('2026-05-15')); // live channel followed
+    expect(calendar()).toBeNull(); // popup collapsed
+    expect(h.editor()).not.toBeNull(); // session still open
+  });
+
+  it('keyboard navigation crosses month edges (the transition dance)', async () => {
+    const h = setup();
+    await typeText(h, '31.5.2026');
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    grid()!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }),
+    );
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(activeCell()?.getAttribute('data-day')).toBe('2026-06-01');
+    expect(calendar()!.querySelector('.cal__label')?.textContent).toContain('June');
+  });
+
+  it('Escape in the grid collapses the popup and keeps the session open', async () => {
+    const h = setup();
+    await typeText(h, '12.5.2026');
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    grid()!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    h.fixture.detectChanges();
+
+    expect(calendar()).toBeNull();
+    expect(h.editor()).not.toBeNull();
+  });
+
+  it('idle: the 📅 affix opens the grid and a pick COMMITS immediately', async () => {
+    const h = setup();
+
+    const trigger = h.fixture.nativeElement.querySelector('.date-trigger') as HTMLElement;
+    trigger.click();
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(calendar()).not.toBeNull();
+    expect(activeCell()?.getAttribute('data-day')).toBe('2026-05-12'); // the committed day
+
+    (calendar()!.querySelector('[data-day="2026-05-20"]') as HTMLElement).click();
+    h.fixture.detectChanges();
+
+    expect(h.host.saved).toEqual([db('2026-05-20')]);
+    expect(h.host.sessions).toEqual([{ value: db('2026-05-20'), changed: true }]);
+    expect(calendar()).toBeNull();
+  });
+});

@@ -26,6 +26,28 @@
 </ng-template>
 
 <!--
+  The suffix slot: the consumer's affix or the 📅 calendar trigger (the
+  phone flag-picker analogue — a pointer affordance, never part of the
+  draft).
+-->
+<ng-template #suffixTpl>
+  @if (consumerSuffixTpl(); as consumer) {
+    <ng-container [ngTemplateOutlet]="consumer" />
+  } @else if (showCalendar()) {
+    <button
+      type="button"
+      class="date-trigger"
+      aria-label="Open calendar"
+      [attr.aria-expanded]="calendarOpen()"
+      (mousedown)="$event.preventDefault()"
+      (click)="toggleCalendar($event)"
+    >
+      📅
+    </button>
+  }
+</ng-template>
+
+<!--
   Composition, not inheritance: the inner text control owns the session
   machinery; this component translates ISO dates ↔ typed drafts at the
   contract boundary.
@@ -45,7 +67,7 @@
   [placeholder]="placeholder()"
   [ariaLabel]="ariaLabel()"
   [prefixTemplate]="prefixTpl()"
-  [suffixTemplate]="suffixTpl()"
+  [suffixTemplate]="suffixActive() ? suffixTpl : undefined"
   [hintTemplate]="preview() ? previewTpl : undefined"
   [menuTemplate]="showDateMenu() ? dateMenu : undefined"
   (touch)="touch.emit()"
@@ -53,3 +75,29 @@
 >
   <ng-content select="[editable-error]" ngProjectAs="[editable-error]" />
 </angular-inline-text>
+
+<!--
+  T2 — the calendar overlay. Open-on-edit NEVER steals focus (the grid is
+  a live mirror of the draft); ArrowDown hands focus over; Escape and
+  picks refocus the field BEFORE the popup collapses.
+-->
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="calendarOrigin()"
+  [cdkConnectedOverlayOpen]="calendarOpen()"
+  [cdkConnectedOverlayPositions]="calendarPositions"
+  [cdkConnectedOverlayViewportMargin]="8"
+  (overlayOutsideClick)="closeCalendar()"
+  (detach)="closeCalendar()"
+>
+  <div class="date-calendar" role="dialog" aria-label="Calendar">
+    <angular-inline-calendar
+      [activeDay]="pendingDay()"
+      [selectedDay]="internalRange().start"
+      [locale]="locale()"
+      [now]="now()"
+      (picked)="pickDate($event)"
+      (escaped)="escapeCalendar()"
+    />
+  </div>
+</ng-template>
