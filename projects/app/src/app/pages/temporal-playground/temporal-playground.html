@@ -137,6 +137,97 @@
         </div>
       </div>
 
+      <div class="example-card" id="date-range-example">
+        <h3 class="example-card__title">Date range — the binding shape IS the mode</h3>
+        <p class="prose">
+          The SAME date control, bound with <code>{{ '{' }} start, end {{ '}' }}</code> — the shape-echo turns it
+          ranged and echoes commits in that shape: <code>start</code> = local <code>startOf('day')</code>,
+          <code>end</code> = <code>endOf('day')</code>. Typing a day moves the start and keeps the distinct end
+          (the two-field ranged UI + calendar drag arrive with T2/T5).
+        </p>
+
+        <table class="model-table">
+          <thead>
+            <tr>
+              <th scope="col">Field</th>
+              <th scope="col">Display (local)</th>
+              <th scope="col">Model (UTC, SQL-friendly)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Vacation</th>
+              <td>
+                <angular-inline-date
+                  [formField]="dateRangeForm.vacation"
+                  [ranged]="true"
+                  [locale]="dateLocale()"
+                  ariaLabel="Vacation dates"
+                  (savedModelChange)="logEmit('vacation.savedModelChange', $event)"
+                />
+              </td>
+              <td>
+                <code>{{ dateRangeModel().vacation?.start ?? '∅' }}</code>
+                →
+                <code>{{ dateRangeModel().vacation?.end ?? '∅' }}</code>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div
+        class="example-card"
+        id="time-range-example"
+        dateTimeRangeGroup
+        #shiftGroup="dateTimeRangeGroup"
+        [formField]="shiftForm"
+        (savedModelChange)="logEmit('shift.savedModelChange', $event)"
+      >
+        <h3 class="example-card__title">Time range — two time leaves, {{ '{' }} start, end {{ '}' }}</h3>
+        <p class="prose">
+          The same <code>DateTimeRangeGroup</code> with ONLY <code>rangeStart</code>/<code>rangeEnd</code> registered
+          — no day, no duration leaf. The model binds <code>{{ '{' }} start, end {{ '}' }}</code> and the shape-echo
+          never grows a duration key. Overnight seed: the end wears the
+          <code>+{{ shiftGroup.endDayOffset() }}</code> badge; a typed end is wall-clock intent (at-or-before the
+          start rolls next-day, overflow hours like “25:15” type the over by hand).
+        </p>
+
+        <table class="model-table">
+          <thead>
+            <tr>
+              <th scope="col">Field</th>
+              <th scope="col">Display (local)</th>
+              <th scope="col">Model (UTC, SQL-friendly)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Shift starts</th>
+              <td>
+                <angular-inline-time
+                  rangeStart
+                  [locale]="militaryLocale()"
+                  ariaLabel="Shift start in 24-hour time"
+                />
+              </td>
+              <td><code>{{ shiftModel()?.start ?? '∅' }}</code></td>
+            </tr>
+            <tr>
+              <th scope="row">Shift ends</th>
+              <td>
+                <angular-inline-time
+                  rangeEnd
+                  [locale]="militaryLocale()"
+                  ariaLabel="Shift end in 24-hour time"
+                />
+              </td>
+              <td><code>{{ shiftModel()?.end ?? '∅' }}</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <div
         class="example-card"
         id="quartet-example"

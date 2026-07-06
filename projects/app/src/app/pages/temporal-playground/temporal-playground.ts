@@ -23,8 +23,10 @@ import {
   RangeLength,
   composeDbEntry,
   dayToDbEntry,
+  dayEndToDbEntry,
   type DurationFormat,
   type TemporalRangeValue,
+  type IsoDateRange,
 } from 'angular-inline-select/temporal';
 
 @Component({
@@ -81,6 +83,26 @@ export class TemporalPlayground {
   protected durationFormat = signal<DurationFormat>('h:mm');
   protected durationModel = signal<{ estimate: number | null }>({ estimate: 5400 });
   protected durationForm = form(this.durationModel);
+
+  // ---------------------------------------------------------------------------
+  // Date range — shape-echo: the OBJECT binding turns the ONE date control
+  // ranged; model start = startOf('day'), end = endOf('day') in UTC.
+  // ---------------------------------------------------------------------------
+  protected dateRangeModel = signal<{ vacation: IsoDateRange | null }>({
+    vacation: { start: dayToDbEntry('2026-07-21'), end: dayEndToDbEntry('2026-07-24') },
+  });
+  protected dateRangeForm = form(this.dateRangeModel);
+
+  // ---------------------------------------------------------------------------
+  // Time range — the group with ONLY rangeStart/rangeEnd registered; the
+  // model binds {start, end} WITHOUT a duration key (shape-echoed away).
+  // Seeded overnight: the end instant is next-day, so it wears the +1 badge.
+  // ---------------------------------------------------------------------------
+  protected shiftModel = signal<TemporalRangeValue | null>({
+    start: composeDbEntry('2026-07-21', '22:00'),
+    end: composeDbEntry('2026-07-22', '01:30'),
+  });
+  protected shiftForm = form(this.shiftModel);
 
   // ---------------------------------------------------------------------------
   // The quartet — T5b: the GROUP is the form control. ONE field, the domain
