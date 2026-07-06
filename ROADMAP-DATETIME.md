@@ -177,9 +177,31 @@ derives `errorState = (field invalid || local invalid) && touched`. Plan:
 **Sandbox setup exists:** the demo's sign-in dialog carries the UNLINKED
 trio — date of birth, a military-time field (24 h via the `en-u-hc-h23`
 locale extension, zero codec changes) and a duration — as the fixture the
-group directive will be developed against. (The dialog is dynamically
+group directive will be developed against; it grows into the maximal
+date-range + time-range + duration composition below. (The dialog is dynamically
 imported: it carries the phone metadata AND the temporal entry point, so
 a static import would drag both into main — it did, until it didn't.)
+
+**The destination (decided): the maximal group is date range + time range
++ duration.** The trio is only the reduced form — the full composition a
+consumer can wire up is start day | end day | start time | end time |
+duration, all speaking to each other: one range of datetimes decomposed
+into five inline fields. Everything below scales to that shape.
+
+- **Day-overflow badge on the end time.** When the composed end datetime
+  lands on a later calendar day than the start (22:00 → 06:00 = next
+  day), the end-time field renders a `+1`-style badge — the airline
+  arrival-time pattern (`+2`, `+n` for multi-day). It is an ADORNMENT:
+  a suffix affix outside the contenteditable (caret-proof,
+  parser-invisible, described via aria), DERIVED by the group from the
+  date + time fields — never part of the draft and never encoded in the
+  `'HH:mm'` value. When no date fields participate (a pure time range),
+  the badge still applies with wall-clock semantics: an end at or before
+  the start reads as next-day.
+- The badge REFRAMES the ordering invariant: `end >= start` applies to
+  the composed DATETIMES, not to the time fields in isolation — a
+  wall-clock end earlier than the start is legal exactly when the day
+  offset covers it, and the badge is what makes that legibly so.
 
 The particular UX, verbatim requirements:
 - **Two separate editing fields** for start and end — never one combined
@@ -206,7 +228,10 @@ range in its single `value`. No group needed for date-only ranges. The
 `DateTimeRangeGroup` directive survives with a narrower job: linking
 SEPARATE controls (a date control + time controls + a duration control)
 when a consumer composes them — still via DI, still owning the invariants:
-- `end >= start` (violations = errors on the offending field, mat split);
+- `end >= start` over the COMPOSED datetimes (violations = errors on the
+  offending field, mat split; a wall-clock-earlier end covered by the day
+  badge is NOT a violation);
+- the day-overflow badge on the end-time field (derived, see above);
 - `duration = end − start`; editing duration moves `end`;
 - day edits shift both sides preserving wall-clock times;
 - a full ISO datetime pasted anywhere decomposes into the group;
