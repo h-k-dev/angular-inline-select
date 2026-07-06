@@ -68,15 +68,19 @@ export class TemporalPlayground {
   );
 
   // ---------------------------------------------------------------------------
-  // Time — wall-clock string, native OS picker
+  // Time — form-driven: the model is a full UTC instant carrying its day
   // ---------------------------------------------------------------------------
-  protected startsAt = signal<string | null>(composeDbEntry('2026-07-20', '09:30'));
+  protected timeModel = signal<{ starts: string | null }>({
+    starts: composeDbEntry('2026-07-20', '09:30'),
+  });
+  protected timeForm = form(this.timeModel);
 
   // ---------------------------------------------------------------------------
-  // Duration — standalone [(value)] in seconds
+  // Duration — form-driven: the model is seconds
   // ---------------------------------------------------------------------------
   protected durationFormat = signal<DurationFormat>('h:mm');
-  protected estimate = signal<number | null>(5400);
+  protected durationModel = signal<{ estimate: number | null }>({ estimate: 5400 });
+  protected durationForm = form(this.durationModel);
 
   // ---------------------------------------------------------------------------
   // The quartet — T5b: the GROUP is the form control. ONE field, the domain

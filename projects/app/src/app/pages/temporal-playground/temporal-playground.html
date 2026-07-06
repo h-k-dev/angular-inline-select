@@ -3,39 +3,54 @@
     <header class="example__header">
       <h2>Inline temporal editables</h2>
       <p>
-        The temporal family — codec compositions over the text core, same styling, same session semantics. Dates are
-        ISO strings (the E.164 of calendars), times are 24&nbsp;h <code>HH:mm</code> wall-clock strings, durations are
-        seconds. All interpret the draft live instead of reformatting it.
+        The temporal family — codec compositions over the text core, same styling, same session semantics. There is a
+        difference between what the user SEES and what is BEHIND it: displays are local readings, models are UTC ISO
+        DB entries (<code>datetime.toUTC().toISO()</code>, SQL-friendly) — durations plain seconds. All fields are
+        driven by <code>[formField]</code> and interpret the draft live instead of reformatting it.
       </p>
     </header>
 
     <div class="example__body example-stack">
       <div class="example-card" id="date-example">
-        <h3 class="example-card__title">Date — typed drafts + /today slash menu</h3>
+        <h3 class="example-card__title">Date — what the user sees vs the model</h3>
         <p class="prose">
-          Deadline:
-          <angular-inline-date
-            #due
-            [formField]="deadlineForm.due"
-            [locale]="dateLocale()"
-            ariaLabel="Deadline date"
-            (savedModelChange)="logEmit('savedModelChange', $event)"
-            (saved)="logEmit('saved', $event)"
-          >
-            <span editable-error>
-              @if (due.parseFailed()) {
-                That doesn’t read as a date — try “24.12.2026”, “24.12.” or “2026-12-24”.
-              } @else if (dueMissing()) {
-                A deadline is required.
-              }
-            </span>
-          </angular-inline-date>
-          — type “24.12.” (year auto-completes), an ISO date, or “/” for
-          <code>/today</code>, <code>/tomorrow</code> and the next weekdays — labels localized via
-          <code>Intl</code>, matching German and English alike. The preview reads the draft back in full — model:
-          <code>{{ deadlineModel().due ?? '∅' }}</code
-          >.
+          One <code>[formField]</code>. Type “24.12.” (year auto-completes), an ISO date, or “/” for
+          <code>/today</code>, <code>/tomorrow</code> and the next weekdays (labels via <code>Intl</code>). The model
+          behind the local calendar day is the UTC ISO DB entry of its local <code>startOf('day')</code>.
         </p>
+
+        <table class="model-table">
+          <thead>
+            <tr>
+              <th scope="col">Field</th>
+              <th scope="col">Display (local)</th>
+              <th scope="col">Model (UTC, SQL-friendly)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Deadline</th>
+              <td>
+                <angular-inline-date
+                  #due
+                  [formField]="deadlineForm.due"
+                  [locale]="dateLocale()"
+                  ariaLabel="Deadline date"
+                  (savedModelChange)="logEmit('deadline.savedModelChange', $event)"
+                >
+                  <span editable-error>
+                    @if (due.parseFailed()) {
+                      That doesn’t read as a date — try “24.12.2026”, “24.12.” or “2026-12-24”.
+                    } @else if (dueMissing()) {
+                      A deadline is required.
+                    }
+                  </span>
+                </angular-inline-date>
+              </td>
+              <td><code>{{ deadlineModel().due ?? '∅' }}</code></td>
+            </tr>
+          </tbody>
+        </table>
 
         <div class="form-toggles" role="group" aria-label="Date field state">
           <button mat-stroked-button (click)="fieldRequired.update((v) => !v)">
@@ -47,47 +62,72 @@
           <button mat-stroked-button (click)="deadlineForm().markAsTouched()">Mark touched</button>
           <button mat-stroked-button (click)="deadlineForm.due().reset()">Reset field</button>
         </div>
-
-        <p class="form-toggles__hint">
-          The calendar-overlay picker (same pattern as the phone’s flag picker) is deliberately left open for
-          sandboxing — see the roadmap notes.
-        </p>
       </div>
 
       <div class="example-card" id="time-example">
-        <h3 class="example-card__title">Time — typed drafts + the OS picker</h3>
+        <h3 class="example-card__title">Time — what the user sees vs the model</h3>
         <p class="prose">
-          Starts at:
-          <angular-inline-time
-            [(value)]="startsAt"
-            [locale]="dateLocale()"
-            ariaLabel="Start time"
-            (savedModelChange)="logEmit('savedModelChange', $event)"
-            (saved)="logEmit('saved', $event)"
-          />
-          — type “930”, “9” or “21:05”; the 🕐 opens the platform’s own time picker (wheels on mobile). Canonical
-          value is 24 h <code>HH:mm</code>, display follows the locale toggle above — model:
-          <code>{{ startsAt() ?? '∅' }}</code
-          >.
+          One <code>[formField]</code>. Type “930”, “9”, “21:05” — or overflow hours (“24:30” reads as next-day
+          00:30); the 🕐 opens the platform’s own picker. The local wall-clock display hides a FULL UTC instant that
+          carries its own day.
         </p>
+
+        <table class="model-table">
+          <thead>
+            <tr>
+              <th scope="col">Field</th>
+              <th scope="col">Display (local)</th>
+              <th scope="col">Model (UTC, SQL-friendly)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Starts at</th>
+              <td>
+                <angular-inline-time
+                  [formField]="timeForm.starts"
+                  [locale]="dateLocale()"
+                  ariaLabel="Start time"
+                  (savedModelChange)="logEmit('starts.savedModelChange', $event)"
+                />
+              </td>
+              <td><code>{{ timeModel().starts ?? '∅' }}</code></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <div class="example-card" id="duration-example">
-        <h3 class="example-card__title">Duration — seconds in, clock out</h3>
+        <h3 class="example-card__title">Duration — what the user sees vs the model</h3>
         <p class="prose">
-          Estimated effort:
-          <angular-inline-duration
-            [(value)]="estimate"
-            [durationFormat]="durationFormat()"
-            [step]="60"
-            ariaLabel="Estimated effort"
-            (savedModelChange)="logEmit('savedModelChange', $event)"
-            (saved)="logEmit('saved', $event)"
-          />
-          — type “2:15”, “135” (minutes), or “1h 30m”; commits snap to whole minutes and round-trip the codec.
-          Model (seconds): <code>{{ estimate() ?? '∅' }}</code
-          >.
+          One <code>[formField]</code>. Type “2:15”, “135” (minutes), or “1h 30m”; commits snap to whole minutes and
+          round-trip the codec. The model is always plain seconds.
         </p>
+
+        <table class="model-table">
+          <thead>
+            <tr>
+              <th scope="col">Field</th>
+              <th scope="col">Display (local)</th>
+              <th scope="col">Model (seconds)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Estimated effort</th>
+              <td>
+                <angular-inline-duration
+                  [formField]="durationForm.estimate"
+                  [durationFormat]="durationFormat()"
+                  [step]="60"
+                  ariaLabel="Estimated effort"
+                  (savedModelChange)="logEmit('estimate.savedModelChange', $event)"
+                />
+              </td>
+              <td><code>{{ durationModel().estimate ?? '∅' }}s</code></td>
+            </tr>
+          </tbody>
+        </table>
 
         <div class="form-toggles" role="group" aria-label="Duration format">
           <button mat-stroked-button (click)="durationFormat.set('h:mm')">h:mm</button>
@@ -112,7 +152,7 @@
           UNBOUND surfaces the group feeds — <em>Stay</em> is a rendering of <code>start</code>'s date part:
         </p>
 
-        <table class="quartet-table">
+        <table class="model-table">
           <thead>
             <tr>
               <th scope="col">Field</th>

@@ -1,7 +1,7 @@
 @use '../demo';
 
 // Display-vs-model table: what the user sees | the DB entry behind it.
-.quartet-table {
+.model-table {
   width: 100%;
   border-collapse: collapse;
   font: var(--mat-sys-body-medium);
