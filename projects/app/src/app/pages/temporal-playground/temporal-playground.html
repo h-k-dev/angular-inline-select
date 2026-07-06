@@ -1,10 +1,11 @@
 <main>
   <section class="example" id="temporal-example">
     <header class="example__header">
-      <h2>Inline date &amp; duration</h2>
+      <h2>Inline temporal editables</h2>
       <p>
-        Two more codec compositions over the text core — same styling, same session semantics. Dates are ISO strings
-        (the E.164 of calendars), durations are seconds. Both interpret the draft live instead of reformatting it.
+        The temporal family — codec compositions over the text core, same styling, same session semantics. Dates are
+        ISO strings (the E.164 of calendars), times are 24&nbsp;h <code>HH:mm</code> wall-clock strings, durations are
+        seconds. All interpret the draft live instead of reformatting it.
       </p>
     </header>
 
@@ -94,6 +95,46 @@
           <button mat-stroked-button (click)="durationFormat.set('mm:ss')">mm:ss</button>
           <span class="form-toggles__hint">current: {{ durationFormat() }}</span>
         </div>
+      </div>
+
+      <div class="example-card" id="trio-example">
+        <h3 class="example-card__title">The trio — day · start · length (unlinked, the T5 fixture)</h3>
+        <p class="prose">
+          Workshop on
+          <angular-inline-date
+            [formField]="workshopForm.day"
+            [locale]="dateLocale()"
+            ariaLabel="Workshop day"
+            (saved)="logEmit('trio.day saved', $event)"
+          />
+          starting at
+          <angular-inline-time
+            [formField]="workshopForm.starts"
+            [locale]="militaryLocale()"
+            ariaLabel="Workshop start in 24-hour time"
+            (saved)="logEmit('trio.starts saved', $event)"
+          />
+          for
+          <angular-inline-duration
+            [formField]="workshopForm.length"
+            durationFormat="h:mm"
+            [step]="60"
+            ariaLabel="Workshop length"
+            (saved)="logEmit('trio.length saved', $event)"
+          />
+          — one signal form, three temporal fields, start in military time (24&nbsp;h via the
+          <code>hc-h23</code> locale extension). Model:
+          <code
+            >{{ workshopModel().day ?? '∅' }} · {{ workshopModel().starts ?? '∅' }} ·
+            {{ workshopModel().length ?? '∅' }}s</code
+          >.
+        </p>
+
+        <p class="form-toggles__hint">
+          Deliberately NOT linked yet — this is the fixture T5's <code>DateTimeRangeGroup</code> grows on: date range +
+          time range + duration speaking to each other, the end time wearing a <code>+1</code> day badge when it
+          crosses midnight (the airline arrival pattern). See ROADMAP-DATETIME.
+        </p>
       </div>
 
       @if (emittedEvents().length > 0) {

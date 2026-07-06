@@ -65,6 +65,29 @@ export class TemporalPlayground {
   protected durationFormat = signal<DurationFormat>('h:mm');
   protected estimate = signal<number | null>(5400);
 
+  // ---------------------------------------------------------------------------
+  // The trio — one signal form, three temporal fields, deliberately UNLINKED:
+  // the T5 DateTimeRangeGroup fixture (day/start/end/duration speaking to
+  // each other; end times get a +1 day badge when they cross midnight).
+  // ---------------------------------------------------------------------------
+  protected workshopModel = signal<{
+    /** ISO `'yyyy-MM-dd'`. */
+    day: string | null;
+    /** `'HH:mm'` — shown in 24 h via the `hc-h23` locale extension. */
+    starts: string | null;
+    /** Seconds. */
+    length: number | null;
+  }>({
+    day: '2026-07-21',
+    starts: '14:00',
+    length: 5400,
+  });
+
+  protected workshopForm = form(this.workshopModel);
+
+  /** The page's locale toggle, pinned to 24 h — military time survives `en`. */
+  protected militaryLocale = computed(() => `${this.dateLocale()}-u-hc-h23`);
+
   // Event console: newest first.
   protected emittedEvents = signal<string[]>([]);
 
