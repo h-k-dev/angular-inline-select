@@ -18,7 +18,6 @@ import { MatDialog } from '@angular/material/dialog';
 
 // Components
 import { AngularInlineText } from '../../../angular-inline-select/src/lib/angular-inline-text/angular-inline-text';
-import { Login } from './login/login';
 
 /**
  * The shell: sticky toolbar (editable title, page navigation, theme, login)
@@ -59,7 +58,11 @@ export class App {
   // ---------------------------------------------------------------------------
   // Login
   // ---------------------------------------------------------------------------
-  protected openLoginDialog() {
+  // Lazy like the pages: the dialog carries the phone engine (metadata) and
+  // the temporal trio — statically importing it would drag both into main.
+  protected async openLoginDialog() {
+    const { Login } = await import('./login/login');
+
     const ref = this.#dialog.open(Login, {
       width: 'min(60ch, 100dvw)',
       height: 'min(60dvh, 100dvh)',

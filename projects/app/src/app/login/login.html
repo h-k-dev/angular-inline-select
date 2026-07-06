@@ -68,6 +68,35 @@
         }
       </span>
     </angular-inline-phone>
+
+    <!--
+      The temporal trio — date, time, duration side by side, deliberately
+      NOT bound to each other yet: the T5 DateTimeRangeGroup will link
+      fields exactly like these (day/start/end/duration).
+    -->
+    <span class="login-form__label">Date of birth</span>
+    <angular-inline-date
+      [formField]="signInForm.dateOfBirth"
+      placeholder="Your birthday…"
+      ariaLabel="Date of birth"
+    />
+
+    <span class="login-form__label">Day starts</span>
+    <angular-inline-time
+      [formField]="signInForm.dayStart"
+      locale="en-u-hc-h23"
+      placeholder="Military time…"
+      ariaLabel="Day start in 24-hour time"
+    />
+
+    <span class="login-form__label">Focus time</span>
+    <angular-inline-duration
+      [formField]="signInForm.focusTime"
+      durationFormat="h:mm"
+      [step]="60"
+      placeholder="Hours per day…"
+      ariaLabel="Daily focus time"
+    />
   </form>
 </mat-dialog-content>
 

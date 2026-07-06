@@ -174,6 +174,13 @@ derives `errorState = (field invalid || local invalid) && touched`. Plan:
 
 ## T5 — Range & linked fields ("they speak to each other")
 
+**Sandbox setup exists:** the demo's sign-in dialog carries the UNLINKED
+trio — date of birth, a military-time field (24 h via the `en-u-hc-h23`
+locale extension, zero codec changes) and a duration — as the fixture the
+group directive will be developed against. (The dialog is dynamically
+imported: it carries the phone metadata AND the temporal entry point, so
+a static import would drag both into main — it did, until it didn't.)
+
 The particular UX, verbatim requirements:
 - **Two separate editing fields** for start and end — never one combined
   range input.

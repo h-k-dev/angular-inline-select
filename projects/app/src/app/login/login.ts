@@ -23,12 +23,24 @@ import { AngularInlinePhone, createLibphonenumberCodec } from 'angular-inline-se
 import metadata from 'libphonenumber-js/metadata.min.json';
 import examples from 'libphonenumber-js/examples.mobile.json';
 
+// Temporal entry point
+import {
+  AngularInlineDate,
+  AngularInlineTime,
+  AngularInlineDuration,
+} from 'angular-inline-select/temporal';
+
 const phoneCodec = createLibphonenumberCodec(metadata, examples);
 
 /**
  * Sign-in dialog: a centered signal form exercising every inline control —
- * text (required), number, number + euro suffix, and two phone fields
- * (one prefilled + required, one empty).
+ * text (required), number, number + euro suffix, two phone fields
+ * (one prefilled + required, one empty), and the temporal trio: date of
+ * birth, day-start in military time (24 h via the `hc-h23` locale
+ * extension — zero codec changes) and a daily focus duration. The trio is
+ * deliberately UNLINKED — the T5 `DateTimeRangeGroup`
+ * (day/start/end/duration speaking to each other) will be sandboxed
+ * against exactly this setup.
  */
 @Component({
   selector: 'app-login',
@@ -46,6 +58,9 @@ const phoneCodec = createLibphonenumberCodec(metadata, examples);
     AngularInlineText,
     AngularInlineNumber,
     AngularInlinePhone,
+    AngularInlineDate,
+    AngularInlineTime,
+    AngularInlineDuration,
     EditableSuffix,
   ],
   templateUrl: './login.html',
@@ -64,12 +79,21 @@ export class Login {
     income: number | null;
     telephone: string | null;
     mobile: string | null;
+    /** ISO `'yyyy-MM-dd'` — the date control's canonical value. */
+    dateOfBirth: string | null;
+    /** `'HH:mm'` — displayed in military time via the `hc-h23` locale. */
+    dayStart: string | null;
+    /** Seconds — the duration control's canonical value. */
+    focusTime: number | null;
   }>({
     name: '',
     age: null,
     income: null,
     telephone: '+49301234567',
     mobile: null,
+    dateOfBirth: null,
+    dayStart: '06:30',
+    focusTime: null,
   });
 
   protected signInForm = form(this.signInModel, (path) => {
