@@ -229,6 +229,39 @@ two-field date UI, the maximal end-day field, and `end >= start`
 violation ERRORS (the quartet can't violate it — propagation keeps it
 consistent by construction; errors become real with an end-day field).
 
+### T5b — the group IS the form control (DECIDED, next up)
+
+Binding four sub-fields (day/start/end/length) is a normalization smell:
+the domain value is `{start, end, duration}` (one PATCH, one DB shape;
+`day` is a RENDERING of start's date part, `duration` is derived). The
+Material precedent (`MatDateRangeInput`: the composite registers with
+mat-form-field, inner inputs are surfaces) split the VALUE only because
+Reactive Forms made object values awkward — signal forms'
+`FormValueControl<T>` doesn't, and our shape-echo date control already
+carries object values.
+
+**Design — the directive-stays hybrid** (keeps the time-entry table's
+split-across-columns layout, which a composed component can't do):
+- `DateTimeRangeGroup` itself implements
+  `FormValueControl<TemporalRangeValue>`;
+  `TemporalRangeValue = { start, end, duration? } | null` (DB entries +
+  seconds), SHAPE-ECHOED: a `{start, end}` binding keeps duration
+  internal-only; duration is always computed inside and can never
+  disagree with the range.
+- Field-bound group ⇒ leaves are UNBOUND surfaces: the group already
+  writes their `value` models and collects their commits (role-directive
+  DI registration = the mat-form-field registration analogue); it
+  additionally forwards `touched`/`disabled`/`errors` down (ordering
+  violations target the END leaf — mat split intact). ONE
+  `savedModelChange` emits the composed `{start, end, duration}`.
+- A leaf with its own `[formField]` inside a field-bound group THROWS at
+  registration (mixed mode is a bug).
+- Standalone leaves keep their own contract unchanged (deadline `dueAt`
+  stays a lone date field).
+- Stepping stone to T4: the group implementing the form contract is what
+  `MatFormFieldAdapterContract` wants to adapt for the deadline/task
+  add-dialogs ("one labeled Deadline field").
+
 **Sandbox fixtures exist:** the temporal playground carries the UNLINKED
 quartet — stay · start · end · length in one signal form, seeded with an
 overnight stay (21:00 → 06:00, the +1-badge case) — as THE fixture the
