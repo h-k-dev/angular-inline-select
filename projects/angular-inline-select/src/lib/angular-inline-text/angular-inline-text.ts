@@ -13,6 +13,7 @@ import {
   contentChild,
   input,
   effect,
+  afterRenderEffect,
   signal,
   untracked,
   linkedSignal,
@@ -27,6 +28,7 @@ import { A11yModule, _IdGenerator } from '@angular/cdk/a11y';
 import { getSelectionOffsets, setCaretOffset, replayEdit } from './caret';
 import { EditablePrefix, EditableSuffix } from './editable-affix';
 import { EditableHint } from './editable-hint';
+import { EditableMenu, detectSlashToken, type SlashToken } from './editable-menu';
 
 interface ValueNormalizationDetails {
   value: string;
@@ -161,6 +163,9 @@ export class AngularInlineText implements FormValueControl<string> {
   /** The contenteditable inside the elevated panel. Exists only while editing. */
   protected editor = viewChild<ElementRef<HTMLElement>>('editor');
 
+  /** The slash-menu container in the panel. Exists only while the menu is open. */
+  protected menuContainer = viewChild<ElementRef<HTMLElement>>('menuContainer');
+
   // DI-scoped (not module-global) so the sequence restarts per app instance —
   // deterministic across an SSR render and its client hydration.
   protected readonly panelId = inject(_IdGenerator).getId('editable-panel-');
@@ -267,6 +272,120 @@ export class AngularInlineText implements FormValueControl<string> {
    * ('decimal', 'tel', 'email', …).
    */
   inputMode = input<string | undefined>(undefined);
+
+  /**
+   * Slash-command menu template — dormant unless provided. The consumer owns
+   * the options and the search (an `@for` filtered by the live query); the
+   * control owns the trigger, keyboard navigation, and the combobox ARIA.
+   * Same dual channel as the other slots: input for composition,
+   * `ng-template[editableMenu]` content for direct use.
+   */
+  menuTemplate = input<TemplateRef<unknown> | undefined>(undefined);
+
+  private contentMenu = contentChild(EditableMenu);
+
+  protected menuTpl = computed(() => this.menuTemplate() ?? this.contentMenu()?.templateRef);
+
+  /** The active `/query` token, or `null` when the menu is closed. */
+  #menuToken = signal<SlashToken | null>(null);
+
+  /** Id of the active option (mirrored to the editor's `aria-activedescendant`). */
+  protected menuActiveId = signal<string | undefined>(undefined);
+
+  protected menuOpen = computed(() => this.menuTpl() != null && this.#menuToken() != null);
+  protected menuQuery = computed(() => this.#menuToken()?.query ?? '');
+
+  /**
+   * The `editableMenu` template context: the live query, the active-option id
+   * signal (for declarative `data-active` binding), and the `apply` callback.
+   */
+  protected menuContext = computed(() => ({
+    $implicit: this.menuQuery(),
+    activeId: this.menuActiveId,
+    apply: this.applyMenu,
+  }));
+
+  /** The projected option elements, in DOM order. */
+  #menuOptionEls(): HTMLElement[] {
+    const container = this.menuContainer()?.nativeElement;
+    return container ? Array.from(container.querySelectorAll<HTMLElement>('[role="option"]')) : [];
+  }
+
+  /**
+   * Keeps the active option valid as the consumer re-filters: when the menu
+   * opens or the query changes, land on the first option (or clear if empty).
+   */
+  #menuActiveReset = afterRenderEffect(() => {
+    if (!this.#menuToken()) return;
+
+    const options = this.#menuOptionEls();
+    const activeId = untracked(() => this.menuActiveId());
+
+    if (options.length === 0) {
+      if (activeId !== undefined) this.menuActiveId.set(undefined);
+    } else if (activeId === undefined || !options.some((option) => option.id === activeId)) {
+      this.menuActiveId.set(options[0].id);
+    }
+  });
+
+  #menuMove(delta: number) {
+    const options = this.#menuOptionEls();
+    if (options.length === 0) return;
+
+    const index = options.findIndex((option) => option.id === this.menuActiveId());
+    const next =
+      index < 0
+        ? delta > 0
+          ? 0
+          : options.length - 1
+        : (index + delta + options.length) % options.length;
+
+    this.menuActiveId.set(options[next].id);
+    options[next].scrollIntoView({ block: 'nearest' });
+  }
+
+  #closeMenu() {
+    this.#menuToken.set(null);
+    this.menuActiveId.set(undefined);
+  }
+
+  /** Re-detects the `/query` token from the editor DOM after every edit. */
+  #detectMenu(el: HTMLElement) {
+    if (!this.menuTpl()) return;
+
+    const selection = getSelectionOffsets(el);
+    const text = el.innerText ?? el.textContent ?? '';
+    this.#menuToken.set(detectSlashToken(text, selection?.end ?? text.length));
+  }
+
+  /**
+   * Replaces the draft with a command's text and closes the menu. Replaces
+   * the whole draft by default (a command is usually the new beginning —
+   * a country becoming `'+49 '`), or just the `/query` token with
+   * `{ replaceToken: true }`. An arrow so the template context can hold it.
+   */
+  protected applyMenu = (replacement: string, options?: { replaceToken?: boolean }) => {
+    const el = this.editor()?.nativeElement;
+    if (!el) return;
+
+    const token = this.#menuToken();
+    const text = el.innerText ?? el.textContent ?? '';
+
+    let next: string;
+    let caret: number;
+    if (options?.replaceToken && token) {
+      next = text.slice(0, token.start) + replacement + text.slice(token.end);
+      caret = token.start + replacement.length;
+    } else {
+      next = replacement;
+      caret = replacement.length;
+    }
+
+    el.textContent = next;
+    setCaretOffset(el, caret);
+    this.#closeMenu();
+    this.handleEditorInput();
+  };
 
   /**
    * Trims leading/trailing whitespace on commit — the committed value and the
@@ -507,6 +626,11 @@ export class AngularInlineText implements FormValueControl<string> {
       editorEl.focus();
       setCaretOffset(editorEl, this.#pendingCaret ?? draft.length);
       this.#pendingCaret = null;
+
+      // Elevating on a `/` (typed from the idle display) should open the menu
+      // immediately — no `input` event fires for the seeded draft, so detect
+      // it here once the editor and caret are in place.
+      this.#detectMenu(editorEl);
     });
   }
 
@@ -624,6 +748,43 @@ export class AngularInlineText implements FormValueControl<string> {
     // every keystroke. The page stays still — the display is frozen at the
     // session baseline. `revert` rolls this back.
     this.value.set(text);
+
+    this.#detectMenu(el);
+  }
+
+  /** Arrow-key navigation while the slash menu is open. */
+  protected handleMenuNav(event: Event, delta: number) {
+    if (!this.menuOpen()) return;
+
+    event.preventDefault();
+    this.#menuMove(delta);
+  }
+
+  /**
+   * Two-stage Escape: first press closes an open menu, the next cancels the
+   * session. (Bound at the panel level.)
+   */
+  protected handleEscape(event: Event) {
+    if (this.menuOpen()) {
+      event.stopPropagation();
+      this.#closeMenu();
+      return;
+    }
+
+    this.cancel();
+  }
+
+  /** Selects the active option if the menu is open. Returns whether it handled the key. */
+  #menuSelectActive(event: Event): boolean {
+    if (!this.menuOpen()) return false;
+
+    event.preventDefault();
+    const activeId = this.menuActiveId();
+    this.#menuOptionEls()
+      .find((option) => option.id === activeId)
+      ?.click();
+
+    return true;
   }
 
   /**
@@ -668,8 +829,9 @@ export class AngularInlineText implements FormValueControl<string> {
     this.handleEditorInput();
   }
 
-  /** Single-line fields accept on Enter instead of inserting a line break. */
+  /** Single-line fields accept on Enter — unless the menu claims it for selection. */
   protected handleEnterKey(event: Event) {
+    if (this.#menuSelectActive(event)) return;
     if (!this.isSingleLine()) return;
 
     event.preventDefault();

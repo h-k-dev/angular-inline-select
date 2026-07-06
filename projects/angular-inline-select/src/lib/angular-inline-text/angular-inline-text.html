@@ -51,7 +51,7 @@
     [animate.enter]="'editable-panel-enter'"
     cdkTrapFocus
     [cdkTrapFocusAutoCapture]="false"
-    (keydown.escape)="cancel()"
+    (keydown.escape)="handleEscape($event)"
     (keydown.control.enter)="handleCtrlEnter()"
   >
     <div class="editable-panel__line">
@@ -62,7 +62,7 @@
       }
       <span
         #editor
-        role="textbox"
+        [attr.role]="menuOpen() ? 'combobox' : 'textbox'"
         class="editable-text__editor"
         [attr.contenteditable]="editableMode()"
         [attr.aria-multiline]="!isSingleLine()"
@@ -70,12 +70,17 @@
         [attr.aria-required]="required() || null"
         [attr.aria-invalid]="errorsVisible() || null"
         [attr.aria-describedby]="panelId + '-messages'"
+        [attr.aria-expanded]="menuOpen() ? 'true' : null"
+        [attr.aria-controls]="menuOpen() ? panelId + '-menu' : null"
+        [attr.aria-activedescendant]="menuOpen() ? menuActiveId() : null"
         [attr.data-placeholder]="placeholder()"
         [attr.inputmode]="inputMode() ?? null"
         (input)="handleEditorInput()"
         (paste)="handleEditorPaste($event)"
         (keydown.enter)="handleEnterKey($event)"
         (keydown.shift.enter)="handleEnterKey($event)"
+        (keydown.arrowdown)="handleMenuNav($event, 1)"
+        (keydown.arrowup)="handleMenuNav($event, -1)"
       ></span>
       @if (suffixTpl(); as suffix) {
         <span class="editable-text__affix editable-text__affix--suffix" aria-hidden="true">
@@ -83,6 +88,22 @@
         </span>
       }
     </div>
+
+    <!--
+      Slash-command menu — consumer-owned options, control-owned navigation.
+      mousedown is swallowed so clicking an option never pulls focus out of
+      the editor (the caret stays put for the next keystroke).
+    -->
+    @if (menuOpen()) {
+      <div
+        #menuContainer
+        class="editable-menu"
+        [attr.id]="panelId + '-menu'"
+        (mousedown)="$event.preventDefault()"
+      >
+        <ng-container *ngTemplateOutlet="menuTpl()!; context: menuContext()" />
+      </div>
+    }
 
     <div class="editable-panel__footer" [attr.id]="panelId + '-messages'">
       <!--

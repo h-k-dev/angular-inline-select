@@ -3,6 +3,8 @@ import {
   validatePhoneNumberLength,
   formatIncompletePhoneNumber,
   getExampleNumber,
+  getCountries,
+  getCountryCallingCode,
   type MetadataJson,
   type Examples,
   type CountryCode,
@@ -80,6 +82,7 @@ export function createLibphonenumberCodec(metadata: MetadataJson, examples?: Exa
         e164: phone.number,
         country: phone.country,
         dialCode: String(phone.countryCallingCode),
+        nationalNumber: String(phone.nationalNumber),
         national: phone.formatNational(),
         international: phone.formatInternational(),
         ...(warning ? { warning } : {}),
@@ -105,6 +108,18 @@ export function createLibphonenumberCodec(metadata: MetadataJson, examples?: Exa
       if (!examples) return undefined;
 
       return getExampleNumber(country as CountryCode, examples, metadata)?.formatNational();
+    },
+
+    listCountries(): PhoneCountry[] {
+      return getCountries(metadata);
+    },
+
+    dialCodeOf(country: PhoneCountry): string | undefined {
+      try {
+        return getCountryCallingCode(country as CountryCode, metadata);
+      } catch {
+        return undefined;
+      }
     },
   };
 }

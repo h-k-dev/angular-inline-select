@@ -22,6 +22,23 @@ value ownership — value restoration is the form's job; the control only keeps
 its presentation state honest. Signal forms improves on its `ngDoCheck`
 error-state polling by delivering `touched`/`invalid` as inputs.
 
+**Guardrail — the ProseMirror line.** `angular-inline-text` is a *value*
+editor (flat string), never a *document* editor, and stays that way:
+
+1. The editable contains characters only — every adornment (affixes, flag,
+   preview, menu) renders OUTSIDE the contenteditable.
+2. The draft is never transformed under the caret (as-you-type formatting is
+   permanently rejected — position mapping through transforms is the start
+   of hand-rolling a bad ProseMirror).
+3. The moment a requirement needs a tree — marks (bold/links), atomic
+   in-text tokens/pills/mentions, semantic blocks, semantic undo, collab —
+   that feature does NOT grow here. It becomes a separate control behind
+   the same `FormValueControl` contract, with ProseMirror (or similar)
+   contained inside it by composition, exactly like libphonenumber is
+   contained in the phone codec. PM owns its DOM and its state lives
+   outside signals — bridging it is intl-tel-input flag-hell at 10×, a
+   price paid only when the problem is genuinely documents.
+
 ---
 
 ## Shipped on this branch
@@ -303,15 +320,102 @@ overrides it (parser detects).
   Confirmed by production: the old control ran `formatOnDisplay: false` for
   the same reason.
 
-**P3 — as-you-type formatting (hard, separate).** libphonenumber's
-`AsYouType` inserts separators while typing — which rewrites the draft under
-the caret, the exact thing our architecture forbids. Needs caret-preserving
-reformat math (map caret through inserted separators). Only attempt with a
-dedicated spec suite; the control must stay correct without it.
+**P3 — as-you-type formatting: REJECTED, permanently.** Decided: rewriting
+the draft under the caret is never acceptable, and the live interpretation
+preview already delivers the visibility it promised. If anyone proposes
+this again, the answer is the preview line.
 
-**P4 — country picker.** An interactive prefix (flag + dial code) opening a
-country list in the panel. This is inline-select territory — a natural
-trigger for extracting the `createEditSession()` primitives. Not before.
+**P4 — slash command menu — SHIPPED.** A typed, keyboard-first menu, the
+seed of the future inline-select. Implemented exactly as designed below.
+
+- **Core seam (`angular-inline-text`):** `menuTemplate` input +
+  `ng-template[editableMenu]` content sugar, dormant unless provided. The
+  control owns trigger detection (`detectSlashToken` — `/` at draft start or
+  after whitespace, no mid-word slashes), DOM-based navigation over the
+  consumer's `[role="option"]` elements, two-stage Escape, combobox ARIA
+  (editor becomes `role=combobox` with mirrored `aria-activedescendant`),
+  and the `apply(replacement, {replaceToken?})` callback (rewrites the draft
+  via the caret machinery, whole-draft by default). Context gives the
+  consumer `{ $implicit: query, activeId, apply }`.
+- **`@angular/aria` finding (why we didn't use the directives):** `ngCombobox`
+  hard-checks `tagName === input|textarea`, so on our contenteditable it
+  degrades to a non-editable select; `ngListbox`/`ngOption` keyboard is
+  host-focus-bound and never fires while focus stays in the editor, and
+  `ngOption`'s `data-active` is driven by the listbox's own (never-active)
+  navigation. Driving them would mean forwarding synthetic events into a
+  focus-assuming widget — the intl-tel-input bridge trap at small scale. So
+  we implement the raw ARIA **combobox pattern** (which is all the directive
+  encodes) by hand, since we already own the editor keyboard. Consumers get
+  plain `[role="option"]` divs; they may still layer aria typeahead if they
+  want, our nav is DOM-based either way.
+- **Phone country menu:** `AngularInlinePhone` provides the `editableMenu`
+  template; consumer-owned `@for` + `countryOptions(query)` search, control
+  owns nav. Selecting rewrites the draft to `'+49 '` → existing detection
+  flips the flag and preview. **i18n via `Intl.DisplayNames`** (`menuLocale`
+  input, browser default) — zero bundled country names, every locale. Search
+  matches the localized name **and** the English name **and** ISO **and**
+  dial code, so `/germany`, `/deutschland`, `/de`, `/49` all resolve to 🇩🇪
+  in any menu locale. Browser-verified de↔en switching; secondary-entry-point
+  production build confirms `libphonenumber` is referenced only in the phone
+  bundle, never the core.
+- **Later:** this menu is the core of `angular-inline-select` (filtered
+  option list in the panel) — the `createEditSession()` extraction trigger.
+
+**P4b — flag country picker (the primary / mobile gesture) — SHIPPED.** The
+slash menu is a keyboard *insert* gesture (great for fresh entry); changing
+the country of an *existing* number is a *transform* and needs the
+established phone-input gesture: an interactive flag opening a searchable
+list, preserving the national number. Both gestures share one option list.
+
+- **Interactive flag:** phone renders the flag prefix as a `<button>` (tappable
+  on mobile, Tab-reachable in the panel) that opens a **CDK overlay**
+  (`@angular/cdk/overlay`) with its own search `<input>` — so the draft is
+  never touched. `angular-inline-text` stays country-ignorant; it's all in
+  the projected prefix + phone's overlay.
+- **NSN preservation:** codec exposes `nationalNumber`; `pickCountry` rebuilds
+  `+<newDial><nationalNumber>`. Verified: `+49 30 12345678` → pick AT →
+  `+43 3012 345678`, digits intact, flag 🇩🇪→🇦🇹.
+- **Three apply paths:** editing → rewrite the live draft; idle with a number
+  → swap + commit immediately (emits `saved`, like the clear bubble); idle +
+  empty → open the editor seeded with `+<dial> ` to type from.
+- **Shared:** one `#countryRow` template + `countryOptions()` filter +
+  `Intl.DisplayNames`/English-fallback search feed both the slash menu and
+  the picker. The picker nav is index-based over the filtered array (its own
+  search field owns focus); the slash nav stays the editor DOM-walk.
+- Demo: `/phone` gained a **fresh-entry empty-field card** (both gestures
+  from scratch) and a `menuLocale` toggle. 71 tests; production secondary-
+  entry-point build still isolates `libphonenumber` to the phone bundle.
+
+Original design notes:
+
+- **Core seam (dormant unless fed):** `angular-inline-text` gets a
+  `commands` input (`InlineCommand[]` or a `(query) => InlineCommand[]`
+  source). Undefined → the feature doesn't render or listen; text and
+  number stay untouched. Same philosophy as the affix/hint slots: the
+  capability is core, activation is per-consumer. (A separate directive
+  would be more byte-optional but requires exposing editor internals —
+  extract one later only if the menu grows heavy.)
+- **Mechanics:** menu renders INSIDE the panel between editor line and
+  footer — no second overlay, no positioning math. Focus stays in the
+  contenteditable; combobox pattern (`aria-activedescendant`) for virtual
+  arrow-key navigation. Trigger: `/` at draft start or after whitespace;
+  query = text from `/` to caret. Escape is two-stage (menu, then
+  session); Enter/Tab selects; dismissed tokens don't re-trigger. On
+  selection the control rewrites the draft itself (it owns the caret) and
+  emits `(commandSelected)`.
+- **Phone integration is detection, not state:** picking a country rewrites
+  the draft to `'+49 '` — the existing parser detects DE, the flag flips,
+  the preview updates. No override signal, no new plumbing. Country names
+  come from `Intl.DisplayNames` (localized, zero bytes — replaces the
+  i18n country bundles the old intl-tel-input setup shipped); commands
+  match against localized name, English name, ISO code, and dial code, so
+  `/german`, `/deutschland`, `/de` and `/49` all resolve to 🇩🇪.
+- **Caveat:** `/` can collide with real content in generic text fields
+  ("either/or") — start-of-token rule mitigates; commands stay strictly
+  opt-in and never become a default.
+- **Later:** the same menu machinery is the natural core of
+  `angular-inline-select` (filtered option list in the panel) — the
+  `createEditSession()` extraction trigger moves here.
 
 **Demo:** `/phone` page — `defaultCountry="DE"` field, E.164 model display,
 per-reason projected errors, event console, and a bundle-size note comparing

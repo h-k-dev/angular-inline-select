@@ -65,6 +65,34 @@
 }
 
 // -----------------------------------------------------------------------------
+// ELEMENT: slash-command menu (consumer options, control navigation)
+// -----------------------------------------------------------------------------
+.editable-menu {
+  max-height: var(--editable-menu-max-height, 40vh);
+  overflow-y: auto;
+
+  // The consumer renders the options; these are the shared affordances the
+  // control's DOM navigation drives, themeable via tokens.
+  [role='option'] {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--mat-sys-inner-spacing, 16px) / 2);
+
+    padding: calc(var(--mat-sys-inner-spacing, 16px) / 4)
+      calc(var(--mat-sys-inner-spacing, 16px) / 2);
+    border-radius: var(--mat-sys-corner-small, 0.4rem);
+    cursor: pointer;
+
+    // The control mirrors the active option to `aria-activedescendant` and
+    // marks it for styling — keyboard highlight without moving focus.
+    &[data-active='true'] {
+      background: var(--editable-menu-active-background, var(--mat-sys-secondary-container, #d7e3ff));
+      color: var(--editable-menu-active-color, var(--mat-sys-on-secondary-container, #001b3f));
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
 // ELEMENTS: panel footer (messages + actions)
 // -----------------------------------------------------------------------------
 .editable-panel__footer {

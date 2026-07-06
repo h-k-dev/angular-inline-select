@@ -4,6 +4,7 @@ import { FormField, form, type ValidationError } from '@angular/forms/signals';
 
 import { AngularInlineText, normalizeString, type InlineTextSaved } from './angular-inline-text';
 import { EditableSuffix } from './editable-affix';
+import { detectSlashToken } from './editable-menu';
 import { replayEdit } from './caret';
 
 // =============================================================================
@@ -143,6 +144,33 @@ function cancel(h: Harness<unknown>) {
 describe('normalizeString', () => {
   it('trims edge whitespace and preserves interior spacing and line breaks', () => {
     expect(normalizeString('  hello \n  world  ')).toBe('hello \n  world');
+  });
+});
+
+describe('detectSlashToken', () => {
+  it('detects a slash token at the start of the draft', () => {
+    expect(detectSlashToken('/ger', 4)).toEqual({ start: 0, end: 4, query: 'ger' });
+  });
+
+  it('detects a slash token after whitespace', () => {
+    expect(detectSlashToken('call /de', 8)).toEqual({ start: 5, end: 8, query: 'de' });
+  });
+
+  it('ignores a mid-word slash (either/or, URLs)', () => {
+    expect(detectSlashToken('either/or', 9)).toBeNull();
+    expect(detectSlashToken('http://x', 8)).toBeNull();
+  });
+
+  it('closes once whitespace follows the slash', () => {
+    expect(detectSlashToken('/de now', 7)).toBeNull();
+  });
+
+  it('reads the query only up to the caret', () => {
+    expect(detectSlashToken('/german', 4)).toEqual({ start: 0, end: 4, query: 'ger' });
+  });
+
+  it('a bare slash is an open token with an empty query', () => {
+    expect(detectSlashToken('/', 1)).toEqual({ start: 0, end: 1, query: '' });
   });
 });
 

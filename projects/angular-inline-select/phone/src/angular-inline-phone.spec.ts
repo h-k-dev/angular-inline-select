@@ -94,6 +94,16 @@ async function typeText(h: Harness<unknown>, text: string) {
   if (!editor) throw new Error('elevated editor not found');
 
   editor.textContent = text;
+
+  // Place the caret at the end, as real typing would — the slash-menu trigger
+  // reads the caret position, so programmatic textContent alone isn't enough.
+  const selection = document.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  range.collapse(false);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+
   editor.dispatchEvent(new Event('input', { bubbles: true }));
   h.fixture.detectChanges();
 }
@@ -162,6 +172,63 @@ describe('AngularInlinePhone — [(value)] binding', () => {
 
     expect(h.host.value()).toBeNull();
     expect(h.host.sessions).toEqual([{ value: null, changed: true }]);
+  });
+
+  it('typing / on the idle display elevates and opens the menu in one gesture', async () => {
+    h.host.value.set(null);
+    h.fixture.detectChanges();
+
+    // A single `/` on the pristine display — should elevate AND open the menu,
+    // not land in edit mode with a lone slash and no menu.
+    const display = h.display();
+    const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
+    Object.defineProperty(event, 'inputType', { value: 'insertText' });
+    Object.defineProperty(event, 'data', { value: '/' });
+    display.dispatchEvent(event);
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(h.inner().editing()).toBe(true);
+    expect(h.editor()?.textContent).toBe('/');
+    expect(document.querySelector('.editable-menu [role="option"]')).not.toBeNull();
+  });
+
+  it('the /country slash menu filters and inserts the dial code', async () => {
+    // `/49` matches Germany's calling code — locale-independent, unlike names
+    await typeText(h, '/49');
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    const options = [...document.querySelectorAll('.editable-menu [role="option"]')];
+    expect(options.length).toBeGreaterThan(0);
+    const germany = options.find((option) => option.textContent?.includes('+49'));
+    expect(germany).toBeTruthy();
+
+    (germany as HTMLElement).click();
+    h.fixture.detectChanges();
+
+    // The draft becomes the dial-code prefix and the menu closes
+    expect(h.editor()?.textContent).toBe('+49 ');
+    expect(document.querySelector('.editable-menu')).toBeNull();
+  });
+
+  it('picking a country while idle swaps the dial code and preserves the national number', () => {
+    // Committed as +49 30 49781234 (NSN 3049781234)
+    h.host.value.set('+493049781234');
+    h.fixture.detectChanges();
+
+    // Pick Austria (+43) — the idle-commit path
+    (h.phone() as unknown as { pickCountry(o: { country: string; dialCode: string }): void }).pickCountry({
+      country: 'AT',
+      dialCode: '43',
+    });
+    h.fixture.detectChanges();
+
+    // National number kept, calling code swapped, committed immediately
+    expect(h.host.value()).toBe('+433049781234');
+    expect(h.host.saved).toEqual(['+433049781234']);
+    expect(h.host.sessions).toEqual([{ value: '+433049781234', changed: true }]);
   });
 
   it('the live preview interprets the draft without touching it', async () => {

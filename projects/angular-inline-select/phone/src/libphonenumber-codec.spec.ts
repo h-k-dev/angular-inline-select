@@ -15,6 +15,7 @@ describe('createLibphonenumberCodec', () => {
       e164: '+491712345678',
       country: 'DE',
       dialCode: '49',
+      nationalNumber: '1712345678',
       national: '0171 2345678',
       international: '+49 171 2345678',
     });

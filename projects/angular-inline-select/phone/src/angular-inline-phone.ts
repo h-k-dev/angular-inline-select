@@ -9,7 +9,13 @@ import {
   linkedSignal,
   viewChild,
   contentChild,
+  afterNextRender,
+  ElementRef,
+  Injector,
+  inject,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { OverlayModule, type ConnectedPosition } from '@angular/cdk/overlay';
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 import {
@@ -55,9 +61,72 @@ export interface InlinePhoneSaved {
  */
 @Component({
   selector: 'angular-inline-phone',
-  imports: [AngularInlineText],
+  imports: [AngularInlineText, OverlayModule, NgTemplateOutlet],
   templateUrl: './angular-inline-phone.html',
-  styles: ':host { display: inline; }',
+  styles: `
+    :host { display: inline; }
+    .country-name { flex: 1 1 auto; }
+    .country-dial { color: var(--mat-sys-on-surface-variant, #5f6368); font-variant-numeric: tabular-nums; }
+    .country-empty {
+      padding: calc(var(--mat-sys-inner-spacing, 16px) / 4) calc(var(--mat-sys-inner-spacing, 16px) / 2);
+      color: var(--mat-sys-on-surface-variant, #5f6368);
+    }
+
+    .country-trigger {
+      font: inherit;
+      line-height: 1;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      border-radius: var(--mat-sys-corner-extra-small, 0.25rem);
+    }
+    .country-trigger:focus-visible {
+      outline: 2px solid var(--mat-sys-primary, #4285f4);
+      outline-offset: 2px;
+    }
+
+    .country-picker {
+      display: flex;
+      flex-direction: column;
+      width: min(20rem, calc(100dvw - 16px));
+      max-height: min(24rem, 60dvh);
+      box-sizing: border-box;
+
+      background: var(--mat-sys-surface-container, #fff);
+      border: 1px solid var(--mat-sys-outline-variant, #c4c7c5);
+      border-radius: var(--mat-sys-corner-medium, 0.75rem);
+      box-shadow:
+        0 2px 6px hsl(0deg 0% 0% / 0.08),
+        0 8px 24px hsl(0deg 0% 0% / 0.12);
+      overflow: hidden;
+    }
+    .country-picker__search {
+      font: inherit;
+      padding: 0.6rem 0.75rem;
+      border: 0;
+      border-bottom: 1px solid var(--mat-sys-outline-variant, #c4c7c5);
+      background: transparent;
+      color: inherit;
+      outline: none;
+    }
+    .country-picker__list {
+      overflow-y: auto;
+      padding: 4px;
+    }
+    .country-picker__list [role='option'] {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.5rem;
+      border-radius: var(--mat-sys-corner-small, 0.4rem);
+      cursor: pointer;
+    }
+    .country-picker__list [role='option'][data-active='true'] {
+      background: var(--mat-sys-secondary-container, #d7e3ff);
+      color: var(--mat-sys-on-secondary-container, #001b3f);
+    }
+  `,
   host: {
     '[style.display]': 'hidden() ? "none" : null',
   },
@@ -86,6 +155,16 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
 
   /** The country-detection prefix. Off, or overridden by `editablePrefix` content. */
   showFlag = input(true);
+
+  /** Enables the `/country` slash-menu (type `/german`, `/de`, `/49` → `+49 `). */
+  showCountryMenu = input(true);
+
+  /**
+   * Locale for the slash-menu's country names (`Intl.DisplayNames`). Undefined
+   * = the browser default. Only affects display and adds a matching basis;
+   * the English name, ISO code and dial code always match too.
+   */
+  menuLocale = input<string | string[] | undefined>(undefined);
 
   /** Form Value Contract — forwarded into the inner control. */
   errors = input<readonly ValidationError.WithOptionalFieldTree[]>([]);
@@ -256,6 +335,182 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     }
 
     this.saved.emit({ value, changed: session.changed });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Country slash-menu — the picker, keyboard-first and translation-free.
+  // ---------------------------------------------------------------------------
+
+  /** Localized region names from the browser — no bundled i18n, every locale. */
+  #regionNames = computed(() => this.#displayNames(this.menuLocale()));
+
+  /** English names as a constant matching basis, so `/germany` always works. */
+  #regionNamesEn = this.#displayNames('en');
+
+  #displayNames(locale: string | string[] | undefined) {
+    try {
+      return new Intl.DisplayNames(locale as unknown as string[], { type: 'region' });
+    } catch {
+      return undefined;
+    }
+  }
+
+  #nameOf(names: Intl.DisplayNames | undefined, country: PhoneCountry): string {
+    try {
+      return names?.of(country) ?? country;
+    } catch {
+      return country;
+    }
+  }
+
+  /** The full country list, rebuilt when the codec or display locale changes. */
+  #countries = computed(() => {
+    const codec = this.codec();
+    const names = this.#regionNames();
+    const list = codec.listCountries?.() ?? [];
+
+    return list
+      .map((country) => {
+        const dialCode = codec.dialCodeOf?.(country) ?? '';
+        return {
+          id: `ai-country-${country}`,
+          country,
+          name: this.#nameOf(names, country),
+          // Lower-cased match keys: localized name + English name + ISO code.
+          match: `${this.#nameOf(names, country)}\n${this.#nameOf(this.#regionNamesEn, country)}\n${country}`.toLowerCase(),
+          dialCode,
+          flag: countryFlagEmoji(country),
+          insert: `+${dialCode} `,
+        };
+      })
+      .filter((option) => option.dialCode)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  /**
+   * Options for the current query — the consumer-owned search. Matches the
+   * localized name, the English name, the ISO code, and the dial code, so
+   * `/deutschland`, `/germany`, `/de` and `/49` all resolve to 🇩🇪. Capped so
+   * a bare `/` stays a usable list.
+   */
+  protected countryOptions(query: string) {
+    const q = query.trim().toLowerCase();
+    const all = this.#countries();
+    if (!q) return all.slice(0, 60);
+
+    const digits = q.replace(/\D/g, '');
+    return all
+      .filter(
+        (option) =>
+          option.match.includes(q) ||
+          (digits.length > 0 && option.dialCode.startsWith(digits)),
+      )
+      .slice(0, 60);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Flag country picker — the primary, mobile-first, pointer gesture. Shares
+  // the option list with the slash menu; unlike it, the query lives in the
+  // picker's own search field (the draft is never touched) and picking
+  // preserves the national number.
+  // ---------------------------------------------------------------------------
+  #injector = inject(Injector);
+
+  protected pickerSearch = viewChild<ElementRef<HTMLInputElement>>('pickerSearch');
+
+  protected pickerOpen = signal(false);
+  protected pickerOrigin = signal<Element | null>(null);
+  protected pickerQuery = signal('');
+  protected pickerActiveIndex = signal(0);
+
+  protected pickerOptions = computed(() => this.countryOptions(this.pickerQuery()));
+  protected pickerActiveId = computed(() => this.pickerOptions()[this.pickerActiveIndex()]?.id);
+
+  protected pickerPositions: ConnectedPosition[] = [
+    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
+    { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
+  ];
+
+  protected openPicker(event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    this.pickerOrigin.set(event.currentTarget as Element);
+    this.pickerQuery.set('');
+    this.pickerActiveIndex.set(0);
+    this.pickerOpen.set(true);
+
+    afterNextRender(() => this.pickerSearch()?.nativeElement.focus(), { injector: this.#injector });
+  }
+
+  protected closePicker() {
+    this.pickerOpen.set(false);
+  }
+
+  protected onPickerSearch(value: string) {
+    this.pickerQuery.set(value);
+    this.pickerActiveIndex.set(0);
+  }
+
+  protected onPickerKeydown(event: KeyboardEvent) {
+    const options = this.pickerOptions();
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        this.pickerActiveIndex.update((i) => Math.min(i + 1, options.length - 1));
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        this.pickerActiveIndex.update((i) => Math.max(i - 1, 0));
+        break;
+      case 'Enter': {
+        event.preventDefault();
+        const option = options[this.pickerActiveIndex()];
+        if (option) this.pickCountry(option);
+        break;
+      }
+      case 'Escape':
+        event.preventDefault();
+        event.stopPropagation();
+        this.closePicker();
+        break;
+    }
+  }
+
+  /**
+   * Applies a picked country. Preserves the national number by rebuilding
+   * `+<newDial><nationalNumber>`. While editing it updates the live draft;
+   * idle it commits immediately (the flag is a standalone quick-edit, like
+   * the clear bubble).
+   */
+  protected pickCountry(option: { country: PhoneCountry; dialCode: string }) {
+    const base = this.canonical();
+    const parsed = base ? this.codec().parse(base, this.defaultCountry()) : null;
+    const nsn = parsed?.ok ? parsed.nationalNumber : undefined;
+
+    if (this.innerEditing()) {
+      // Editing: rewrite the live draft, keep the session open.
+      const draft = nsn
+        ? this.codec().format(`+${option.dialCode}${nsn}`, this.displayFormat(), option.country)
+        : `+${option.dialCode} `;
+      this.handleInnerValue(draft);
+    } else if (nsn) {
+      // Idle with a number: swap the calling code and commit immediately.
+      const e164 = `+${option.dialCode}${nsn}`;
+      if (e164 !== base) {
+        this.value.set(e164);
+        this.savedModelChange.emit(e164);
+        this.saved.emit({ value: e164, changed: true });
+      }
+    } else {
+      // Idle and empty: nothing to swap — open the editor seeded with the
+      // calling code so the user can type the rest.
+      this.innerValue.set(`+${option.dialCode} `);
+      this.innerEditing.set(true);
+    }
+
+    this.closePicker();
   }
 
   /** Form Value Contract: focus — delegates to the inner control. */

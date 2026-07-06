@@ -29,6 +29,12 @@ export interface PhoneParseSuccess {
   country?: PhoneCountry;
   /** Country calling code without the `+`, e.g. `'49'`. */
   dialCode?: string;
+  /**
+   * The national significant number — the digits after the calling code
+   * (`'3049781234'`). This is what a country swap preserves: rebuild
+   * `+<newDial><nationalNumber>` to change country without losing the number.
+   */
+  nationalNumber: string;
   national: string;
   international: string;
   warning?: PhoneParseWarning;
@@ -56,6 +62,12 @@ export interface PhoneCodec {
 
   /** A real example number in national format, for placeholder use. */
   placeholderExample?(country: PhoneCountry, kind: PhoneNumberKind): string | undefined;
+
+  /** All supported ISO country codes — powers the country slash-menu. */
+  listCountries?(): PhoneCountry[];
+
+  /** Country calling code without `+`, e.g. `'49'` for `'DE'`. */
+  dialCodeOf?(country: PhoneCountry): string | undefined;
 }
 
 /**

@@ -1,8 +1,57 @@
-<!-- The country-detection prefix: feedback, not decoration. -->
-<ng-template #flagTpl>{{ flag() }}</ng-template>
+<!--
+  The country-detection prefix — feedback AND the picker trigger. A button so
+  it's tappable on mobile and Tab-reachable in the panel; opens the shared
+  country list in a CDK overlay. Rendered outside the contenteditable, so the
+  click never touches the draft.
+-->
+<ng-template #flagTpl>
+  <button
+    type="button"
+    class="country-trigger"
+    [attr.aria-label]="'Change country' + (country() ? ' (' + country() + ')' : '')"
+    aria-haspopup="listbox"
+    [attr.aria-expanded]="pickerOpen()"
+    (mousedown)="$event.preventDefault()"
+    (click)="openPicker($event)"
+  >
+    {{ flag() }}
+  </button>
+</ng-template>
 
 <!-- Live interpretation preview: ✓/⚠/… + what the engine understood. -->
 <ng-template #previewTpl>{{ preview() }}</ng-template>
+
+<!-- Shared option row — used by both the slash menu and the flag picker. -->
+<ng-template #countryRow let-option>
+  <span class="country-flag" aria-hidden="true">{{ option.flag }}</span>
+  <span class="country-name">{{ option.name }}</span>
+  <span class="country-dial">+{{ option.dialCode }}</span>
+</ng-template>
+
+<!--
+  Country slash-menu: consumer owns the options + search, the text control
+  owns the trigger, keyboard navigation and combobox ARIA. Plain [role=option]
+  (not ngOption) because navigation is driven from the editor while focus stays
+  there — the control mirrors the active id, so we bind data-active ourselves.
+  Fresh-entry gesture: `apply(insert)` sets `+49 ` on an empty draft.
+-->
+<ng-template #countryMenu let-query let-apply="apply" let-activeId="activeId">
+  <div role="listbox" aria-label="Countries">
+    @for (option of countryOptions(query); track option.country) {
+      <div
+        role="option"
+        [id]="option.id"
+        [attr.data-active]="option.id === activeId()"
+        [attr.aria-selected]="option.id === activeId()"
+        (click)="apply(option.insert)"
+      >
+        <ng-container *ngTemplateOutlet="countryRow; context: { $implicit: option }" />
+      </div>
+    } @empty {
+      <div class="country-empty">No country matches “{{ query }}”.</div>
+    }
+  </div>
+</ng-template>
 
 <!--
   Composition, not inheritance: the inner text control owns the session
@@ -27,8 +76,54 @@
   [prefixTemplate]="consumerPrefixTpl() ?? (flag() ? flagTpl : undefined)"
   [suffixTemplate]="suffixTpl()"
   [hintTemplate]="preview() ? previewTpl : undefined"
+  [menuTemplate]="showCountryMenu() ? countryMenu : undefined"
   (touch)="touch.emit()"
   (saved)="handleInnerSaved($event)"
 >
   <ng-content select="[editable-error]" ngProjectAs="[editable-error]" />
 </angular-inline-text>
+
+<!--
+  Flag country picker — CDK overlay, its own search field, draft untouched.
+  Picking preserves the national number and swaps only the calling code.
+-->
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="pickerOrigin()!"
+  [cdkConnectedOverlayOpen]="pickerOpen() && pickerOrigin() !== null"
+  [cdkConnectedOverlayPositions]="pickerPositions"
+  [cdkConnectedOverlayViewportMargin]="8"
+  (overlayOutsideClick)="closePicker()"
+  (detach)="closePicker()"
+>
+  <div class="country-picker" role="dialog" aria-label="Select country">
+    <input
+      #pickerSearch
+      class="country-picker__search"
+      type="text"
+      role="combobox"
+      aria-autocomplete="list"
+      [attr.aria-expanded]="true"
+      [attr.aria-activedescendant]="pickerActiveId()"
+      placeholder="Search country"
+      [value]="pickerQuery()"
+      (input)="onPickerSearch($any($event.target).value)"
+      (keydown)="onPickerKeydown($event)"
+    />
+    <div class="country-picker__list" role="listbox" aria-label="Countries">
+      @for (option of pickerOptions(); track option.country) {
+        <div
+          role="option"
+          [id]="'picker-' + option.id"
+          [attr.data-active]="option.id === pickerActiveId()"
+          [attr.aria-selected]="option.id === pickerActiveId()"
+          (click)="pickCountry(option)"
+        >
+          <ng-container *ngTemplateOutlet="countryRow; context: { $implicit: option }" />
+        </div>
+      } @empty {
+        <div class="country-empty">No country matches “{{ pickerQuery() }}”.</div>
+      }
+    </div>
+  </div>
+</ng-template>

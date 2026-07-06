@@ -40,6 +40,11 @@ export class PhonePlayground {
   protected codec = phoneCodec;
 
   // ---------------------------------------------------------------------------
+  // Fresh-entry example — empty field, no pre-filled number
+  // ---------------------------------------------------------------------------
+  protected freshPhone = signal<string | null>(null);
+
+  // ---------------------------------------------------------------------------
   // Standalone [(value)] example — any parseable string in, E.164 out
   // ---------------------------------------------------------------------------
   protected hotline = signal<string | null>('+493012345678');
@@ -52,6 +57,7 @@ export class PhonePlayground {
   protected fieldDisabled = signal(false);
 
   protected displayFormat = signal<'national' | 'international'>('international');
+  protected menuLocale = signal<'de' | 'en'>('en');
 
   protected contactModel = signal<{ phone: string | null }>({ phone: '+491712345678' });
 

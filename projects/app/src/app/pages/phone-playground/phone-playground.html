@@ -11,6 +11,22 @@
 
     <div class="example__body example-stack">
       <div class="example-card">
+        <h3 class="example-card__title">Fresh entry — empty field</h3>
+        <p class="prose">
+          New number:
+          <angular-inline-phone
+            [(value)]="freshPhone"
+            [codec]="codec"
+            defaultCountry="DE"
+            ariaLabel="New phone number"
+          />
+          — starting from nothing. Type “/” for the country menu (Notion-style: only at the start), or tap the flag
+          for the searchable picker. Both set the calling code so you can type the rest — model:
+          <code>{{ freshPhone() ?? '∅' }}</code>.
+        </p>
+      </div>
+
+      <div class="example-card">
         <h3 class="example-card__title">Standalone [(value)]</h3>
         <p class="prose">
           Support hotline:
@@ -20,8 +36,9 @@
             defaultCountry="DE"
             ariaLabel="Support hotline phone number"
           />
-          — the flag shows the <em>detected</em> country, the panel previews the engine's interpretation on every
-          keystroke, and the draft itself is never reformatted — model: <code>{{ hotline() ?? '∅' }}</code
+          — the flag shows the <em>detected</em> country; tap it for the searchable picker, which swaps the calling
+          code while keeping the national number (try switching to another country — the digits stay). The panel
+          previews the engine's interpretation on every keystroke — model: <code>{{ hotline() ?? '∅' }}</code
           >.
         </p>
       </div>
@@ -36,6 +53,7 @@
             [codec]="codec"
             defaultCountry="DE"
             [displayFormat]="displayFormat()"
+            [menuLocale]="menuLocale()"
             ariaLabel="Contact phone number, German format by default"
             (savedModelChange)="logEmit('savedModelChange', $event)"
             (saved)="logEmit('saved', $event)"
@@ -70,13 +88,18 @@
           >
             Display: {{ displayFormat() }}
           </button>
+          <button mat-stroked-button (click)="menuLocale.set(menuLocale() === 'en' ? 'de' : 'en')">
+            Menu: {{ menuLocale() }}
+          </button>
           <button mat-stroked-button (click)="contactForm().markAsTouched()">Mark touched</button>
           <button mat-stroked-button (click)="contactForm.phone().reset()">Reset field</button>
         </div>
 
         <p class="form-toggles__hint">
           Try “0171 2345678” (✓), “017” (⚠ too short — still saves), “abc” (parse gate — Save stays blocked), or
-          “+33 1 42 68 53 00” (the flag flips to 🇫🇷). The model always holds E.164 or <code>null</code>.
+          “+33 1 42 68 53 00” (the flag flips to 🇫🇷). Type “/” for the country menu — <code>/germany</code>,
+          <code>/deutschland</code>, <code>/de</code> and <code>/49</code> all find 🇩🇪 regardless of the Menu locale.
+          The model always holds E.164 or <code>null</code>.
         </p>
 
         @if (emittedEvents().length > 0) {
