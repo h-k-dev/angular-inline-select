@@ -20,21 +20,31 @@ import {
   EditableSuffix,
   type InlineTextSaved,
 } from 'angular-inline-select';
-import { parseTime, formatWallClock, type WallClockTime } from './time-codec';
+import { parseTime, formatWallClock } from './time-codec';
 import { INLINE_TIME_DAY_OFFSET } from './day-offset';
+import {
+  composeDbEntry,
+  localDayOf,
+  localTimeOf,
+  toDbEntry,
+  type DbDateTime,
+} from '../datetime/db-entry';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineTimeSaved {
-  /** The value the session settled on — `'HH:mm'`, or `null` for empty. */
-  value: WallClockTime | null;
+  /** The value the session settled on — a UTC ISO DB entry, or `null` for empty. */
+  value: DbDateTime | null;
   /** Whether the settled value differs from the session baseline. */
   changed: boolean;
 }
 
 /**
- * Inline time: a `FormValueControl` for wall-clock times that COMPOSES the
- * inline text control. Canonical value: `'HH:mm' | null` (24 h,
- * locale/timezone-free); display localizes via `Intl`.
+ * Inline time: a `FormValueControl` for times that COMPOSES the inline
+ * text control. Canonical value: a **UTC ISO DB entry**
+ * (`'2026-07-21T19:00:00.000Z'` — iusta's `toDBEntry`), `null` for empty;
+ * the DISPLAY is the local wall-clock reading, localized via `Intl`. The
+ * value carries its own date: typed `'HH:mm'` drafts set the local
+ * time-of-day on the value's existing day (or `now`'s day when empty).
  *
  * - Drafts are TYPED (`'9'` → 09:00, `'930'`, `'21:05'`) with a live
  *   interpretation preview; impossible times (`'25:00'`) hit the parse gate.
@@ -92,15 +102,18 @@ export interface InlineTimeSaved {
     '[style.display]': 'hidden() ? "none" : null',
   },
 })
-export class AngularInlineTime implements FormValueControl<WallClockTime | null> {
+export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
   /** The composed text control — all session machinery lives there. */
   protected inner = viewChild.required(AngularInlineText);
 
   /** The visually-hidden native input backing the OS picker. */
   protected nativeInput = viewChild.required<ElementRef<HTMLInputElement>>('nativeInput');
 
-  /** The committed value channel: `'HH:mm'`, or `null`. */
-  value = model<WallClockTime | null>(null);
+  /** The committed value channel: a UTC ISO DB entry, or `null`. */
+  value = model<DbDateTime | null>(null);
+
+  /** Reference clock — anchors the day of a time typed into an EMPTY field. */
+  now = input<() => Date>(() => new Date());
 
   /** Form Value Contract — forwarded into the inner control. */
   errors = input<readonly ValidationError.WithOptionalFieldTree[]>([]);
@@ -159,8 +172,8 @@ export class AngularInlineTime implements FormValueControl<WallClockTime | null>
   /** Form Value Contract: touch — forwarded from the inner control. */
   touch = output<void>();
 
-  /** Hard commit event: fires once per accepted edit session — `'HH:mm'` or `null`. */
-  savedModelChange = output<WallClockTime | null>();
+  /** Hard commit event: fires once per accepted edit session — a DB entry or `null`. */
+  savedModelChange = output<DbDateTime | null>();
 
   /** Emitted exactly once per settled edit session (Save, Discard, clear). */
   saved = output<InlineTimeSaved>();
@@ -168,12 +181,28 @@ export class AngularInlineTime implements FormValueControl<WallClockTime | null>
   /** Whether an edit session is open. Two-way bindable. */
   editing = model(false);
 
+  /** The value's LOCAL wall-clock reading — the user-facing side of the split. */
+  readonly localTime = computed(() => localTimeOf(this.value()));
+
+  /**
+   * The day anchoring a commit: the value's own local day, else `now`'s.
+   * The value model always carries a full datetime behind the local display.
+   */
+  #anchorDay = computed(
+    () => localDayOf(this.value()) ?? localDayOf(toDbEntry(this.now()()))!,
+  );
+
+  /** Composes a typed local `'HH:mm'` onto the anchor day — the ONE outbound path. */
+  #toValue(time: string | null): DbDateTime | null {
+    return time === null ? null : composeDbEntry(this.#anchorDay(), time);
+  }
+
   /**
    * The string channel feeding the inner control: the localized committed
    * time while idle, the raw draft while a session is open.
    */
   protected innerValue = linkedSignal<string, string>({
-    source: () => formatWallClock(this.value(), this.locale()),
+    source: () => formatWallClock(this.localTime(), this.locale()),
     computation: (source, prev) => (this.editing() ? (prev?.value ?? source) : source),
   });
 
@@ -199,18 +228,21 @@ export class AngularInlineTime implements FormValueControl<WallClockTime | null>
     return `✓ ${formatWallClock(time, this.locale())}`;
   });
 
-  /** Live channel: readable drafts flow into the model as `'HH:mm'`. */
+  /** Live channel: readable drafts flow into the model as DB entries. */
   protected handleInnerValue(raw: string) {
     this.innerValue.set(raw);
 
     const time = parseTime(raw);
-    if (time !== undefined && time !== this.value()) this.value.set(time);
+    if (time === undefined) return;
+
+    const value = this.#toValue(time);
+    if (value !== this.value()) this.value.set(value);
   }
 
-  /** Retype the settled session: strings inside, wall-clock times outside. */
+  /** Retype the settled session: local strings inside, DB entries outside. */
   protected handleInnerSaved(session: InlineTextSaved) {
     const time = parseTime(session.value);
-    const value = time === undefined ? this.value() : time;
+    const value = time === undefined ? this.value() : this.#toValue(time);
 
     if (session.changed) {
       this.value.set(value);
@@ -226,7 +258,7 @@ export class AngularInlineTime implements FormValueControl<WallClockTime | null>
     event.stopPropagation();
 
     const native = this.nativeInput().nativeElement;
-    native.value = this.value() ?? '';
+    native.value = this.localTime() ?? '';
 
     try {
       native.showPicker();
@@ -243,16 +275,18 @@ export class AngularInlineTime implements FormValueControl<WallClockTime | null>
     const time = parseTime(raw);
     if (time === undefined) return;
 
+    const value = this.#toValue(time);
+
     if (this.editing()) {
       this.innerValue.set(raw);
-      if (time !== this.value()) this.value.set(time);
+      if (value !== this.value()) this.value.set(value);
       return;
     }
 
-    if (time !== this.value()) {
-      this.value.set(time);
-      this.savedModelChange.emit(time);
-      this.saved.emit({ value: time, changed: true });
+    if (value !== this.value()) {
+      this.value.set(value);
+      this.savedModelChange.emit(value);
+      this.saved.emit({ value, changed: true });
     }
   }
 

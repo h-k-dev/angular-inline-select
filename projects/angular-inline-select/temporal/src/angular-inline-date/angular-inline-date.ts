@@ -31,6 +31,7 @@ import {
   type DateValueShape,
   type InternalDateRange,
 } from './date-codec';
+import { dayToDbEntry, dayEndToDbEntry, localDayOf } from '../datetime/db-entry';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineDateSaved {
@@ -42,9 +43,9 @@ export interface InlineDateSaved {
 
 /**
  * Inline date: a `FormValueControl` for calendar dates that COMPOSES the
- * inline text control. Canonical value: ISO `'yyyy-MM-dd' | null` — the
- * date analogue of the phone control's E.164 (serializable, locale-free);
- * consumers needing Luxon/Date objects convert at their boundary.
+ * inline text control. Canonical value: a **UTC ISO DB entry**
+ * (`'2026-07-20T22:00:00.000Z'` — iusta's `toDBEntry` of the local
+ * `startOf('day')`); the DISPLAY is the localized local calendar day.
  *
  * - Drafts are TYPED (`'12.5.'`, `'12.5.2026'`, `'2026-05-12'`) and never
  *   reformatted under the caret; the live interpretation preview shows the
@@ -74,10 +75,11 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   protected inner = viewChild.required(AngularInlineText);
 
   /**
-   * The committed value channel — polymorphic: ISO `'yyyy-MM-dd'` binds a
-   * single date, `{ start, end? }` binds a range, and the control ECHOES
-   * whichever shape it received (see the shape-echo table in
-   * ROADMAP-DATETIME.md).
+   * The committed value channel — polymorphic UTC ISO DB entries (iusta's
+   * `toDBEntry`): a single string binds a single date, `{ start, end? }`
+   * binds a range, and the control ECHOES whichever shape it received.
+   * Behind the back a day is its local `startOf('day')` in UTC (range ends
+   * `endOf('day')`); the DISPLAY is the localized local calendar day.
    */
   value = model<InlineDateValue>(null);
 
@@ -147,8 +149,27 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     () => this.#lastShape() ?? (this.ranged() ? 'range' : 'single'),
   );
 
-  /** One canonical internal model, always: `{ start, end }`. */
-  readonly internalRange = computed<InternalDateRange>(() => toInternalRange(this.value()));
+  /**
+   * One canonical internal model, always: `{ start, end }` as LOCAL
+   * calendar DAYS — the user-facing side; DB entries live only at the
+   * value boundary.
+   */
+  readonly internalRange = computed<InternalDateRange>(() => {
+    const { start, end } = toInternalRange(this.value());
+    return { start: start === null ? null : localDayOf(start), end: end === null ? null : localDayOf(end) };
+  });
+
+  /** The value boundary, outbound: local days → DB entries in the echoed shape. */
+  #daysToDbShape(days: InternalDateRange, shape: DateValueShape): InlineDateValue {
+    const echoed = echoDateShape(days, shape);
+    if (echoed === null) return null;
+    if (typeof echoed === 'string') return dayToDbEntry(echoed);
+
+    const start = echoed.start === null ? null : dayToDbEntry(echoed.start);
+    if (!('end' in echoed)) return { start };
+
+    return { start, end: echoed.end == null ? null : dayEndToDbEntry(echoed.end) };
+  }
 
   /**
    * The string channel feeding the inner control: the localized committed
@@ -205,24 +226,24 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     return end === null || end === start ? { start: day, end: day } : { start: day, end };
   }
 
-  /** Live channel: readable drafts flow into the model in the bound shape. */
+  /** Live channel: readable drafts flow into the model as DB entries, in the bound shape. */
   protected handleInnerValue(raw: string) {
     this.innerValue.set(raw);
 
     const day = parseDateInput(raw, this.now()());
     if (day === undefined) return;
 
-    const echoed = echoDateShape(this.#mergeDay(day), this.shape());
+    const echoed = this.#daysToDbShape(this.#mergeDay(day), this.shape());
     if (!dateValuesEqual(echoed, this.value())) this.value.set(echoed);
   }
 
-  /** Retype the settled session: strings inside, the echoed shape outside. */
+  /** Retype the settled session: local days inside, DB entries in the echoed shape outside. */
   protected handleInnerSaved(session: InlineTextSaved) {
     const day = parseDateInput(session.value, this.now()());
     const value =
       day === undefined
         ? this.value()
-        : echoDateShape(this.#mergeDay(day), this.shape());
+        : this.#daysToDbShape(this.#mergeDay(day), this.shape());
 
     if (session.changed) {
       this.value.set(value);

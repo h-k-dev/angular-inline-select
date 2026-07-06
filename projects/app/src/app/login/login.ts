@@ -28,6 +28,9 @@ import {
   AngularInlineDate,
   AngularInlineTime,
   AngularInlineDuration,
+  composeDbEntry,
+  localDayOf,
+  toDbEntry,
 } from 'angular-inline-select/temporal';
 
 const phoneCodec = createLibphonenumberCodec(metadata, examples);
@@ -79,9 +82,9 @@ export class Login {
     income: number | null;
     telephone: string | null;
     mobile: string | null;
-    /** ISO `'yyyy-MM-dd'` — the date control's canonical value. */
+    /** UTC ISO DB entry (local start-of-day) — the date control's canonical value. */
     dateOfBirth: string | null;
-    /** `'HH:mm'` — displayed in military time via the `hc-h23` locale. */
+    /** UTC ISO DB entry — displayed in military time via the `hc-h23` locale. */
     dayStart: string | null;
     /** Seconds — the duration control's canonical value. */
     focusTime: number | null;
@@ -92,7 +95,7 @@ export class Login {
     telephone: '+49301234567',
     mobile: null,
     dateOfBirth: null,
-    dayStart: '06:30',
+    dayStart: composeDbEntry(localDayOf(toDbEntry(new Date()))!, '06:30'),
     focusTime: null,
   });
 

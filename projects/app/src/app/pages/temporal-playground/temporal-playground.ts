@@ -6,7 +6,6 @@ import {
   signal,
   computed,
 } from '@angular/core';
-import { JsonPipe } from '@angular/common';
 import { FormField, form, required } from '@angular/forms/signals';
 
 // Material
@@ -22,6 +21,8 @@ import {
   RangeStart,
   RangeEnd,
   RangeLength,
+  composeDbEntry,
+  dayToDbEntry,
   type DurationFormat,
 } from 'angular-inline-select/temporal';
 
@@ -31,9 +32,6 @@ import {
   styleUrl: './temporal-playground.scss',
   changeDetection: ChangeDetectionStrategy.Eager,
   imports: [
-    // Angular
-    JsonPipe,
-
     // Material
     MatButtonModule,
 
@@ -58,7 +56,7 @@ export class TemporalPlayground {
   protected fieldRequired = signal(true);
   protected dateLocale = signal<'de' | 'en'>('en');
 
-  protected deadlineModel = signal<{ due: string | null }>({ due: '2026-07-20' });
+  protected deadlineModel = signal<{ due: string | null }>({ due: dayToDbEntry('2026-07-20') });
 
   protected deadlineForm = form(this.deadlineModel, (path) => {
     required(path.due, { when: () => this.fieldRequired() });
@@ -71,7 +69,7 @@ export class TemporalPlayground {
   // ---------------------------------------------------------------------------
   // Time — wall-clock string, native OS picker
   // ---------------------------------------------------------------------------
-  protected startsAt = signal<string | null>('09:30');
+  protected startsAt = signal<string | null>(composeDbEntry('2026-07-20', '09:30'));
 
   // ---------------------------------------------------------------------------
   // Duration — standalone [(value)] in seconds
@@ -86,18 +84,18 @@ export class TemporalPlayground {
   // wall-clock-earlier than the start, so the end field wears the +1 badge.
   // ---------------------------------------------------------------------------
   protected stayModel = signal<{
-    /** ISO `'yyyy-MM-dd'`. */
+    /** UTC ISO DB entry — local `startOf('day')`. */
     day: string | null;
-    /** `'HH:mm'` — shown in 24 h via the `hc-h23` locale extension. */
+    /** UTC ISO DB entry — the instant carries its own date. */
     starts: string | null;
-    /** `'HH:mm'` — the future +1 badge carrier. */
+    /** UTC ISO DB entry — overnight lives IN the value (+1 badge derives from it). */
     ends: string | null;
     /** Seconds. */
     length: number | null;
   }>({
-    day: '2026-07-21',
-    starts: '21:00',
-    ends: '06:00',
+    day: dayToDbEntry('2026-07-21'),
+    starts: composeDbEntry('2026-07-21', '21:00'),
+    ends: composeDbEntry('2026-07-22', '06:00'),
     length: 32_400,
   });
 

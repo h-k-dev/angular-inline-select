@@ -1,1 +1,33 @@
 @use '../demo';
+
+// Display-vs-model table: what the user sees | the DB entry behind it.
+.quartet-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: var(--mat-sys-body-medium);
+
+  th,
+  td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+    vertical-align: baseline;
+  }
+
+  thead th {
+    font: var(--mat-sys-label-large);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  tbody th {
+    font: var(--mat-sys-label-large);
+    color: var(--mat-sys-on-surface-variant);
+    white-space: nowrap;
+  }
+
+  code {
+    font-size: 0.85em;
+    color: var(--mat-sys-on-surface-variant);
+    word-break: break-all;
+  }
+}

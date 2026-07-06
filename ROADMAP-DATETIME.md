@@ -55,17 +55,32 @@ Rules that make it deterministic:
   cold-start default before any value has been seen.
 - Same principle later for datetime/time ranges (T5/T6).
 
-## Canonical primitives
+## Canonical primitives — REVISED: the DB-entry contract (2026-07-06)
 
-| Control | Value | Notes |
+**Supersedes the timezone-free `'yyyy-MM-dd'`/`'HH:mm'` decision.** iusta's
+`core/datetime` dictates ONE model format everywhere (`toDBEntry(dt) =
+dt.toUTC().toISO()`; the time-entry table binds
+`FieldTree<DomainResult['model']>` = `{date, range: {start, end},
+duration}`), and the sandbox now mirrors it — `temporal/src/datetime/
+db-entry.ts` is the dictating core (Luxon-free `Date` math):
+
+| Control | `value` / `savedModelChange` | Display |
 | --- | --- | --- |
-| date | `InlineDateValue` (above) | days are `'yyyy-MM-dd'` |
-| time | `'HH:mm'` (`':ss'` opt) `\| null` | 24 h wall-clock string |
-| duration | seconds `number \| null` | matches iusta time-duration |
-| datetime | ISO 8601 `\| null` | T6 — timezone story TBD |
+| date | UTC ISO DB entry of local `startOf('day')` (ranges: end = `endOf('day')`); shape-echo intact | localized local calendar day |
+| time | UTC ISO DB entry — the instant CARRIES its day (typed `'HH:mm'` re-anchors on the value's own day; `now`'s day when empty) | local wall-clock via `Intl` |
+| duration | seconds `number \| null` | `h:mm` etc. |
 
-Luxon `DateTime` (what iusta's date-v2 emits today) and `Date` objects live
-at consumer boundaries — the iusta wrappers convert, the controls never do.
+The difference between what the user sees and what is behind the back:
+controls keep local day/`'HH:mm'` machinery internally and convert ONLY at
+the value boundary. Overnight is intrinsic (an end instant on the next day
+IS the +1; the badge derives via `localDayDiff`). Group propagation is
+plain datetime arithmetic — the sandbox mirror of `shiftFromDuration` /
+`induceFromTimeRange`; a typed END is wall-clock intent (re-anchored to
+the start's day, rolled forward while at-or-before), a START commit never
+re-anchors (multi-day ends survive), a DAY commit shifts both instants
+preserving wall-clock + over-count. Demo: the quartet card is a
+display-vs-model TABLE. Main iusta consumers to target: the time-entry
+table (primary), deadline & task add-dialogs (mat-form-field, T4).
 
 ## T0 — `angular-inline-select/temporal` entry point — SHIPPED
 

@@ -108,51 +108,76 @@
       >
         <h3 class="example-card__title">The quartet — stay · start · end · length (linked: the T5 group core)</h3>
         <p class="prose">
-          Stay on
-          <angular-inline-date
-            rangeDay
-            [formField]="stayForm.day"
-            [locale]="dateLocale()"
-            ariaLabel="Stay day"
-          />
-          from
-          <angular-inline-time
-            rangeStart
-            [formField]="stayForm.starts"
-            [locale]="militaryLocale()"
-            ariaLabel="Stay start in 24-hour time"
-          />
-          to
-          <angular-inline-time
-            rangeEnd
-            [formField]="stayForm.ends"
-            [locale]="militaryLocale()"
-            ariaLabel="Stay end in 24-hour time"
-          />
-          for
-          <angular-inline-duration
-            rangeLength
-            [formField]="stayForm.length"
-            durationFormat="h:mm"
-            [step]="60"
-            ariaLabel="Stay length"
-          />
-          — one signal form, four temporal fields LINKED by the <code>DateTimeRangeGroup</code> directive, times in
-          military (24&nbsp;h via <code>hc-h23</code>). Model:
-          <code
-            >{{ stayModel().day ?? '∅' }} · {{ stayModel().starts ?? '∅' }}–{{ stayModel().ends ?? '∅' }} ·
-            {{ stayModel().length ?? '∅' }}s</code
-          >.
+          What the user SEES vs the model BEHIND it — every temporal value is a UTC ISO DB entry
+          (<code>datetime.toUTC().toISO()</code>), the display is the local reading:
         </p>
 
+        <table class="quartet-table">
+          <thead>
+            <tr>
+              <th scope="col">Field</th>
+              <th scope="col">Display (local)</th>
+              <th scope="col">Model (UTC, SQL-friendly)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Stay</th>
+              <td>
+                <angular-inline-date
+                  rangeDay
+                  [formField]="stayForm.day"
+                  [locale]="dateLocale()"
+                  ariaLabel="Stay day"
+                />
+              </td>
+              <td><code>{{ stayModel().day ?? '∅' }}</code></td>
+            </tr>
+            <tr>
+              <th scope="row">Starts</th>
+              <td>
+                <angular-inline-time
+                  rangeStart
+                  [formField]="stayForm.starts"
+                  [locale]="militaryLocale()"
+                  ariaLabel="Stay start in 24-hour time"
+                />
+              </td>
+              <td><code>{{ stayModel().starts ?? '∅' }}</code></td>
+            </tr>
+            <tr>
+              <th scope="row">Ends</th>
+              <td>
+                <angular-inline-time
+                  rangeEnd
+                  [formField]="stayForm.ends"
+                  [locale]="militaryLocale()"
+                  ariaLabel="Stay end in 24-hour time"
+                />
+              </td>
+              <td><code>{{ stayModel().ends ?? '∅' }}</code></td>
+            </tr>
+            <tr>
+              <th scope="row">Length</th>
+              <td>
+                <angular-inline-duration
+                  rangeLength
+                  [formField]="stayForm.length"
+                  durationFormat="h:mm"
+                  [step]="60"
+                  ariaLabel="Stay length"
+                />
+              </td>
+              <td><code>{{ stayModel().length ?? '∅' }}s</code></td>
+            </tr>
+          </tbody>
+        </table>
+
         <p class="form-toggles__hint">
-          They speak to each other: committing a start or end recomputes the length (an end at or before the start
-          wraps to the next day — the <code>+{{ stayGroup.endDayOffset() }}</code> badge on the end field, the airline
-          arrival pattern); committing a length MOVES the end (try “30h”: the badge grows to <code>+2</code>); day
-          edits shift the whole stay. The log below shows the GROUP's composed emissions per commit — the date range
-          in ISO with the over-count applied (<code>{{ stayGroup.dateRange() | json }}</code>), the time range, and
-          the duration in seconds — each stream only when its value changed. Still open: Tab-advance, ISO-paste
-          decomposition, the calendar gestures (T2).
+          Linked by <code>DateTimeRangeGroup</code>: a typed end is wall-clock intent (at-or-before the start rolls to
+          the next day — the <code>+{{ stayGroup.endDayOffset() }}</code> badge); a length commit moves the end (try
+          “30h”); a day commit shifts both instants preserving wall-clock times. The log shows the group's composed
+          emissions — date range, time range (UTC ISO), duration (seconds) — each stream only when it changed.
         </p>
       </div>
 

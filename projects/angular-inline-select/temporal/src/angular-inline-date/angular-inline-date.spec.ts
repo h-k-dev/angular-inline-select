@@ -15,7 +15,14 @@ import {
   dateValuesEqual,
   type InlineDateValue,
 } from './date-codec';
+import { dayToDbEntry, dayEndToDbEntry } from '../datetime/db-entry';
 import { AngularInlineText } from 'angular-inline-select';
+
+// The value contract: UTC ISO DB entries (local startOf/endOf day) behind,
+// localized calendar days in front. Expectations compose through the same
+// helpers, so specs are TZ-independent.
+const db = dayToDbEntry;
+const dbEnd = dayEndToDbEntry;
 
 // A fixed "now" so the specs are deterministic: Tuesday, 12 May 2026.
 const NOW = new Date(2026, 4, 12);
@@ -146,7 +153,7 @@ describe('date shape-echo codec', () => {
   `,
 })
 class DateFormHost {
-  model = signal<string | null>('2026-05-12');
+  model = signal<string | null>(db('2026-05-12'));
   field = form(this.model);
   now = () => NOW;
 
@@ -231,8 +238,8 @@ describe('AngularInlineDate', () => {
 
     accept(h);
 
-    expect(h.host.saved).toEqual(['2026-12-24']);
-    expect(h.host.sessions).toEqual([{ value: '2026-12-24', changed: true }]);
+    expect(h.host.saved).toEqual([db('2026-12-24')]);
+    expect(h.host.sessions).toEqual([{ value: db('2026-12-24'), changed: true }]);
     expect(h.display().textContent).toBe('Dec 24, 2026');
   });
 
@@ -241,7 +248,7 @@ describe('AngularInlineDate', () => {
     accept(h);
 
     expect(h.host.saved).toEqual([]);
-    expect(h.host.field().value()).toBe('2026-05-12');
+    expect(h.host.field().value()).toBe(db('2026-05-12'));
   });
 
   it('the /tomorrow slash command inserts the resolved ISO date', async () => {
@@ -296,39 +303,39 @@ describe('AngularInlineDate shape-echo', () => {
 
   it('a string binding stays a string: single in, single out', async () => {
     const h = setupHost(DateShapeHost);
-    h.host.value.set('2026-05-12');
+    h.host.value.set(db('2026-05-12'));
     h.fixture.detectChanges();
 
     await commitDraft(h, '24.12.2026');
 
-    expect(h.host.value()).toBe('2026-12-24');
+    expect(h.host.value()).toBe(db('2026-12-24'));
   });
 
   it('{ start } echoes one-key: the single-day range moves whole', async () => {
     const h = setupHost(DateShapeHost);
-    h.host.value.set({ start: '2026-05-12' });
+    h.host.value.set({ start: db('2026-05-12') });
     h.fixture.detectChanges();
 
     expect(h.display().textContent).toBe('May 12, 2026');
 
     await commitDraft(h, '24.12.2026');
 
-    expect(h.host.value()).toEqual({ start: '2026-12-24' });
+    expect(h.host.value()).toEqual({ start: db('2026-12-24') });
   });
 
   it('{ start, end } equal moves both sides with the typed day', async () => {
     const h = setupHost(DateShapeHost);
-    h.host.value.set({ start: '2026-05-12', end: '2026-05-12' });
+    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-12') });
     h.fixture.detectChanges();
 
     await commitDraft(h, '24.12.2026');
 
-    expect(h.host.value()).toEqual({ start: '2026-12-24', end: '2026-12-24' });
+    expect(h.host.value()).toEqual({ start: db('2026-12-24'), end: dbEnd('2026-12-24') });
   });
 
   it('a distinct end survives a start edit; idle display shows the range', async () => {
     const h = setupHost(DateShapeHost);
-    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
+    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
     h.fixture.detectChanges();
 
     const idle = h.display().textContent ?? '';
@@ -337,7 +344,7 @@ describe('AngularInlineDate shape-echo', () => {
 
     await commitDraft(h, '13.5.2026');
 
-    expect(h.host.value()).toEqual({ start: '2026-05-13', end: '2026-05-15' });
+    expect(h.host.value()).toEqual({ start: db('2026-05-13'), end: dbEnd('2026-05-15') });
   });
 
   it('null + ranged=false cold-starts as a single date', async () => {
@@ -345,7 +352,7 @@ describe('AngularInlineDate shape-echo', () => {
 
     await commitDraft(h, '24.12.2026');
 
-    expect(h.host.value()).toBe('2026-12-24');
+    expect(h.host.value()).toBe(db('2026-12-24'));
   });
 
   it('null + ranged=true cold-starts in the range shape', async () => {
@@ -355,28 +362,28 @@ describe('AngularInlineDate shape-echo', () => {
 
     await commitDraft(h, '24.12.2026');
 
-    expect(h.host.value()).toEqual({ start: '2026-12-24', end: '2026-12-24' });
+    expect(h.host.value()).toEqual({ start: db('2026-12-24'), end: dbEnd('2026-12-24') });
   });
 
   it('null remembers the last seen shape: cleared one-key stays one-key', async () => {
     const h = setupHost(DateShapeHost);
-    h.host.value.set({ start: '2026-05-12' });
+    h.host.value.set({ start: db('2026-05-12') });
     h.fixture.detectChanges();
 
     await commitDraft(h, '');
     expect(h.host.value()).toEqual({ start: null });
 
     await commitDraft(h, '24.12.2026');
-    expect(h.host.value()).toEqual({ start: '2026-12-24' });
+    expect(h.host.value()).toEqual({ start: db('2026-12-24') });
   });
 
   it('the saved session carries the echoed shape', async () => {
     const h = setupHost(DateShapeHost);
-    h.host.value.set({ start: '2026-05-12' });
+    h.host.value.set({ start: db('2026-05-12') });
     h.fixture.detectChanges();
 
     await commitDraft(h, '24.12.2026');
 
-    expect(h.host.sessions).toEqual([{ value: { start: '2026-12-24' }, changed: true }]);
+    expect(h.host.sessions).toEqual([{ value: { start: db('2026-12-24') }, changed: true }]);
   });
 });

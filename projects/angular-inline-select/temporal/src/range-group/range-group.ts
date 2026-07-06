@@ -1,51 +1,48 @@
 import { Directive, computed, effect, inject, output, signal } from '@angular/core';
 
 import { AngularInlineDate } from '../angular-inline-date/angular-inline-date';
-import { toInternalRange, toIsoDate, type IsoDate } from '../angular-inline-date/date-codec';
+import { toInternalRange } from '../angular-inline-date/date-codec';
 import { AngularInlineTime } from '../angular-inline-time/angular-inline-time';
 import { INLINE_TIME_DAY_OFFSET } from '../angular-inline-time/day-offset';
 import { AngularInlineDuration } from '../angular-inline-duration/angular-inline-duration';
-import type { WallClockTime } from '../angular-inline-time/time-codec';
+import {
+  composeDbEntry,
+  dayToDbEntry,
+  dayEndToDbEntry,
+  diffDbEntrySeconds,
+  localDayDiff,
+  localDayOf,
+  localTimeOf,
+  shiftDbEntry,
+  type DbDateTime,
+} from '../datetime/db-entry';
 
 const DAY_SECONDS = 86_400;
 
-function toSeconds(time: WallClockTime | null): number | null {
-  if (time === null) return null;
-
-  const [hours, minutes] = time.split(':').map(Number);
-  return hours * 3600 + minutes * 60;
+function addDays(day: string, days: number): string {
+  const [year, month, date] = day.split('-').map(Number);
+  return localDayOf(new Date(year, month - 1, date + days).toISOString())!;
 }
 
-function toWallClock(seconds: number): WallClockTime {
-  const wrapped = ((seconds % DAY_SECONDS) + DAY_SECONDS) % DAY_SECONDS;
-  const pad = (value: number) => String(value).padStart(2, '0');
-
-  return `${pad(Math.floor(wrapped / 3600))}:${pad(Math.floor((wrapped % 3600) / 60))}`;
-}
-
-function addDays(iso: IsoDate, days: number): IsoDate {
-  const [year, month, day] = iso.split('-').map(Number);
-  return toIsoDate(new Date(year, month - 1, day + days));
-}
-
-/** The group's composed date value: both ends in ISO, over-count applied. */
+/**
+ * The group's composed DATE value: the stay's day boundaries as DB entries
+ * (`startOf('day')` … `endOf('day')`, over-count intrinsic to the end).
+ */
 export interface ComposedDateRange {
-  start: IsoDate;
-  end: IsoDate;
+  start: DbDateTime;
+  end: DbDateTime;
 }
 
-/** The group's composed time value: both wall-clock endpoints. */
+/** The group's composed TIME value: both endpoint instants as DB entries. */
 export interface ComposedTimeRange {
-  start: WallClockTime;
-  end: WallClockTime;
+  start: DbDateTime;
+  end: DbDateTime;
 }
 
-function sameDateRange(a: ComposedDateRange | null, b: ComposedDateRange | null): boolean {
-  if (a === null || b === null) return a === b;
-  return a.start === b.start && a.end === b.end;
-}
-
-function sameTimeRange(a: ComposedTimeRange | null, b: ComposedTimeRange | null): boolean {
+function sameRange(
+  a: { start: string; end: string } | null,
+  b: { start: string; end: string } | null,
+): boolean {
   if (a === null || b === null) return a === b;
   return a.start === b.start && a.end === b.end;
 }
@@ -53,16 +50,19 @@ function sameTimeRange(a: ComposedTimeRange | null, b: ComposedTimeRange | null)
 /**
  * T5's group core: links SEPARATE temporal controls — a date (`rangeDay`),
  * two times (`rangeStart`/`rangeEnd`) and a duration (`rangeLength`) — via
- * DI, owning the invariants:
+ * DI. Every value is a UTC ISO DB entry (iusta's `toDBEntry`), so the
+ * datetimes are REAL and the invariants are plain arithmetic — the sandbox
+ * mirror of iusta's `shiftFromDuration`/`induceFromTimeRange`:
  *
- * - `duration = end − start` over the COMPOSED datetimes: committing a
- *   start or end recomputes the duration (an end at or before the start
- *   reads as next-day — wall-clock wrap); committing a duration MOVES the
- *   end. Day edits shift the whole stay and touch nothing else.
- * - The `+n` day-overflow badge on the end field (the airline arrival
- *   pattern) is DERIVED — duration-based when a duration participates,
- *   wall-clock wrap otherwise — and feeds the end control through the
- *   `INLINE_TIME_DAY_OFFSET` token. It never enters a draft or a value.
+ * - Committing a start or end induces the duration (`end − start`); an end
+ *   instant at or before the start rolls forward by whole days until it
+ *   follows the start — the overnight case lands IN the value.
+ * - Committing a duration MOVES the end (`end = start + duration`).
+ * - Committing the day shifts BOTH times onto it, preserving wall-clock
+ *   times and the end's day over-count.
+ * - The `+n` badge on the end field = the LOCAL calendar-day difference
+ *   between the two instants — derived presentation, fed through
+ *   `INLINE_TIME_DAY_OFFSET`, never state of its own.
  * - Propagation happens on COMMIT (`saved`), never on live keystrokes:
  *   writes through `value` don't emit `saved`, so no cascades or cycles.
  *
@@ -80,45 +80,49 @@ export class DateTimeRangeGroup {
   #end = signal<AngularInlineTime | null>(null);
   #length = signal<AngularInlineDuration | null>(null);
 
-  /** The composed state, read live off the registered controls. */
-  readonly day = computed<IsoDate | null>(() => {
+  /** The stay's LOCAL calendar day, read off the date control. */
+  readonly day = computed<string | null>(() => {
     const control = this.#day();
-    return control ? toInternalRange(control.value()).start : null;
+    if (!control) return null;
+
+    const start = toInternalRange(control.value()).start;
+    return start === null ? null : localDayOf(start);
   });
-  readonly start = computed<WallClockTime | null>(() => this.#start()?.value() ?? null);
-  readonly end = computed<WallClockTime | null>(() => this.#end()?.value() ?? null);
+
+  /** The endpoint instants and duration, read live off the controls. */
+  readonly start = computed<DbDateTime | null>(() => this.#start()?.value() ?? null);
+  readonly end = computed<DbDateTime | null>(() => this.#end()?.value() ?? null);
   readonly length = computed<number | null>(() => this.#length()?.value() ?? null);
 
   /**
-   * Days the composed end overflows past the start's day — the end field's
-   * `+n` badge. Duration-authoritative when a duration participates
-   * (`21:00 + 30 h` = `+1` at `03:00`); wall-clock wrap otherwise (an end
-   * at or before the start is next-day).
+   * The end field's `+n` badge: LOCAL calendar days between the two
+   * instants — intrinsic to the values now that they carry their days.
    */
   readonly endDayOffset = computed(() => {
-    const start = toSeconds(this.start());
+    const start = this.start();
     if (start === null) return 0;
 
+    const end = this.end();
+    if (end !== null) return Math.max(0, localDayDiff(start, end) ?? 0);
+
     const length = this.length();
-    if (length !== null) return Math.floor((start + length) / DAY_SECONDS);
+    if (length !== null) return Math.max(0, localDayDiff(start, shiftDbEntry(start, length)) ?? 0);
 
-    const end = toSeconds(this.end());
-    return end !== null && end <= start ? 1 : 0;
+    return 0;
   });
 
-  /**
-   * The composed DATE value the group speaks: both ends in ISO, the end
-   * computed from the day plus the over-count (`2026-07-21` at `+1` →
-   * `{ start: '2026-07-21', end: '2026-07-22' }`).
-   */
+  /** The composed DATE value: day boundaries as DB entries, over-count applied. */
   readonly dateRange = computed<ComposedDateRange | null>(() => {
-    const day = this.day();
-    if (day === null) return null;
+    const startDay = this.day() ?? (this.start() !== null ? localDayOf(this.start()) : null);
+    if (startDay === null) return null;
 
-    return { start: day, end: addDays(day, this.endDayOffset()) };
+    return {
+      start: dayToDbEntry(startDay),
+      end: dayEndToDbEntry(addDays(startDay, this.endDayOffset())),
+    };
   });
 
-  /** The composed TIME value: both wall-clock endpoints, or `null` while incomplete. */
+  /** The composed TIME value: both endpoint instants, or `null` while incomplete. */
   readonly timeRange = computed<ComposedTimeRange | null>(() => {
     const start = this.start();
     const end = this.end();
@@ -127,8 +131,8 @@ export class DateTimeRangeGroup {
 
   /**
    * Composed emissions — the group speaks three values, each fired after
-   * commit propagation whenever ITS composed value changed: the date range
-   * (ISO, over-count applied), the time range, and the duration (seconds).
+   * commit propagation whenever ITS composed value changed: the date range,
+   * the time range (all UTC ISO DB entries), and the duration (seconds).
    */
   dateRangeChange = output<ComposedDateRange | null>();
   timeRangeChange = output<ComposedTimeRange | null>();
@@ -157,13 +161,13 @@ export class DateTimeRangeGroup {
 
   #emitChanges() {
     const date = this.dateRange();
-    if (this.#lastDate === undefined || !sameDateRange(date, this.#lastDate)) {
+    if (this.#lastDate === undefined || !sameRange(date, this.#lastDate)) {
       this.#lastDate = date;
       this.dateRangeChange.emit(date);
     }
 
     const time = this.timeRange();
-    if (this.#lastTime === undefined || !sameTimeRange(time, this.#lastTime)) {
+    if (this.#lastTime === undefined || !sameRange(time, this.#lastTime)) {
       this.#lastTime = time;
       this.timeRangeChange.emit(time);
     }
@@ -192,45 +196,91 @@ export class DateTimeRangeGroup {
 
   // -- Commit propagation ------------------------------------------------------
 
+  /** Rolls `end` forward by whole days until it strictly follows `start`, then induces. */
+  #induceFrom(start: DbDateTime, end: DbDateTime) {
+    let diff = diffDbEntrySeconds(start, end)!;
+    while (diff <= 0) {
+      end = shiftDbEntry(end, DAY_SECONDS);
+      diff += DAY_SECONDS;
+    }
+
+    this.#writeEnd(end);
+    this.#writeLength(diff);
+  }
+
   /**
-   * A time endpoint settled: the duration follows (`duration = end − start`,
-   * end-at-or-before-start wraps to next-day). A start commit with no end
-   * but a duration fills the end instead.
+   * The start settled — `induceFromTimeRange`: duration follows from the
+   * instants as they stand (multi-day ends survive); with no end but a
+   * duration, the end is filled from `start + duration`.
    */
-  timeCommitted() {
-    const start = toSeconds(this.start());
+  startCommitted() {
+    const start = this.start();
 
     if (start !== null) {
-      const end = toSeconds(this.end());
+      const end = this.end();
+
       if (end !== null) {
-        const diff = end - start;
-        this.#writeLength(diff <= 0 ? diff + DAY_SECONDS : diff);
+        this.#induceFrom(start, end);
       } else {
         const length = this.length();
-        if (length !== null) this.#writeEnd(toWallClock(start + length));
+        if (length !== null) this.#writeEnd(shiftDbEntry(start, length));
       }
     }
 
     this.#emitChanges();
   }
 
-  /** A duration settled: the end MOVES (`end = start + duration`). */
+  /**
+   * The end settled: a typed end time is WALL-CLOCK intent — re-anchor it
+   * onto the start's own day first, then roll forward while it does not
+   * follow the start (`23:30` lands the same evening, `06:00` the next
+   * morning), then induce the duration.
+   */
+  endCommitted() {
+    const start = this.start();
+    const end = this.end();
+
+    if (start !== null && end !== null) {
+      this.#induceFrom(start, composeDbEntry(localDayOf(start)!, localTimeOf(end)!));
+    }
+
+    this.#emitChanges();
+  }
+
+  /** A duration settled — `shiftFromDuration`: the end MOVES (`start + duration`). */
   lengthCommitted() {
-    const start = toSeconds(this.start());
+    const start = this.start();
     const length = this.length();
-    if (start !== null && length !== null) this.#writeEnd(toWallClock(start + length));
+    if (start !== null && length !== null) this.#writeEnd(shiftDbEntry(start, length));
 
     this.#emitChanges();
   }
 
-  /** Day edits shift the whole stay — wall-clock times and duration hold. */
+  /**
+   * The day settled: shift BOTH instants onto it — wall-clock times and
+   * the end's day over-count are preserved.
+   */
   dayCommitted() {
-    // Nothing to propagate in the single-day group (the maximal form's
-    // end-day field will shift here) — but the composed date range moved.
+    const day = this.day();
+
+    if (day !== null) {
+      const start = this.start();
+      const end = this.end();
+      const offset = start !== null && end !== null ? Math.max(0, localDayDiff(start, end) ?? 0) : 0;
+
+      if (start !== null) this.#writeStart(composeDbEntry(day, localTimeOf(start)!));
+      if (end !== null) this.#writeEnd(composeDbEntry(addDays(day, offset), localTimeOf(end)!));
+    }
+
     this.#emitChanges();
   }
 
-  #writeEnd(value: WallClockTime) {
+  #writeStart(value: DbDateTime) {
+    const control = this.#start();
+    if (control && control.value() !== value) control.value.set(value);
+  }
+
+  #writeEnd(value: DbDateTime) {
     const control = this.#end();
     if (control && control.value() !== value) control.value.set(value);
   }
@@ -264,7 +314,7 @@ export class RangeStart {
 
     group.attachStart(control);
     control.saved.subscribe((session) => {
-      if (session.changed) group.timeCommitted();
+      if (session.changed) group.startCommitted();
     });
   }
 }
@@ -289,7 +339,7 @@ export class RangeEnd {
 
     group.attachEnd(control);
     control.saved.subscribe((session) => {
-      if (session.changed) group.timeCommitted();
+      if (session.changed) group.endCommitted();
     });
   }
 }

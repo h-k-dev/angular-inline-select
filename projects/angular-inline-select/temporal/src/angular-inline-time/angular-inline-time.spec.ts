@@ -4,7 +4,13 @@ import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineTime, type InlineTimeSaved } from './angular-inline-time';
 import { parseTime, formatWallClock } from './time-codec';
+import { composeDbEntry, localTimeOf, localDayOf } from '../datetime/db-entry';
 import { AngularInlineText } from 'angular-inline-select';
+
+// The value contract: UTC ISO DB entries behind, local display in front.
+// Expectations compose through the same helpers, so specs are TZ-independent.
+const DAY = '2026-07-21';
+const at = (time: string) => composeDbEntry(DAY, time);
 
 // =============================================================================
 // Codec
@@ -50,7 +56,7 @@ describe('time codec', () => {
   `,
 })
 class TimeFormHost {
-  model = signal<string | null>('09:30');
+  model = signal<string | null>(at('09:30'));
   field = form(this.model);
 
   saved: (string | null)[] = [];
@@ -115,7 +121,7 @@ describe('AngularInlineTime', () => {
     expect(h.display().textContent).toBe('09:30');
   });
 
-  it('commits compact drafts as HH:mm with a localized preview', async () => {
+  it('commits typed drafts as DB entries anchored on the value own day', async () => {
     await typeText(h, '2105');
 
     const hint = document.querySelector('.editable-panel__message--hint');
@@ -123,9 +129,10 @@ describe('AngularInlineTime', () => {
 
     accept(h);
 
-    expect(h.host.saved).toEqual(['21:05']);
-    expect(h.host.sessions).toEqual([{ value: '21:05', changed: true }]);
-    expect(h.host.model()).toBe('21:05');
+    expect(h.host.saved).toEqual([at('21:05')]);
+    expect(h.host.sessions).toEqual([{ value: at('21:05'), changed: true }]);
+    expect(h.host.model()).toBe(at('21:05'));
+    expect(localDayOf(h.host.model())).toBe(DAY); // the day survives the edit
   });
 
   it('the parse gate blocks impossible times', async () => {
@@ -133,7 +140,7 @@ describe('AngularInlineTime', () => {
     accept(h);
 
     expect(h.host.saved).toEqual([]);
-    expect(h.host.field().value()).toBe('09:30');
+    expect(h.host.field().value()).toBe(at('09:30'));
   });
 
   it('an OS-picker change while idle commits immediately', () => {
@@ -142,9 +149,9 @@ describe('AngularInlineTime', () => {
     native.dispatchEvent(new Event('change', { bubbles: true }));
     h.fixture.detectChanges();
 
-    expect(h.host.model()).toBe('14:45');
-    expect(h.host.saved).toEqual(['14:45']);
-    expect(h.host.sessions).toEqual([{ value: '14:45', changed: true }]);
+    expect(h.host.model()).toBe(at('14:45'));
+    expect(h.host.saved).toEqual([at('14:45')]);
+    expect(h.host.sessions).toEqual([{ value: at('14:45'), changed: true }]);
     expect(h.display().textContent).toBe('14:45');
   });
 
@@ -159,9 +166,21 @@ describe('AngularInlineTime', () => {
     // Draft replaced, still an open session, nothing committed yet
     expect(h.host.saved).toEqual([]);
     expect(h.inner().editing()).toBe(true);
-    expect(h.host.field().value()).toBe('10:15'); // live channel
+    expect(h.host.field().value()).toBe(at('10:15')); // live channel
 
     accept(h);
-    expect(h.host.saved).toEqual(['10:15']);
+    expect(h.host.saved).toEqual([at('10:15')]);
+  });
+
+  it('a time typed into an EMPTY field anchors on the reference clock day', async () => {
+    h.host.model.set(null);
+    h.fixture.detectChanges();
+
+    await typeText(h, '8');
+    accept(h);
+
+    const value = h.host.model();
+    expect(localTimeOf(value)).toBe('08:00');
+    expect(localDayOf(value)).toBe(localDayOf(new Date().toISOString()));
   });
 });
