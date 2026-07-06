@@ -8,6 +8,71 @@
 /** `'yyyy-MM-dd'`. */
 export type IsoDate = string;
 
+/** The object shapes of `InlineDateValue`: `{ start }` is the single-day range `[start, start]`. */
+export interface IsoDateRange {
+  start: IsoDate | null;
+  end?: IsoDate | null;
+}
+
+/**
+ * The polymorphic bound value. The consumer's binding shape IS the mode
+ * declaration: a string binds a single date field, an object binds a range.
+ * The control echoes the shape it received and never invents another one.
+ */
+export type InlineDateValue = IsoDate | IsoDateRange | null;
+
+/** The shape a non-null value declares; `null` declares nothing (shape-ambiguous). */
+export type DateValueShape = 'single' | 'start-only' | 'range';
+
+export function inferDateShape(value: InlineDateValue): DateValueShape | null {
+  if (value === null) return null;
+  if (typeof value === 'string') return 'single';
+
+  return 'end' in value ? 'range' : 'start-only';
+}
+
+/** One canonical internal model, always — whatever shape came in. */
+export interface InternalDateRange {
+  start: IsoDate | null;
+  end: IsoDate | null;
+}
+
+export function toInternalRange(value: InlineDateValue): InternalDateRange {
+  if (value === null) return { start: null, end: null };
+  if (typeof value === 'string') return { start: value, end: value };
+
+  const start = value.start ?? null;
+  return { start, end: value.end === undefined ? start : value.end };
+}
+
+/**
+ * The echo: renders the internal range back in the consumer's shape.
+ * `start-only` keeps its one-key form until the data actually has a
+ * distinct end — only then does it grow the `end` key.
+ */
+export function echoDateShape(
+  internal: InternalDateRange,
+  shape: DateValueShape,
+): InlineDateValue {
+  switch (shape) {
+    case 'single':
+      return internal.start;
+    case 'start-only':
+      return internal.end === internal.start || internal.end === null
+        ? { start: internal.start }
+        : { start: internal.start, end: internal.end };
+    case 'range':
+      return { start: internal.start, end: internal.end };
+  }
+}
+
+/** Structural equality over the polymorphic value — echo writes must not loop. */
+export function dateValuesEqual(a: InlineDateValue, b: InlineDateValue): boolean {
+  if (a === null || b === null || typeof a === 'string' || typeof b === 'string') return a === b;
+
+  return a.start === b.start && a.end === b.end;
+}
+
 const pad = (value: number) => String(value).padStart(2, '0');
 
 export function toIsoDate(date: Date): IsoDate {
@@ -76,6 +141,35 @@ export function formatIsoDate(
 /** Long reading for the interpretation preview: `'Monday, 12 May 2026'`. */
 export function describeIsoDate(iso: IsoDate, locale?: string | string[]): string {
   return formatIsoDate(iso, locale, { dateStyle: 'full' });
+}
+
+/**
+ * Localized display of the internal range: single days render like
+ * `formatIsoDate`; a distinct end renders through `formatRange`
+ * (`'12 – 15 May 2026'`). Interim single-field display until T5's
+ * two-field ranged UI.
+ */
+export function formatInternalRange(
+  range: InternalDateRange,
+  locale?: string | string[],
+): string {
+  const { start, end } = range;
+  if (start === null && end === null) return '';
+  if (start === null) return `– ${formatIsoDate(end, locale)}`;
+  if (end === null || end === start) return formatIsoDate(start, locale);
+
+  const toDate = (iso: IsoDate) => {
+    const [year, month, day] = iso.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+  try {
+    return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).formatRange(
+      toDate(start),
+      toDate(end),
+    );
+  } catch {
+    return `${start} – ${end}`;
+  }
 }
 
 /** A slash-menu command resolving to a concrete date. */

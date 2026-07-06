@@ -19,16 +19,23 @@ import {
 } from 'angular-inline-select';
 import {
   parseDateInput,
-  formatIsoDate,
+  formatInternalRange,
   describeIsoDate,
   buildDateCommands,
+  inferDateShape,
+  toInternalRange,
+  echoDateShape,
+  dateValuesEqual,
   type IsoDate,
+  type InlineDateValue,
+  type DateValueShape,
+  type InternalDateRange,
 } from './date-codec';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineDateSaved {
-  /** The value the session settled on — ISO `'yyyy-MM-dd'`, or `null` for empty. */
-  value: IsoDate | null;
+  /** The value the session settled on, in the consumer's bound shape. */
+  value: InlineDateValue;
   /** Whether the settled value differs from the session baseline. */
   changed: boolean;
 }
@@ -62,12 +69,23 @@ export interface InlineDateSaved {
     '[style.display]': 'hidden() ? "none" : null',
   },
 })
-export class AngularInlineDate implements FormValueControl<IsoDate | null> {
+export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   /** The composed text control — all session machinery lives there. */
   protected inner = viewChild.required(AngularInlineText);
 
-  /** The committed value channel: ISO `'yyyy-MM-dd'`, or `null`. */
-  value = model<IsoDate | null>(null);
+  /**
+   * The committed value channel — polymorphic: ISO `'yyyy-MM-dd'` binds a
+   * single date, `{ start, end? }` binds a range, and the control ECHOES
+   * whichever shape it received (see the shape-echo table in
+   * ROADMAP-DATETIME.md).
+   */
+  value = model<InlineDateValue>(null);
+
+  /**
+   * Cold-start shape default: which shape a `null`-bound field emits before
+   * any non-null value has declared one. Ignored once a shape has been seen.
+   */
+  ranged = input(false);
 
   /** Form Value Contract — forwarded into the inner control. */
   errors = input<readonly ValidationError.WithOptionalFieldTree[]>([]);
@@ -105,8 +123,8 @@ export class AngularInlineDate implements FormValueControl<IsoDate | null> {
   /** Form Value Contract: touch — forwarded from the inner control. */
   touch = output<void>();
 
-  /** Hard commit event: fires once per accepted edit session — ISO or `null`. */
-  savedModelChange = output<IsoDate | null>();
+  /** Hard commit event: fires once per accepted edit session, in the bound shape. */
+  savedModelChange = output<InlineDateValue>();
 
   /** Emitted exactly once per settled edit session (Save, Discard, clear). */
   saved = output<InlineDateSaved>();
@@ -115,11 +133,29 @@ export class AngularInlineDate implements FormValueControl<IsoDate | null> {
   editing = model(false);
 
   /**
+   * `null` is the only shape-ambiguous value: this remembers the last shape
+   * a non-null value declared, so a cleared field keeps emitting the shape
+   * its consumer speaks.
+   */
+  #lastShape = linkedSignal<InlineDateValue, DateValueShape | null>({
+    source: this.value,
+    computation: (value, prev) => inferDateShape(value) ?? prev?.value ?? null,
+  });
+
+  /** The effective shape: last seen, or the `ranged` cold-start default. */
+  readonly shape = computed<DateValueShape>(
+    () => this.#lastShape() ?? (this.ranged() ? 'range' : 'single'),
+  );
+
+  /** One canonical internal model, always: `{ start, end }`. */
+  readonly internalRange = computed<InternalDateRange>(() => toInternalRange(this.value()));
+
+  /**
    * The string channel feeding the inner control: the localized committed
-   * date while idle, the raw draft while a session is open.
+   * date (or range) while idle, the raw draft while a session is open.
    */
   protected innerValue = linkedSignal<string, string>({
-    source: () => formatIsoDate(this.value(), this.locale()),
+    source: () => formatInternalRange(this.internalRange(), this.locale()),
     computation: (source, prev) => (this.editing() ? (prev?.value ?? source) : source),
   });
 
@@ -156,18 +192,37 @@ export class AngularInlineDate implements FormValueControl<IsoDate | null> {
     return all.filter((command) => command.match.includes(q));
   }
 
-  /** Live channel: readable drafts flow into the model as ISO dates. */
+  /**
+   * Interim single-field merge (until T5's two-field ranged UI): the typed
+   * day moves the whole range when it is single-day, and only `start` when
+   * a distinct `end` exists; clearing empties both sides. Never invents or
+   * drops a shape — that's the echo's job.
+   */
+  #mergeDay(day: IsoDate | null): InternalDateRange {
+    if (day === null) return { start: null, end: null };
+
+    const { start, end } = this.internalRange();
+    return end === null || end === start ? { start: day, end: day } : { start: day, end };
+  }
+
+  /** Live channel: readable drafts flow into the model in the bound shape. */
   protected handleInnerValue(raw: string) {
     this.innerValue.set(raw);
 
-    const iso = parseDateInput(raw, this.now()());
-    if (iso !== undefined && iso !== this.value()) this.value.set(iso);
+    const day = parseDateInput(raw, this.now()());
+    if (day === undefined) return;
+
+    const echoed = echoDateShape(this.#mergeDay(day), this.shape());
+    if (!dateValuesEqual(echoed, this.value())) this.value.set(echoed);
   }
 
-  /** Retype the settled session: strings inside, ISO dates outside. */
+  /** Retype the settled session: strings inside, the echoed shape outside. */
   protected handleInnerSaved(session: InlineTextSaved) {
-    const iso = parseDateInput(session.value, this.now()());
-    const value = iso === undefined ? this.value() : iso;
+    const day = parseDateInput(session.value, this.now()());
+    const value =
+      day === undefined
+        ? this.value()
+        : echoDateShape(this.#mergeDay(day), this.shape());
 
     if (session.changed) {
       this.value.set(value);

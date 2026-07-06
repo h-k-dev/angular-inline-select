@@ -1,9 +1,20 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, type Type } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineDate, type InlineDateSaved } from './angular-inline-date';
-import { parseDateInput, formatIsoDate, buildDateCommands, toIsoDate } from './date-codec';
+import {
+  parseDateInput,
+  formatIsoDate,
+  formatInternalRange,
+  buildDateCommands,
+  toIsoDate,
+  inferDateShape,
+  toInternalRange,
+  echoDateShape,
+  dateValuesEqual,
+  type InlineDateValue,
+} from './date-codec';
 import { AngularInlineText } from 'angular-inline-select';
 
 // A fixed "now" so the specs are deterministic: Tuesday, 12 May 2026.
@@ -56,6 +67,68 @@ describe('date codec', () => {
   });
 });
 
+describe('date shape-echo codec', () => {
+  it('infers the shape from the bound value; null declares nothing', () => {
+    expect(inferDateShape('2026-05-12')).toBe('single');
+    expect(inferDateShape({ start: '2026-05-12' })).toBe('start-only');
+    expect(inferDateShape({ start: '2026-05-12', end: '2026-05-15' })).toBe('range');
+    expect(inferDateShape({ start: null, end: null })).toBe('range');
+    expect(inferDateShape(null)).toBeNull();
+  });
+
+  it('normalizes every shape to the canonical internal range', () => {
+    expect(toInternalRange('2026-05-12')).toEqual({ start: '2026-05-12', end: '2026-05-12' });
+    // { start } is the single-day range [start, start]
+    expect(toInternalRange({ start: '2026-05-12' })).toEqual({
+      start: '2026-05-12',
+      end: '2026-05-12',
+    });
+    expect(toInternalRange({ start: '2026-05-12', end: '2026-05-15' })).toEqual({
+      start: '2026-05-12',
+      end: '2026-05-15',
+    });
+    expect(toInternalRange(null)).toEqual({ start: null, end: null });
+  });
+
+  it('echoes the received shape, never inventing another one', () => {
+    const single = { start: '2026-05-12', end: '2026-05-12' };
+    expect(echoDateShape(single, 'single')).toBe('2026-05-12');
+    expect(echoDateShape(single, 'start-only')).toEqual({ start: '2026-05-12' });
+    expect(echoDateShape(single, 'range')).toEqual({ start: '2026-05-12', end: '2026-05-12' });
+  });
+
+  it('start-only keeps its one-key form until the data has a distinct end', () => {
+    expect(echoDateShape({ start: '2026-05-12', end: '2026-05-12' }, 'start-only')).toEqual({
+      start: '2026-05-12',
+    });
+    expect(echoDateShape({ start: '2026-05-12', end: '2026-05-15' }, 'start-only')).toEqual({
+      start: '2026-05-12',
+      end: '2026-05-15',
+    });
+  });
+
+  it('dateValuesEqual compares structurally across shapes', () => {
+    expect(dateValuesEqual('2026-05-12', '2026-05-12')).toBe(true);
+    expect(dateValuesEqual({ start: '2026-05-12' }, { start: '2026-05-12' })).toBe(true);
+    expect(dateValuesEqual({ start: '2026-05-12' }, '2026-05-12')).toBe(false);
+    expect(
+      dateValuesEqual({ start: '2026-05-12' }, { start: '2026-05-12', end: '2026-05-15' }),
+    ).toBe(false);
+    expect(dateValuesEqual(null, null)).toBe(true);
+  });
+
+  it('formats single days plainly and distinct ranges through formatRange', () => {
+    expect(formatInternalRange({ start: '2026-05-12', end: '2026-05-12' }, 'en')).toBe(
+      'May 12, 2026',
+    );
+    expect(formatInternalRange({ start: null, end: null }, 'en')).toBe('');
+
+    const ranged = formatInternalRange({ start: '2026-05-12', end: '2026-05-15' }, 'en');
+    expect(ranged).toContain('12');
+    expect(ranged).toContain('15');
+  });
+});
+
 // =============================================================================
 // Component
 // =============================================================================
@@ -77,20 +150,20 @@ class DateFormHost {
   field = form(this.model);
   now = () => NOW;
 
-  saved: (string | null)[] = [];
+  saved: InlineDateValue[] = [];
   sessions: InlineDateSaved[] = [];
 }
 
-interface Harness {
-  fixture: ComponentFixture<DateFormHost>;
-  host: DateFormHost;
+interface Harness<T = DateFormHost> {
+  fixture: ComponentFixture<T>;
+  host: T;
   display: () => HTMLElement;
   editor: () => HTMLElement | null;
   inner: () => AngularInlineText;
 }
 
-function setup(): Harness {
-  const fixture = TestBed.createComponent(DateFormHost);
+function setupHost<T>(type: Type<T>): Harness<T> {
+  const fixture = TestBed.createComponent(type);
   fixture.detectChanges();
 
   return {
@@ -103,7 +176,9 @@ function setup(): Harness {
   };
 }
 
-async function typeText(h: Harness, text: string) {
+const setup = () => setupHost(DateFormHost);
+
+async function typeText(h: Harness<unknown>, text: string) {
   const display = h.display();
 
   const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
@@ -132,7 +207,7 @@ async function typeText(h: Harness, text: string) {
   h.fixture.detectChanges();
 }
 
-function accept(h: Harness) {
+function accept(h: Harness<unknown>) {
   (h.inner() as unknown as { accept(): void }).accept();
   h.fixture.detectChanges();
 }
@@ -186,5 +261,122 @@ describe('AngularInlineDate', () => {
     expect(document.querySelector('.editable-panel__message--hint')?.textContent?.trim()).toBe(
       '✓ Wednesday, May 13, 2026',
     );
+  });
+});
+
+// =============================================================================
+// Polymorphic value — the shape-echo (ROADMAP-DATETIME.md)
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineDate],
+  template: `
+    <angular-inline-date
+      [(value)]="value"
+      [ranged]="ranged()"
+      locale="en"
+      [now]="now"
+      (saved)="sessions.push($event)"
+    />
+  `,
+})
+class DateShapeHost {
+  value = signal<InlineDateValue>(null);
+  ranged = signal(false);
+  now = () => NOW;
+
+  sessions: InlineDateSaved[] = [];
+}
+
+describe('AngularInlineDate shape-echo', () => {
+  async function commitDraft(h: Harness<DateShapeHost>, text: string) {
+    await typeText(h, text);
+    accept(h);
+  }
+
+  it('a string binding stays a string: single in, single out', async () => {
+    const h = setupHost(DateShapeHost);
+    h.host.value.set('2026-05-12');
+    h.fixture.detectChanges();
+
+    await commitDraft(h, '24.12.2026');
+
+    expect(h.host.value()).toBe('2026-12-24');
+  });
+
+  it('{ start } echoes one-key: the single-day range moves whole', async () => {
+    const h = setupHost(DateShapeHost);
+    h.host.value.set({ start: '2026-05-12' });
+    h.fixture.detectChanges();
+
+    expect(h.display().textContent).toBe('May 12, 2026');
+
+    await commitDraft(h, '24.12.2026');
+
+    expect(h.host.value()).toEqual({ start: '2026-12-24' });
+  });
+
+  it('{ start, end } equal moves both sides with the typed day', async () => {
+    const h = setupHost(DateShapeHost);
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-12' });
+    h.fixture.detectChanges();
+
+    await commitDraft(h, '24.12.2026');
+
+    expect(h.host.value()).toEqual({ start: '2026-12-24', end: '2026-12-24' });
+  });
+
+  it('a distinct end survives a start edit; idle display shows the range', async () => {
+    const h = setupHost(DateShapeHost);
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
+    h.fixture.detectChanges();
+
+    const idle = h.display().textContent ?? '';
+    expect(idle).toContain('12');
+    expect(idle).toContain('15');
+
+    await commitDraft(h, '13.5.2026');
+
+    expect(h.host.value()).toEqual({ start: '2026-05-13', end: '2026-05-15' });
+  });
+
+  it('null + ranged=false cold-starts as a single date', async () => {
+    const h = setupHost(DateShapeHost);
+
+    await commitDraft(h, '24.12.2026');
+
+    expect(h.host.value()).toBe('2026-12-24');
+  });
+
+  it('null + ranged=true cold-starts in the range shape', async () => {
+    const h = setupHost(DateShapeHost);
+    h.host.ranged.set(true);
+    h.fixture.detectChanges();
+
+    await commitDraft(h, '24.12.2026');
+
+    expect(h.host.value()).toEqual({ start: '2026-12-24', end: '2026-12-24' });
+  });
+
+  it('null remembers the last seen shape: cleared one-key stays one-key', async () => {
+    const h = setupHost(DateShapeHost);
+    h.host.value.set({ start: '2026-05-12' });
+    h.fixture.detectChanges();
+
+    await commitDraft(h, '');
+    expect(h.host.value()).toEqual({ start: null });
+
+    await commitDraft(h, '24.12.2026');
+    expect(h.host.value()).toEqual({ start: '2026-12-24' });
+  });
+
+  it('the saved session carries the echoed shape', async () => {
+    const h = setupHost(DateShapeHost);
+    h.host.value.set({ start: '2026-05-12' });
+    h.fixture.detectChanges();
+
+    await commitDraft(h, '24.12.2026');
+
+    expect(h.host.sessions).toEqual([{ value: { start: '2026-12-24' }, changed: true }]);
   });
 });

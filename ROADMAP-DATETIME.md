@@ -67,13 +67,25 @@ Rules that make it deterministic:
 Luxon `DateTime` (what iusta's date-v2 emits today) and `Date` objects live
 at consumer boundaries — the iusta wrappers convert, the controls never do.
 
-## T0 — `angular-inline-select/temporal` entry point
+## T0 — `angular-inline-select/temporal` entry point — SHIPPED
 
-Move `angular-inline-date`/`-time`/`-duration` out of the core `src/lib`
-into a `temporal/` secondary entry point (the `/phone` recipe: own
-`ng-package.json`, tsconfig path, spec include glob in `angular.json`,
-never re-exported from the core barrel). Then implement the
-`InlineDateValue` shape-echo on the date control.
+Moved `angular-inline-date`/`-time`/`-duration` out of the core `src/lib`
+into the `temporal/` secondary entry point (the `/phone` recipe: own
+`ng-package.json`, tsconfig path, spec include globs in `angular.json` +
+`tsconfig.spec/lib.json`, core barrel temporal-free; controls import the
+text core via the package name). Prod-build verified: all temporal markers
+live exclusively in the lazy temporal-playground chunk.
+
+**Shape-echo shipped, value codec only.** `InlineDateValue` +
+`inferDateShape`/`toInternalRange`/`echoDateShape` in the date codec;
+the control carries `#lastShape` (a `linkedSignal` over `value`), the
+`ranged` cold-start input, and echoes every commit in the bound shape.
+The UI stays a SINGLE field until T5: a distinct-end range displays via
+`Intl.DateTimeFormat.formatRange`, and the interim edit rule is —
+single-day ranges move whole with the typed day, a distinct `end`
+survives a start edit, clearing empties both sides. No validity munging
+(`start <= end` stays T5's job). The two-field ranged UI + calendar
+gestures remain in T5.
 
 ---
 
