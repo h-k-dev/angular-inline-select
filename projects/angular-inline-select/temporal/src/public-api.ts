@@ -9,5 +9,7 @@ export * from './angular-inline-date/angular-inline-date';
 export * from './angular-inline-date/date-codec';
 export * from './angular-inline-time/angular-inline-time';
 export * from './angular-inline-time/time-codec';
+export * from './angular-inline-time/day-offset';
 export * from './angular-inline-duration/angular-inline-duration';
 export * from './angular-inline-duration/duration-codec';
+export * from './range-group/range-group';

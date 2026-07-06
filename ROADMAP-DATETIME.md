@@ -172,7 +172,28 @@ derives `errorState = (field invalid || local invalid) && touched`. Plan:
 - Sandbox gets a minimal copy of the adapter to develop against; iusta
   keeps its own.
 
-## T5 — Range & linked fields ("they speak to each other")
+## T5 — Range & linked fields ("they speak to each other") — CORE SHIPPED
+
+**Shipped (the group core, directive+DI — decision taken):**
+`DateTimeRangeGroup` (`[dateTimeRangeGroup]`) + role directives
+`rangeDay`/`rangeStart`/`rangeEnd`/`rangeLength` in the temporal entry
+point. Controls stay group-ignorant; roles attach them via DI and
+subscribe to `saved`. Propagation on COMMIT only (writes go through
+`value`, which never emits `saved` — no cascades): start/end commits
+recompute the length (end at-or-before start wraps next-day, +24 h);
+length commits MOVE the end; day commits shift the stay untouched. The
+`+n` badge: `endDayOffset` (duration-authoritative when present —
+`21:00 + 30 h` = `+2` — else wall-clock wrap) feeds the end control via
+the `INLINE_TIME_DAY_OFFSET` token, which `rangeEnd` provides on the
+control's own element; the time control renders it as a suffix badge
+(aria: "plus one day"), coexisting with the 🕐 affordance. Playground
+quartet is linked and browser-verified. 123 tests.
+
+**Still open here:** Tab-advance start → end, ISO-datetime paste
+decomposition, calendar drag/Ctrl+click (needs T2), the ranged
+two-field date UI, the maximal end-day field, and `end >= start`
+violation ERRORS (the quartet can't violate it — propagation keeps it
+consistent by construction; errors become real with an end-day field).
 
 **Sandbox fixtures exist:** the temporal playground carries the UNLINKED
 quartet — stay · start · end · length in one signal form, seeded with an

@@ -1,17 +1,29 @@
 <!-- Live interpretation preview: the localized reading of the draft. -->
 <ng-template #previewTpl>{{ preview() }}</ng-template>
 
-<!-- The OS-picker affordance: rendered with the field in both states. -->
-<ng-template #clockTpl>
-  <button
-    type="button"
-    class="time-trigger"
-    aria-label="Open time picker"
-    (mousedown)="$event.preventDefault()"
-    (click)="openNativePicker($event)"
-  >
-    🕐
-  </button>
+<!--
+  The suffix slot: the +n day-overflow badge (group-fed, derived — never
+  part of the draft), then the consumer's affix or the OS-picker 🕐.
+-->
+<ng-template #suffixTpl>
+  @if (dayOffset() > 0) {
+    <span class="time-day-badge" role="img" [attr.aria-label]="dayBadgeAria()"
+      >+{{ dayOffset() }}</span
+    >
+  }
+  @if (consumerSuffixTpl(); as consumer) {
+    <ng-container [ngTemplateOutlet]="consumer" />
+  } @else if (showNativePicker()) {
+    <button
+      type="button"
+      class="time-trigger"
+      aria-label="Open time picker"
+      (mousedown)="$event.preventDefault()"
+      (click)="openNativePicker($event)"
+    >
+      🕐
+    </button>
+  }
 </ng-template>
 
 <!--
@@ -35,7 +47,7 @@
   [placeholder]="placeholder()"
   [ariaLabel]="ariaLabel()"
   [prefixTemplate]="prefixTpl()"
-  [suffixTemplate]="consumerSuffixTpl() ?? (showNativePicker() ? clockTpl : undefined)"
+  [suffixTemplate]="suffixActive() ? suffixTpl : undefined"
   [hintTemplate]="preview() ? previewTpl : undefined"
   (touch)="touch.emit()"
   (saved)="handleInnerSaved($event)"

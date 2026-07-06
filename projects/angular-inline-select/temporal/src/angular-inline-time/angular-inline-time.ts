@@ -2,6 +2,7 @@ import {
   Component,
   ElementRef,
   TemplateRef,
+  inject,
   input,
   model,
   output,
@@ -10,6 +11,7 @@ import {
   viewChild,
   contentChild,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 import {
@@ -19,6 +21,7 @@ import {
   type InlineTextSaved,
 } from 'angular-inline-select';
 import { parseTime, formatWallClock, type WallClockTime } from './time-codec';
+import { INLINE_TIME_DAY_OFFSET } from './day-offset';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineTimeSaved {
@@ -43,10 +46,23 @@ export interface InlineTimeSaved {
  */
 @Component({
   selector: 'angular-inline-time',
-  imports: [AngularInlineText],
+  imports: [AngularInlineText, NgTemplateOutlet],
   templateUrl: './angular-inline-time.html',
   styles: `
     :host { display: inline; position: relative; }
+    .time-day-badge {
+      display: inline-block;
+      padding: 0 0.35em;
+      margin-inline-end: 0.15em;
+      border-radius: var(--mat-sys-corner-small, 0.5rem);
+      background: var(--mat-sys-tertiary-container, #e8f0fe);
+      color: var(--mat-sys-on-tertiary-container, #174ea6);
+      font-size: 0.72em;
+      font-weight: 600;
+      line-height: 1.6;
+      vertical-align: super;
+      user-select: none;
+    }
     .time-trigger {
       font: inherit;
       line-height: 1;
@@ -119,6 +135,25 @@ export class AngularInlineTime implements FormValueControl<WallClockTime | null>
   protected prefixTpl = computed(() => this.prefixTemplate() ?? this.contentPrefix()?.templateRef);
   protected consumerSuffixTpl = computed(
     () => this.suffixTemplate() ?? this.contentSuffix()?.templateRef,
+  );
+
+  /**
+   * Day-overflow badge feed — provided on this element by the range
+   * group's `rangeEnd` role directive; absent (0) everywhere else.
+   */
+  #groupDayOffset = inject(INLINE_TIME_DAY_OFFSET, { optional: true, self: true });
+
+  /** Days the composed end overflows past the start's calendar day (`+1` badge). */
+  readonly dayOffset = computed(() => this.#groupDayOffset?.() ?? 0);
+
+  protected dayBadgeAria = computed(() =>
+    this.dayOffset() === 1 ? 'plus one day' : `plus ${this.dayOffset()} days`,
+  );
+
+  /** Whether the suffix slot has anything to render (badge, consumer affix, or 🕐). */
+  protected suffixActive = computed(
+    () =>
+      this.dayOffset() > 0 || this.consumerSuffixTpl() !== undefined || this.showNativePicker(),
   );
 
   /** Form Value Contract: touch — forwarded from the inner control. */

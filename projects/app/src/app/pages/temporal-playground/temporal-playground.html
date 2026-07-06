@@ -97,11 +97,12 @@
         </div>
       </div>
 
-      <div class="example-card" id="quartet-example">
-        <h3 class="example-card__title">The quartet — stay · start · end · length (unlinked, the T5 fixture)</h3>
+      <div class="example-card" id="quartet-example" dateTimeRangeGroup #stayGroup="dateTimeRangeGroup">
+        <h3 class="example-card__title">The quartet — stay · start · end · length (linked: the T5 group core)</h3>
         <p class="prose">
           Stay on
           <angular-inline-date
+            rangeDay
             [formField]="stayForm.day"
             [locale]="dateLocale()"
             ariaLabel="Stay day"
@@ -109,6 +110,7 @@
           />
           from
           <angular-inline-time
+            rangeStart
             [formField]="stayForm.starts"
             [locale]="militaryLocale()"
             ariaLabel="Stay start in 24-hour time"
@@ -116,6 +118,7 @@
           />
           to
           <angular-inline-time
+            rangeEnd
             [formField]="stayForm.ends"
             [locale]="militaryLocale()"
             ariaLabel="Stay end in 24-hour time"
@@ -123,14 +126,15 @@
           />
           for
           <angular-inline-duration
+            rangeLength
             [formField]="stayForm.length"
             durationFormat="h:mm"
             [step]="60"
             ariaLabel="Stay length"
             (saved)="logEmit('stay.length saved', $event)"
           />
-          — one signal form, four temporal fields, times in military (24&nbsp;h via the <code>hc-h23</code> locale
-          extension). Model:
+          — one signal form, four temporal fields LINKED by the <code>DateTimeRangeGroup</code> directive, times in
+          military (24&nbsp;h via <code>hc-h23</code>). Model:
           <code
             >{{ stayModel().day ?? '∅' }} · {{ stayModel().starts ?? '∅' }}–{{ stayModel().ends ?? '∅' }} ·
             {{ stayModel().length ?? '∅' }}s</code
@@ -138,10 +142,10 @@
         </p>
 
         <p class="form-toggles__hint">
-          Deliberately NOT linked yet — this is the fixture T5's <code>DateTimeRangeGroup</code> grows on: end ≥ start
-          over the composed datetimes, duration = end − start, day edits shifting both sides. The seed is an OVERNIGHT
-          stay (21:00 → 06:00): once linked, the end field wears a <code>+1</code> day badge (the airline arrival
-          pattern) instead of reading as an error. See ROADMAP-DATETIME.
+          They speak to each other: committing a start or end recomputes the length (an end at or before the start
+          wraps to the next day — the <code>+{{ stayGroup.endDayOffset() }}</code> badge on the end field, the airline
+          arrival pattern); committing a length MOVES the end (try “30h”: the badge grows to <code>+2</code>); day
+          edits shift the whole stay. Still open: Tab-advance, ISO-paste decomposition, the calendar gestures (T2).
         </p>
       </div>
 

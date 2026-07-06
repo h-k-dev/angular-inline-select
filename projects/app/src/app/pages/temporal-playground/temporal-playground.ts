@@ -16,6 +16,11 @@ import {
   AngularInlineDate,
   AngularInlineDuration,
   AngularInlineTime,
+  DateTimeRangeGroup,
+  RangeDay,
+  RangeStart,
+  RangeEnd,
+  RangeLength,
   type DurationFormat,
 } from 'angular-inline-select/temporal';
 
@@ -35,6 +40,11 @@ import {
     AngularInlineDate,
     AngularInlineDuration,
     AngularInlineTime,
+    DateTimeRangeGroup,
+    RangeDay,
+    RangeStart,
+    RangeEnd,
+    RangeLength,
   ],
 })
 export class TemporalPlayground {
@@ -66,11 +76,10 @@ export class TemporalPlayground {
   protected estimate = signal<number | null>(5400);
 
   // ---------------------------------------------------------------------------
-  // The quartet — stay · start · end · length in one signal form, deliberately
-  // UNLINKED: the T5 DateTimeRangeGroup fixture (end >= start over composed
-  // datetimes, duration = end − start, day edits shift both sides). Seeded
-  // OVERNIGHT: the end is wall-clock-earlier than the start — exactly the
-  // case the +1 day badge on the end field will make legible.
+  // The quartet — stay · start · end · length in one signal form, LINKED by
+  // the DateTimeRangeGroup: duration = end − start, duration edits move the
+  // end, day edits shift the stay. Seeded OVERNIGHT: the end is
+  // wall-clock-earlier than the start, so the end field wears the +1 badge.
   // ---------------------------------------------------------------------------
   protected stayModel = signal<{
     /** ISO `'yyyy-MM-dd'`. */
