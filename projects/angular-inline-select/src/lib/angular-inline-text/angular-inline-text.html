@@ -25,6 +25,7 @@
     [attr.aria-invalid]="isEmpty() && required() ? null : errorsVisible() || null"
     [attr.aria-expanded]="editing()"
     [attr.data-placeholder]="placeholder()"
+    [attr.inputmode]="inputMode() ?? null"
     spellcheck="false"
     (beforeinput)="interceptBeforeInput($event)"
     (paste)="interceptPaste($event)"
@@ -70,6 +71,7 @@
         [attr.aria-invalid]="errorsVisible() || null"
         [attr.aria-describedby]="panelId + '-messages'"
         [attr.data-placeholder]="placeholder()"
+        [attr.inputmode]="inputMode() ?? null"
         (input)="handleEditorInput()"
         (paste)="handleEditorPaste($event)"
         (keydown.enter)="handleEnterKey($event)"
@@ -99,6 +101,13 @@
             </div>
           }
         </ng-content>
+      }
+
+      <!-- Live panel hint: per-keystroke feedback that never touches the draft -->
+      @if (hintTpl(); as hint) {
+        <div class="editable-panel__message editable-panel__message--hint">
+          <ng-container *ngTemplateOutlet="hint" />
+        </div>
       }
 
       @if (isDirty() && !errorsVisible()) {

@@ -26,6 +26,7 @@ import { A11yModule, _IdGenerator } from '@angular/cdk/a11y';
 
 import { getSelectionOffsets, setCaretOffset, replayEdit } from './caret';
 import { EditablePrefix, EditableSuffix } from './editable-affix';
+import { EditableHint } from './editable-hint';
 
 interface ValueNormalizationDetails {
   value: string;
@@ -248,6 +249,24 @@ export class AngularInlineText implements FormValueControl<string> {
 
   protected prefixTpl = computed(() => this.prefixTemplate() ?? this.contentPrefix()?.templateRef);
   protected suffixTpl = computed(() => this.suffixTemplate() ?? this.contentSuffix()?.templateRef);
+
+  /**
+   * Panel hint template — live per-keystroke feedback (interpretation
+   * previews, counters) rendered in the panel footer, independent of the
+   * error state. Same dual channel as the affixes: input for composition,
+   * `ng-template[editableHint]` content for direct use.
+   */
+  hintTemplate = input<TemplateRef<unknown> | undefined>(undefined);
+
+  private contentHint = contentChild(EditableHint);
+
+  protected hintTpl = computed(() => this.hintTemplate() ?? this.contentHint()?.templateRef);
+
+  /**
+   * `inputmode` for the editable surfaces — virtual-keyboard hint on mobile
+   * ('decimal', 'tel', 'email', …).
+   */
+  inputMode = input<string | undefined>(undefined);
 
   /**
    * Trims leading/trailing whitespace on commit — the committed value and the

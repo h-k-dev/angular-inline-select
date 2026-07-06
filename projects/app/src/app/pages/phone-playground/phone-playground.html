@@ -1,0 +1,92 @@
+<main>
+  <section class="example" id="phone-example">
+    <header class="example__header">
+      <h2>Inline phone</h2>
+      <p>
+        <code>angular-inline-phone</code> composes the text control over an injected <code>PhoneCodec</code>
+        (libphonenumber-js, metadata of your choice). Canonical value: E.164. No third-party DOM, no CSS to break —
+        the flag is a unicode emoji.
+      </p>
+    </header>
+
+    <div class="example__body example-stack">
+      <div class="example-card">
+        <h3 class="example-card__title">Standalone [(value)]</h3>
+        <p class="prose">
+          Support hotline:
+          <angular-inline-phone
+            [(value)]="hotline"
+            [codec]="codec"
+            defaultCountry="DE"
+            ariaLabel="Support hotline phone number"
+          />
+          — the flag shows the <em>detected</em> country, the panel previews the engine's interpretation on every
+          keystroke, and the draft itself is never reformatted — model: <code>{{ hotline() ?? '∅' }}</code
+          >.
+        </p>
+      </div>
+
+      <div class="example-card" id="phone-form-example">
+        <h3 class="example-card__title">Signal form + live interpretation</h3>
+        <p class="prose">
+          Contact number:
+          <angular-inline-phone
+            #contact
+            [formField]="contactForm.phone"
+            [codec]="codec"
+            defaultCountry="DE"
+            [displayFormat]="displayFormat()"
+            ariaLabel="Contact phone number, German format by default"
+            (savedModelChange)="logEmit('savedModelChange', $event)"
+            (saved)="logEmit('saved', $event)"
+          >
+            <span editable-error>
+              @if (contact.parseFailed()) {
+                That doesn’t read as a phone number — digits, spaces and an optional leading “+”.
+              } @else if (phoneMissing()) {
+                A contact number is required.
+              }
+            </span>
+          </angular-inline-phone>
+          — typed nationally (“0171…”) it resolves against <code>defaultCountry</code>; typed with “+CC” the detected
+          country wins. Structurally unreadable drafts can’t save; suspicious ones (too short, unrecognized) save with
+          a ⚠ in the preview — model: <code>{{ contactModel().phone ?? '∅' }}</code
+          >.
+        </p>
+
+        <div class="form-toggles" role="group" aria-label="Field state">
+          <button mat-stroked-button (click)="fieldRequired.update((v) => !v)">
+            Required: {{ fieldRequired() ? 'on' : 'off' }}
+          </button>
+          <button mat-stroked-button (click)="fieldReadonly.update((v) => !v)">
+            Readonly: {{ fieldReadonly() ? 'on' : 'off' }}
+          </button>
+          <button mat-stroked-button (click)="fieldDisabled.update((v) => !v)">
+            Disabled: {{ fieldDisabled() ? 'on' : 'off' }}
+          </button>
+          <button
+            mat-stroked-button
+            (click)="displayFormat.set(displayFormat() === 'national' ? 'international' : 'national')"
+          >
+            Display: {{ displayFormat() }}
+          </button>
+          <button mat-stroked-button (click)="contactForm().markAsTouched()">Mark touched</button>
+          <button mat-stroked-button (click)="contactForm.phone().reset()">Reset field</button>
+        </div>
+
+        <p class="form-toggles__hint">
+          Try “0171 2345678” (✓), “017” (⚠ too short — still saves), “abc” (parse gate — Save stays blocked), or
+          “+33 1 42 68 53 00” (the flag flips to 🇫🇷). The model always holds E.164 or <code>null</code>.
+        </p>
+
+        @if (emittedEvents().length > 0) {
+          <div class="event-log" role="log" aria-label="Emitted events">
+            @for (entry of emittedEvents(); track $index) {
+              <code class="event-log__entry">{{ entry }}</code>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+</main>

@@ -11,5 +11,10 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./pages/number-playground/number-playground').then((m) => m.NumberPlayground),
   },
+  {
+    path: 'phone',
+    loadComponent: () =>
+      import('./pages/phone-playground/phone-playground').then((m) => m.PhonePlayground),
+  },
   { path: '', pathMatch: 'full', redirectTo: 'text' },
 ];

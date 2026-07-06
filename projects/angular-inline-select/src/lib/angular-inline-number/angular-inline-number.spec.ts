@@ -208,7 +208,9 @@ describe('AngularInlineNumber — affix forwarding', () => {
 
     await typeText(h, '55');
 
-    const inPanel = document.querySelector('.editable-panel__line .editable-text__affix--suffix .unit');
+    const inPanel = document.querySelector(
+      '.editable-panel__line .editable-text__affix--suffix .unit',
+    );
     expect(inPanel?.textContent).toBe('€');
 
     // The affix never leaks into the draft or the committed number

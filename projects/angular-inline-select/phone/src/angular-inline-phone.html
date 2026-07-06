@@ -1,6 +1,13 @@
+<!-- The country-detection prefix: feedback, not decoration. -->
+<ng-template #flagTpl>{{ flag() }}</ng-template>
+
+<!-- Live interpretation preview: ✓/⚠/… + what the engine understood. -->
+<ng-template #previewTpl>{{ preview() }}</ng-template>
+
 <!--
   Composition, not inheritance: the inner text control owns the session
-  machinery; this component only translates at the contract boundary.
+  machinery; this component translates at the contract boundary through the
+  injected PhoneCodec.
 -->
 <angular-inline-text
   [value]="innerValue()"
@@ -8,17 +15,18 @@
   [(editing)]="innerEditing"
   [isSingleLine]="true"
   [normalizeValue]="true"
-  inputMode="decimal"
+  inputMode="tel"
   [errors]="innerErrors()"
   [invalid]="invalid()"
   [disabled]="disabled()"
   [readonly]="readonly()"
   [required]="required()"
   [touched]="touched()"
-  [placeholder]="placeholder()"
+  [placeholder]="effectivePlaceholder()"
   [ariaLabel]="ariaLabel()"
-  [prefixTemplate]="prefixTpl()"
+  [prefixTemplate]="consumerPrefixTpl() ?? (flag() ? flagTpl : undefined)"
   [suffixTemplate]="suffixTpl()"
+  [hintTemplate]="preview() ? previewTpl : undefined"
   (touch)="touch.emit()"
   (saved)="handleInnerSaved($event)"
 >

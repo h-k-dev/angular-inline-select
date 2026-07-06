@@ -4,8 +4,10 @@
   "compileOnSave": false,
   "compilerOptions": {
     "paths": {
-      "angular-inline-select": ["./dist/angular-inline-select"]
+      "angular-inline-select": ["./projects/angular-inline-select/src/public-api.ts"],
+      "angular-inline-select/phone": ["./projects/angular-inline-select/phone/src/public-api.ts"]
     },
+    "resolveJsonModule": true,
     "strict": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,

@@ -12,7 +12,10 @@ import {
 } from '@angular/core';
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
-import { AngularInlineText, type InlineTextSaved } from '../angular-inline-text/angular-inline-text';
+import {
+  AngularInlineText,
+  type InlineTextSaved,
+} from '../angular-inline-text/angular-inline-text';
 import { EditablePrefix, EditableSuffix } from '../angular-inline-text/editable-affix';
 
 /** Payload of the `saved` output: one emission per settled edit session. */

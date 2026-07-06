@@ -171,6 +171,189 @@ forwarded by `angular-inline-number`:
 - Intl codec preset (locale grouping/decimal comma) shipped as an opt-in
   `parse`/`format` pair.
 
+## Next up — `angular-inline-phone`
+
+### The core decision: own the UI, never the metadata
+
+Phone handling is two problems with opposite build-vs-buy answers:
+
+1. **The engine** (what is a valid number, how does it format): this is
+   Google's libphonenumber metadata — ~250 regions, updated continuously as
+   carriers change numbering plans. **Never hand-roll this.** Correctness is
+   a moving target that Google chases for us.
+2. **The UI** (input surface, country affordance, error presentation): we
+   already own a better one than any widget ships. **Never import someone
+   else's DOM/CSS again.**
+
+`intl-tel-input` is rejected on architecture, not quality: it is a DOM+CSS
+widget (the twice-broken CSS is structural — their markup IS their API), its
+`utils.js` is a ~260 kB monolith you load whole, and every piece of UI it
+offers (input, dropdown, flag sprite) is something our inline paradigm
+replaces. What we actually want from that stack is the thing underneath it:
+**`libphonenumber-js`** — the maintained, modular rewrite of Google's
+library.
+
+### Tree-shaking strategy (three independent seams)
+
+1. **Secondary entry point.** The phone control and its adapter live in
+   `angular-inline-select/phone` (ng-packagr secondary entry point, the same
+   mechanism as `@angular/material/button`). Apps that never import it carry
+   zero phone bytes — the core library stays engine-free.
+2. **Codec injection, again.** Like number's `parse`/`format`, the control
+   takes a `PhoneCodec` — a plain interface of functions (no OOP):
+   ```ts
+   interface PhoneCodec {
+     parse(raw: string, defaultCountry?: string): PhoneParseResult;
+     // e164 + country on success; a reason ('too-short' | 'too-long' |
+     // 'invalid-country' | 'not-a-number') on failure
+     format(e164: string, style: 'national' | 'international'): string;
+     placeholderExample?(country: string): string;
+   }
+   ```
+   The control never imports libphonenumber-js; it consumes the codec.
+   `PhoneParseResult` carries the full interpretation, not just pass/fail:
+   `{ e164, country, dialCode, formatted }` on success plus a
+   `reason`/`warning` tier (see below) — the UI renders *what the engine
+   understood*, live.
+3. **Metadata injection into the adapter.** `libphonenumber-js/core` exports
+   metadata-free functions; the metadata is an argument. Our adapter is a
+   factory:
+   ```ts
+   createLibphonenumberCodec(metadata) // consumer picks the payload
+   ```
+   Consumers choose `libphonenumber-js/metadata.min.json` (~all countries,
+   validation-grade), `.max` (stricter type detection), `mobile`, or a
+   **custom subset built with the package's metadata generator CLI**
+   (`--countries DE,AT,CH` → a few kB). `libphonenumber-js` becomes an
+   optional peer dependency of the secondary entry point only.
+
+The flag/country affordance uses **flag emoji** (two regional-indicator code
+points from the ISO country code) — zero sprites, zero CSS dependency, the
+entire class of intl-tel-input breakage is structurally impossible.
+
+### Value contract
+
+- `value = model<string | null>` holding **E.164** (`'+4917112345678'`) —
+  canonical, serializable, locale-free; empty commits `null` (same decision
+  as number). `saved`/`savedModelChange` always emit E.164 or `null`.
+- Display formatting is presentation: `displayFormat` input
+  (`'national' | 'international'`), rendered through the codec on commit —
+  same round-trip principle as `'12.50'` → `12.5`.
+- Detected country, national form, and parse reason are exposed as public
+  computeds (like `parseFailed` on number) for consumer error content and
+  UI, not stuffed into the value.
+
+### Phases
+
+**P1 — codec + adapter — shipped.** `PhoneCodec`/`PhoneParseResult` +
+`countryFlagEmoji` in `angular-inline-select/phone` (secondary entry point;
+`libphonenumber-js` is an optional peer dep). `createLibphonenumberCodec(
+metadata, examples?)` over `libphonenumber-js/core`. Severity emerges from
+parseability: readable-but-suspicious input parses with a `warning`
+(committable), unreadable input fails with a `reason` (gated) — pinned
+against the real engine (`'017'@DE` → E.164 `+49017` + `too-short` warning;
+`'abc'` → `not-a-number`; national digits without country →
+`invalid-country`). **Measured bundle cost:** the demo's `/phone` lazy chunk
+— control + adapter + full min-metadata for every country — is ~173 kB raw /
+**~36 kB transfer**, loaded only on that route; the number page's chunk stays
+at ~3.8 kB (entry-point isolation proven). A custom country subset shrinks
+it further.
+
+**P2 — `angular-inline-phone` — shipped** (as specified below, plus the
+`editableHint` slot and generic `inputMode` input on `angular-inline-text`;
+number now sends `inputmode="decimal"`, phone `"tel"`). Browser-verified:
+`… abc` blocked with the projected parse message, `⚠ +49 017` committed
+(warn-don't-block), `+33…` flips the flag to 🇫🇷 live, commits log E.164.
+One discovery: the unit-test builder globs from `sourceRoot`, so the
+secondary entry's specs need `"include": ["**/*.spec.ts",
+"../phone/src/**/*.spec.ts"]` in the test target.
+
+**P2 — `angular-inline-phone` (composition MVP).** Same shape as number:
+contains `angular-inline-text`, forwards the contract, retypes events to
+E.164. `defaultCountry` input for national-format typing; `+CC` input
+overrides it (parser detects).
+
+- **The live interpretation preview is the centerpiece** (production
+  lesson: "the user must SEE it — phone numbers are flimsy"). While the
+  session is open, a hint line in the panel footer shows what the engine
+  understood of the current draft, per keystroke: 🇩🇪 `+49` · "will save as
+  +49 171 1234567" — or the parse reason. This delivers as-you-type
+  *visibility* with zero caret rewriting: the draft is never touched, the
+  interpretation renders next to it. (Needs a small generic `editableHint`
+  slot on `angular-inline-text` — hint template rendered in the panel
+  footer; also future home for maxLength counters.)
+- **Two-tier severity, warn-don't-block** (production lesson: the old
+  control shipped soft issues as warnings, never blocked them). Commit gate
+  = structurally impossible input only (`not-a-number`, `invalid-country`);
+  soft findings (`too-short`/`too-long`/`possible-local-only`) surface as a
+  warning in the preview line and via a public signal, but commit stays
+  allowed; business strictness (`isValid`, mobile-only) ships as
+  signal-forms validators for the consumer's schema.
+- **Flag emoji as detection feedback, not decoration**: the built-in prefix
+  shows the *detected* country (falling back to `defaultCountry`), updating
+  live — its job is deciphering `+49` vs `+21` at a glance, idle and while
+  editing. No picker in the MVP.
+- **Example-number placeholders**: `numberType` input
+  (`'mobile' | 'fixed-or-mobile'`) feeds `codec.placeholderExample()` —
+  the placeholder shows a real example for the default country.
+- `inputmode="tel"` via the new generic attr input on the text control
+  (pulled forward from N3).
+- **No live reformatting of the draft** — validate live, preview live,
+  format on commit (round-trip through the codec, like `'12.50'` → `12.5`).
+  Confirmed by production: the old control ran `formatOnDisplay: false` for
+  the same reason.
+
+**P3 — as-you-type formatting (hard, separate).** libphonenumber's
+`AsYouType` inserts separators while typing — which rewrites the draft under
+the caret, the exact thing our architecture forbids. Needs caret-preserving
+reformat math (map caret through inserted separators). Only attempt with a
+dedicated spec suite; the control must stay correct without it.
+
+**P4 — country picker.** An interactive prefix (flag + dial code) opening a
+country list in the panel. This is inline-select territory — a natural
+trigger for extracting the `createEditSession()` primitives. Not before.
+
+**Demo:** `/phone` page — `defaultCountry="DE"` field, E.164 model display,
+per-reason projected errors, event console, and a bundle-size note comparing
+min vs custom metadata.
+
+### Production lessons absorbed (from the previous intl-tel-input control)
+
+- E.164 out on accept (`getNumber(0)`) — unchanged, already the contract.
+- Numeric validation-error table (`TOO_SHORT`, `INVALID_COUNTRY_CODE`,
+  `IS_POSSIBLE_LOCAL_ONLY`, …) surfaced as *warnings*, never commit
+  blockers → the two-tier severity design above.
+- `formatOnDisplay: false` in production → confirms MVP skips draft
+  reformatting.
+- `placeholderNumberType` driven by an `isMobilePhone` input → the
+  `numberType` + example-placeholder feature.
+- `dialCode` exposed as a model + data attribute → public
+  `country`/`dialCode` computeds and the flag-as-feedback prefix.
+- The flag-hell that disappears by being signal-native end-to-end: no
+  `#isUpdatingFromControl`/`#isUpdatingFromInput` circular-update guards, no
+  `#didInitialSync` + `queueMicrotask` + `requestAnimationFrame` double
+  reset, no "parent must seed `previous`" workaround (the derived
+  `previous` baseline covers it), no `afterRenderEffect` init/destroy
+  lifecycle for a foreign widget. That entire class of code existed to
+  bridge an imperative DOM library into signals; composing our own control
+  makes it unrepresentable.
+
+### Open questions (brainstorm)
+
+1. **Extensions** (`x123`) — E.164 doesn't carry them; libphonenumber does
+   (`ext` field). Support in v1 or explicitly out of scope? (Decides the
+   value shape — breaking to change later.)
+2. **Warning presentation**: does the warning tier stay phone-internal
+   (rendered in its preview line) or does `angular-inline-text` grow a
+   first-class warning slot next to errors? Leaning: keep it in the preview
+   line until a second control needs warnings.
+3. **Who owns the default codec instance** — DI token with
+   `providePhoneCodec(...)` app-wide vs per-instance input? Proposal: input
+   with DI fallback, like mat's ErrorStateMatcher.
+4. **Idle flag**: show the flag prefix on the committed display too, or
+   only while editing? Leaning: idle too — deciphering `+49` at a glance is
+   exactly the idle use case.
+
 ### Manual QA — Safari / iOS pass
 
 The `plaintext-only` probe falls back to `contenteditable="true"` + manual

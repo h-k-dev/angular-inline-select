@@ -93,7 +93,8 @@
         "test": {
           "builder": "@angular/build:unit-test",
           "options": {
-            "tsConfig": "projects/angular-inline-select/tsconfig.spec.json"
+            "tsConfig": "projects/angular-inline-select/tsconfig.spec.json",
+            "include": ["**/*.spec.ts", "../phone/src/**/*.spec.ts"]
           }
         }
       }
