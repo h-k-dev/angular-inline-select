@@ -1,14 +1,73 @@
 <h2 mat-dialog-title>Sign In</h2>
-<mat-dialog-content>
-  <p>Pick a display name — it becomes the toolbar title.</p>
-  <form id="login-form">
+<mat-dialog-content class="login-content">
+  <p class="login-intro">Pick a display name — it becomes the toolbar title.</p>
+
+  <form id="login-form" class="login-form">
+    <span class="login-form__label">Name</span>
     <angular-inline-text
-      [value]="displayName()"
-      (savedModelChange)="displayName.set($event)"
+      [formField]="signInForm.name"
       placeholder="Your name…"
       [normalizeValue]="true"
+      ariaLabel="Name"
       cdkInitialFocus
+    >
+      <span editable-error>
+        @if (nameMissing()) {
+          A name is required.
+        }
+      </span>
+    </angular-inline-text>
+
+    <span class="login-form__label">Age</span>
+    <angular-inline-number
+      [formField]="signInForm.age"
+      placeholder="Your age…"
+      ariaLabel="Age in years"
     />
+
+    <span class="login-form__label">Income</span>
+    <angular-inline-number
+      [formField]="signInForm.income"
+      [format]="incomeFormat"
+      placeholder="Your income…"
+      ariaLabel="Income in euros"
+    >
+      <ng-template editableSuffix><mat-icon inline>euro</mat-icon></ng-template>
+    </angular-inline-number>
+
+    <span class="login-form__label">Telephone</span>
+    <angular-inline-phone
+      #telephone
+      [formField]="signInForm.telephone"
+      [codec]="codec"
+      defaultCountry="DE"
+      ariaLabel="Telephone number"
+    >
+      <span editable-error>
+        @if (telephone.parseFailed()) {
+          That doesn’t read as a phone number — digits, spaces and an optional leading “+”.
+        } @else if (telephoneMissing()) {
+          A telephone number is required.
+        }
+      </span>
+    </angular-inline-phone>
+
+    <span class="login-form__label">Mobile</span>
+    <angular-inline-phone
+      #mobile
+      [formField]="signInForm.mobile"
+      [codec]="codec"
+      defaultCountry="DE"
+      numberKind="mobile"
+      placeholder="Your mobile…"
+      ariaLabel="Mobile number"
+    >
+      <span editable-error>
+        @if (mobile.parseFailed()) {
+          That doesn’t read as a phone number — digits, spaces and an optional leading “+”.
+        }
+      </span>
+    </angular-inline-phone>
   </form>
 </mat-dialog-content>
 
@@ -16,8 +75,8 @@
   <button
     class="login-button"
     mat-flat-button
-    [disabled]="!displayName()"
-    [mat-dialog-close]="displayName()"
+    [disabled]="signInForm().invalid()"
+    [mat-dialog-close]="signInModel().name"
   >
     Sign In
   </button>

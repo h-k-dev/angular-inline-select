@@ -448,7 +448,14 @@ export class AngularInlineText implements FormValueControl<string> {
   #wasOpen = false;
   emitTouchOnClose = effect(() => {
     const open = this.editing();
-    if (this.#wasOpen && !open) {
+
+    if (!this.#wasOpen && open) {
+      // A session opened by ANY path — `elevate()`, or an external
+      // `editing.set(true)` (e.g. the phone flag picker seeding a draft).
+      // `#saveAttempted` is per-session, so clear it here too, not only in
+      // `elevate()`, or a stale attempt flashes errors on the fresh draft.
+      untracked(() => this.#saveAttempted.set(false));
+    } else if (this.#wasOpen && !open) {
       untracked(() => {
         this.#selfTouched.set(true);
         this.touch.emit();
@@ -563,6 +570,12 @@ export class AngularInlineText implements FormValueControl<string> {
     event.preventDefault();
     if (this.disabled() || this.readonly() || this.editing()) return;
 
+    // Cut is owned by the `(cut)` handler — it needs `clipboardData`, which a
+    // `beforeinput` can't provide. Ignore the `deleteByCut` intent here so we
+    // don't elevate without removing the selection (that made cut take two
+    // gestures: elevate-unchanged, then cut again in the editor).
+    if ((event as InputEvent).inputType === 'deleteByCut') return;
+
     const committed = this.value() ?? '';
     const selection = getSelectionOffsets(this.display().nativeElement) ?? {
       start: committed.length,
@@ -573,6 +586,29 @@ export class AngularInlineText implements FormValueControl<string> {
 
     if (replayed) this.elevate(replayed.caret, replayed.text);
     else this.elevate(selection.start);
+  }
+
+  /**
+   * Cut on the pristine display: write the selection to the clipboard and
+   * elevate with it removed — one gesture, like delete and paste. Without
+   * this the field would elevate unchanged and the cut would need repeating.
+   */
+  protected interceptCut(event: ClipboardEvent) {
+    if (this.disabled() || this.readonly() || this.editing()) return;
+    event.preventDefault();
+
+    const committed = this.value() ?? '';
+    const selection = getSelectionOffsets(this.display().nativeElement) ?? {
+      start: committed.length,
+      end: committed.length,
+    };
+
+    if (selection.start !== selection.end) {
+      event.clipboardData?.setData('text/plain', committed.slice(selection.start, selection.end));
+    }
+
+    const remaining = committed.slice(0, selection.start) + committed.slice(selection.end);
+    this.elevate(selection.start, remaining);
   }
 
   /** Paste on the pristine display: cancel, splice into the draft, elevate. */
@@ -643,6 +679,10 @@ export class AngularInlineText implements FormValueControl<string> {
     const { value, changed } = this.normalization();
 
     if (!changed) {
+      // Mark accepted so the detach safety net doesn't also run `revert()` —
+      // the outcome is the same either way, but this keeps the accept/detach
+      // ordering from mattering.
+      this.accepted = true;
       this.close();
       this.saved.emit({ value, changed: false });
       return;
@@ -911,6 +951,11 @@ export class AngularInlineText implements FormValueControl<string> {
   protected clearValue(event: Event) {
     event.preventDefault();
     event.stopPropagation();
+
+    // Clear is an idle-only affordance (the bubble is hidden while editing).
+    // Guard anyway: committing '' mid-session would strand `previous` at the
+    // frozen baseline and desync the draft.
+    if (this.editing()) return;
 
     this.value.set('');
     this.savedModelChange.emit('');

@@ -84,6 +84,15 @@ editor (flat string), never a *document* editor, and stays that way:
 - **Hardening.** Bubble close timer cleared via `DestroyRef` (no post-destroy
   signal writes); panel ids from CDK `_IdGenerator` — DI-scoped, so the
   sequence is deterministic across an SSR render and its client hydration.
+- **Idle-gesture completeness.** Every common edit gesture on the idle
+  display elevates in ONE action: type, delete, paste, and now **cut** (a
+  `(cut)` handler writes the clipboard and elevates with the selection
+  removed — previously `deleteByCut` fell through `replayEdit` and elevated
+  unchanged, so cut took two gestures). Similarly, a `/` typed on the idle
+  display opens the slash menu on elevation (detection runs in
+  `handlePanelAttach`, not just on `input`). Known remaining fall-through:
+  word-delete (`deleteWordBackward`) still elevates unchanged — rare, no
+  clipboard stake; revisit if it bites.
 
 Verified against `@angular/forms/signals` 22.0: `touched`/`invalid`/`hidden`
 are auto-bound custom-control inputs; `touch` → `markAsTouched()`;

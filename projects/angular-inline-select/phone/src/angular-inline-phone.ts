@@ -454,11 +454,12 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
 
   protected onPickerKeydown(event: KeyboardEvent) {
     const options = this.pickerOptions();
+    const last = Math.max(0, options.length - 1);
 
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
-        this.pickerActiveIndex.update((i) => Math.min(i + 1, options.length - 1));
+        this.pickerActiveIndex.update((i) => Math.min(i + 1, last));
         break;
       case 'ArrowUp':
         event.preventDefault();

@@ -117,9 +117,17 @@ function accept(h: Harness<unknown>) {
 describe('number codec defaults', () => {
   it('parses dot decimals, empty to null, garbage to undefined', () => {
     expect(defaultParseNumber(' 12.5 ')).toBe(12.5);
+    expect(defaultParseNumber('.5')).toBe(0.5);
+    expect(defaultParseNumber('-3')).toBe(-3);
     expect(defaultParseNumber('')).toBeNull();
     expect(defaultParseNumber('  ')).toBeNull();
     expect(defaultParseNumber('12abc')).toBeUndefined();
+  });
+
+  it('rejects non-decimal shapes Number() would otherwise accept', () => {
+    for (const bad of ['Infinity', '-Infinity', '1e3', '0x10', '0b101', '0o17', 'NaN', '1,000']) {
+      expect(defaultParseNumber(bad)).toBeUndefined();
+    }
   });
 
   it('formats null as empty', () => {

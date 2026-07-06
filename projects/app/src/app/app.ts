@@ -62,7 +62,7 @@ export class App {
   protected openLoginDialog() {
     const ref = this.#dialog.open(Login, {
       width: 'min(60ch, 100dvw)',
-      height: 'min(60dvh, 100dvw)',
+      height: 'min(60dvh, 100dvh)',
     });
 
     ref.afterClosed().subscribe((displayName?: string) => {

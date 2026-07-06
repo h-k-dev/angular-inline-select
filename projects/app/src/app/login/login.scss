@@ -1,3 +1,30 @@
+.login-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-intro {
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// Centered two-column form: labels hug their width, fields take the rest.
+.login-form {
+  margin: auto;
+  width: 100%;
+  max-width: 44ch;
+
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 20px 24px;
+  align-items: baseline;
+}
+
+.login-form__label {
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-on-surface-variant);
+}
+
 .login-button {
   width: 100%;
 }

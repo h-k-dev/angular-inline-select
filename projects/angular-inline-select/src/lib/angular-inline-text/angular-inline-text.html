@@ -29,6 +29,7 @@
     spellcheck="false"
     (beforeinput)="interceptBeforeInput($event)"
     (paste)="interceptPaste($event)"
+    (cut)="interceptCut($event)"
     (compositionstart)="handleCompositionStart()"
   ></span>
   @if (suffixTpl(); as suffix) {

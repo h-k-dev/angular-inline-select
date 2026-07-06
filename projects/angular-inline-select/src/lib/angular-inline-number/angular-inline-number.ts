@@ -34,8 +34,13 @@ export function defaultParseNumber(raw: string): number | null | undefined {
   const trimmed = raw.trim();
   if (trimmed === '') return null;
 
+  // Dot-decimal only. `Number()` alone would accept hex (`0x10`), binary,
+  // octal, scientific (`1e3`) and `Infinity` — all surprising in a plain
+  // number field — so gate on a strict decimal shape first.
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(trimmed)) return undefined;
+
   const parsed = Number(trimmed);
-  return Number.isNaN(parsed) ? undefined : parsed;
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 export function defaultFormatNumber(value: number | null): string {

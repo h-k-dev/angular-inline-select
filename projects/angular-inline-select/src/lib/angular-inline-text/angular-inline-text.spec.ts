@@ -398,6 +398,30 @@ describe('AngularInlineText — [(value)] binding', () => {
     expect(h.host.touchCount).toBe(1);
   });
 
+  it('cut on the idle display elevates with the selection removed and writes the clipboard', () => {
+    const display = h.display();
+
+    // Select the whole committed value on the pristine display
+    const selection = document.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(display);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    let clipped: string | null = null;
+    const event = new Event('cut', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', {
+      value: { setData: (_type: string, value: string) => (clipped = value) },
+    });
+    display.dispatchEvent(event);
+    h.fixture.detectChanges();
+
+    // One gesture: clipboard has the text, the field is elevated and emptied
+    expect(clipped).toBe('initial');
+    expect(h.editable().editing()).toBe(true);
+    expect(h.host.value()).toBe('');
+  });
+
   it('disabled renders a non-editable display and does not elevate', async () => {
     h.host.disabled.set(true);
     h.fixture.detectChanges();
