@@ -97,7 +97,15 @@
         </div>
       </div>
 
-      <div class="example-card" id="quartet-example" dateTimeRangeGroup #stayGroup="dateTimeRangeGroup">
+      <div
+        class="example-card"
+        id="quartet-example"
+        dateTimeRangeGroup
+        #stayGroup="dateTimeRangeGroup"
+        (dateRangeChange)="logEmit('stay.dateRange', $event)"
+        (timeRangeChange)="logEmit('stay.timeRange', $event)"
+        (durationChange)="logEmit('stay.duration', $event)"
+      >
         <h3 class="example-card__title">The quartet — stay · start · end · length (linked: the T5 group core)</h3>
         <p class="prose">
           Stay on
@@ -106,7 +114,6 @@
             [formField]="stayForm.day"
             [locale]="dateLocale()"
             ariaLabel="Stay day"
-            (saved)="logEmit('stay.day saved', $event)"
           />
           from
           <angular-inline-time
@@ -114,7 +121,6 @@
             [formField]="stayForm.starts"
             [locale]="militaryLocale()"
             ariaLabel="Stay start in 24-hour time"
-            (saved)="logEmit('stay.starts saved', $event)"
           />
           to
           <angular-inline-time
@@ -122,7 +128,6 @@
             [formField]="stayForm.ends"
             [locale]="militaryLocale()"
             ariaLabel="Stay end in 24-hour time"
-            (saved)="logEmit('stay.ends saved', $event)"
           />
           for
           <angular-inline-duration
@@ -131,7 +136,6 @@
             durationFormat="h:mm"
             [step]="60"
             ariaLabel="Stay length"
-            (saved)="logEmit('stay.length saved', $event)"
           />
           — one signal form, four temporal fields LINKED by the <code>DateTimeRangeGroup</code> directive, times in
           military (24&nbsp;h via <code>hc-h23</code>). Model:
@@ -145,7 +149,10 @@
           They speak to each other: committing a start or end recomputes the length (an end at or before the start
           wraps to the next day — the <code>+{{ stayGroup.endDayOffset() }}</code> badge on the end field, the airline
           arrival pattern); committing a length MOVES the end (try “30h”: the badge grows to <code>+2</code>); day
-          edits shift the whole stay. Still open: Tab-advance, ISO-paste decomposition, the calendar gestures (T2).
+          edits shift the whole stay. The log below shows the GROUP's composed emissions per commit — the date range
+          in ISO with the over-count applied (<code>{{ stayGroup.dateRange() | json }}</code>), the time range, and
+          the duration in seconds — each stream only when its value changed. Still open: Tab-advance, ISO-paste
+          decomposition, the calendar gestures (T2).
         </p>
       </div>
 

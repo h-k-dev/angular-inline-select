@@ -10,6 +10,8 @@ import {
   RangeStart,
   RangeEnd,
   RangeLength,
+  type ComposedDateRange,
+  type ComposedTimeRange,
 } from './range-group';
 
 const NOW = new Date(2026, 6, 21);
@@ -27,7 +29,12 @@ const NOW = new Date(2026, 6, 21);
     RangeLength,
   ],
   template: `
-    <div dateTimeRangeGroup>
+    <div
+      dateTimeRangeGroup
+      (dateRangeChange)="dateRanges.push($event)"
+      (timeRangeChange)="timeRanges.push($event)"
+      (durationChange)="durations.push($event)"
+    >
       <angular-inline-date rangeDay [(value)]="day" locale="en" [now]="now" />
       <angular-inline-time rangeStart [(value)]="start" locale="en-u-hc-h23" />
       <angular-inline-time rangeEnd [(value)]="end" locale="en-u-hc-h23" />
@@ -42,6 +49,10 @@ class QuartetHost {
   start = signal<string | null>('21:00');
   end = signal<string | null>('06:00');
   length = signal<number | null>(32_400);
+
+  dateRanges: (ComposedDateRange | null)[] = [];
+  timeRanges: (ComposedTimeRange | null)[] = [];
+  durations: (number | null)[] = [];
 
   now = () => NOW;
 }
@@ -165,6 +176,36 @@ describe('DateTimeRangeGroup', () => {
     expect(h.host.start()).toBe('21:00');
     expect(h.host.end()).toBe('06:00');
     expect(h.host.length()).toBe(32_400);
+  });
+
+  it('composes the date range with the over-count applied', () => {
+    // Seed: day 2026-07-21, offset +1 → the end DATE is the next day.
+    expect(h.group().dateRange()).toEqual({ start: '2026-07-21', end: '2026-07-22' });
+    expect(h.group().timeRange()).toEqual({ start: '21:00', end: '06:00' });
+  });
+
+  it('emits the composed streams per commit — only the ones that changed', async () => {
+    // End 23:30: same-day now — date range loses the +1, time range and duration move.
+    await commitInto(h, END, '23:30');
+
+    expect(h.host.dateRanges).toEqual([{ start: '2026-07-21', end: '2026-07-21' }]);
+    expect(h.host.timeRanges).toEqual([{ start: '21:00', end: '23:30' }]);
+    expect(h.host.durations).toEqual([2.5 * 3600]);
+
+    // Length 30h: end moves to 03:00, over-count +2 → end date two days out.
+    await commitInto(h, LENGTH, '30h');
+
+    expect(h.host.dateRanges[1]).toEqual({ start: '2026-07-21', end: '2026-07-23' });
+    expect(h.host.timeRanges[1]).toEqual({ start: '21:00', end: '03:00' });
+    expect(h.host.durations[1]).toBe(30 * 3600);
+  });
+
+  it('day commits emit only the date range — times and duration are untouched', async () => {
+    await commitInto(h, 0, '22.7.2026');
+
+    expect(h.host.dateRanges).toEqual([{ start: '2026-07-22', end: '2026-07-23' }]);
+    expect(h.host.timeRanges).toEqual([]);
+    expect(h.host.durations).toEqual([]);
   });
 
   it('group writes flow through value, never emitting saved on the written control', async () => {

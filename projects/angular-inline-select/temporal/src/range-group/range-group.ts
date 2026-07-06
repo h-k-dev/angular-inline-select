@@ -1,7 +1,7 @@
-import { Directive, computed, inject, signal } from '@angular/core';
+import { Directive, computed, effect, inject, output, signal } from '@angular/core';
 
 import { AngularInlineDate } from '../angular-inline-date/angular-inline-date';
-import { toInternalRange, type IsoDate } from '../angular-inline-date/date-codec';
+import { toInternalRange, toIsoDate, type IsoDate } from '../angular-inline-date/date-codec';
 import { AngularInlineTime } from '../angular-inline-time/angular-inline-time';
 import { INLINE_TIME_DAY_OFFSET } from '../angular-inline-time/day-offset';
 import { AngularInlineDuration } from '../angular-inline-duration/angular-inline-duration';
@@ -21,6 +21,33 @@ function toWallClock(seconds: number): WallClockTime {
   const pad = (value: number) => String(value).padStart(2, '0');
 
   return `${pad(Math.floor(wrapped / 3600))}:${pad(Math.floor((wrapped % 3600) / 60))}`;
+}
+
+function addDays(iso: IsoDate, days: number): IsoDate {
+  const [year, month, day] = iso.split('-').map(Number);
+  return toIsoDate(new Date(year, month - 1, day + days));
+}
+
+/** The group's composed date value: both ends in ISO, over-count applied. */
+export interface ComposedDateRange {
+  start: IsoDate;
+  end: IsoDate;
+}
+
+/** The group's composed time value: both wall-clock endpoints. */
+export interface ComposedTimeRange {
+  start: WallClockTime;
+  end: WallClockTime;
+}
+
+function sameDateRange(a: ComposedDateRange | null, b: ComposedDateRange | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.start === b.start && a.end === b.end;
+}
+
+function sameTimeRange(a: ComposedTimeRange | null, b: ComposedTimeRange | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.start === b.start && a.end === b.end;
 }
 
 /**
@@ -79,6 +106,75 @@ export class DateTimeRangeGroup {
     return end !== null && end <= start ? 1 : 0;
   });
 
+  /**
+   * The composed DATE value the group speaks: both ends in ISO, the end
+   * computed from the day plus the over-count (`2026-07-21` at `+1` →
+   * `{ start: '2026-07-21', end: '2026-07-22' }`).
+   */
+  readonly dateRange = computed<ComposedDateRange | null>(() => {
+    const day = this.day();
+    if (day === null) return null;
+
+    return { start: day, end: addDays(day, this.endDayOffset()) };
+  });
+
+  /** The composed TIME value: both wall-clock endpoints, or `null` while incomplete. */
+  readonly timeRange = computed<ComposedTimeRange | null>(() => {
+    const start = this.start();
+    const end = this.end();
+    return start !== null && end !== null ? { start, end } : null;
+  });
+
+  /**
+   * Composed emissions — the group speaks three values, each fired after
+   * commit propagation whenever ITS composed value changed: the date range
+   * (ISO, over-count applied), the time range, and the duration (seconds).
+   */
+  dateRangeChange = output<ComposedDateRange | null>();
+  timeRangeChange = output<ComposedTimeRange | null>();
+  durationChange = output<number | null>();
+
+  // `undefined` = baseline not captured yet (never emitted-against).
+  #lastDate: ComposedDateRange | null | undefined = undefined;
+  #lastTime: ComposedTimeRange | null | undefined = undefined;
+  #lastLength: number | null | undefined = undefined;
+
+  constructor() {
+    // Baseline the composed values once the initial bindings have settled,
+    // so the first commit emits real deltas, not the seed state.
+    effect(() => {
+      const date = this.dateRange();
+      const time = this.timeRange();
+      const length = this.length();
+
+      if (this.#lastDate === undefined) {
+        this.#lastDate = date;
+        this.#lastTime = time;
+        this.#lastLength = length;
+      }
+    });
+  }
+
+  #emitChanges() {
+    const date = this.dateRange();
+    if (this.#lastDate === undefined || !sameDateRange(date, this.#lastDate)) {
+      this.#lastDate = date;
+      this.dateRangeChange.emit(date);
+    }
+
+    const time = this.timeRange();
+    if (this.#lastTime === undefined || !sameTimeRange(time, this.#lastTime)) {
+      this.#lastTime = time;
+      this.timeRangeChange.emit(time);
+    }
+
+    const length = this.length();
+    if (this.#lastLength === undefined || length !== this.#lastLength) {
+      this.#lastLength = length;
+      this.durationChange.emit(length);
+    }
+  }
+
   // -- Registration (the role directives call these) --------------------------
 
   attachDay(control: AngularInlineDate) {
@@ -103,32 +199,35 @@ export class DateTimeRangeGroup {
    */
   timeCommitted() {
     const start = toSeconds(this.start());
-    if (start === null) return;
 
-    const end = toSeconds(this.end());
-    if (end !== null) {
-      const diff = end - start;
-      this.#writeLength(diff <= 0 ? diff + DAY_SECONDS : diff);
-      return;
+    if (start !== null) {
+      const end = toSeconds(this.end());
+      if (end !== null) {
+        const diff = end - start;
+        this.#writeLength(diff <= 0 ? diff + DAY_SECONDS : diff);
+      } else {
+        const length = this.length();
+        if (length !== null) this.#writeEnd(toWallClock(start + length));
+      }
     }
 
-    const length = this.length();
-    if (length !== null) this.#writeEnd(toWallClock(start + length));
+    this.#emitChanges();
   }
 
   /** A duration settled: the end MOVES (`end = start + duration`). */
   lengthCommitted() {
     const start = toSeconds(this.start());
     const length = this.length();
-    if (start === null || length === null) return;
+    if (start !== null && length !== null) this.#writeEnd(toWallClock(start + length));
 
-    this.#writeEnd(toWallClock(start + length));
+    this.#emitChanges();
   }
 
   /** Day edits shift the whole stay — wall-clock times and duration hold. */
   dayCommitted() {
-    // Nothing to propagate in the single-day group; the maximal form
-    // (separate end-day field) will shift the end day here.
+    // Nothing to propagate in the single-day group (the maximal form's
+    // end-day field will shift here) — but the composed date range moved.
+    this.#emitChanges();
   }
 
   #writeEnd(value: WallClockTime) {

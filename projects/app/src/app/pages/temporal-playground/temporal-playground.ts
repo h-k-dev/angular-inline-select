@@ -6,6 +6,7 @@ import {
   signal,
   computed,
 } from '@angular/core';
+import { JsonPipe } from '@angular/common';
 import { FormField, form, required } from '@angular/forms/signals';
 
 // Material
@@ -30,6 +31,9 @@ import {
   styleUrl: './temporal-playground.scss',
   changeDetection: ChangeDetectionStrategy.Eager,
   imports: [
+    // Angular
+    JsonPipe,
+
     // Material
     MatButtonModule,
 

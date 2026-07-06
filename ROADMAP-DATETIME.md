@@ -187,7 +187,16 @@ length commits MOVE the end; day commits shift the stay untouched. The
 the `INLINE_TIME_DAY_OFFSET` token, which `rangeEnd` provides on the
 control's own element; the time control renders it as a suffix badge
 (aria: "plus one day"), coexisting with the 🕐 affordance. Playground
-quartet is linked and browser-verified. 123 tests.
+quartet is linked and browser-verified. 126 tests.
+
+**The group speaks three composed values** (outputs, fired after commit
+propagation, each stream only when ITS value changed — baselined against
+the seed via a one-shot effect): `dateRangeChange` = both ends in ISO
+with the over-count applied to the end DATE (`2026-07-21` at `+2` →
+`{ start: '2026-07-21', end: '2026-07-23' }`), `timeRangeChange` = both
+wall-clock endpoints, `durationChange` = seconds. This IS the decomposed
+datetime-range value the maximal form and the iusta wrappers will
+consume — the composition direction of T5's decomposition requirement.
 
 **Still open here:** Tab-advance start → end, ISO-datetime paste
 decomposition, calendar drag/Ctrl+click (needs T2), the ranged
