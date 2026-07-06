@@ -16,5 +16,10 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./pages/phone-playground/phone-playground').then((m) => m.PhonePlayground),
   },
+  {
+    path: 'temporal',
+    loadComponent: () =>
+      import('./pages/temporal-playground/temporal-playground').then((m) => m.TemporalPlayground),
+  },
   { path: '', pathMatch: 'full', redirectTo: 'text' },
 ];

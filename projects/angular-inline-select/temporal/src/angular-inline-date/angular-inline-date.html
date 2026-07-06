@@ -1,0 +1,55 @@
+<!-- Live interpretation preview: the full reading of the draft. -->
+<ng-template #previewTpl>{{ preview() }}</ng-template>
+
+<!--
+  Date slash-menu: /today, /tomorrow, /yesterday + the next seven weekdays.
+  Labels come from Intl (localized, zero bundled translations); picking
+  inserts the ISO date, which the codec reads and the preview interprets.
+-->
+<ng-template #dateMenu let-query let-apply="apply" let-activeId="activeId">
+  <div role="listbox" aria-label="Dates">
+    @for (command of commandOptions(query); track command.id) {
+      <div
+        role="option"
+        [id]="command.id"
+        [attr.data-active]="command.id === activeId()"
+        [attr.aria-selected]="command.id === activeId()"
+        (click)="apply(command.iso)"
+      >
+        <span class="date-command__label">{{ command.label }}</span>
+        <span class="date-command__value">{{ command.iso }}</span>
+      </div>
+    } @empty {
+      <div class="date-command__empty">—</div>
+    }
+  </div>
+</ng-template>
+
+<!--
+  Composition, not inheritance: the inner text control owns the session
+  machinery; this component translates ISO dates ↔ typed drafts at the
+  contract boundary.
+-->
+<angular-inline-text
+  [value]="innerValue()"
+  (valueChange)="handleInnerValue($event)"
+  [(editing)]="editing"
+  [isSingleLine]="true"
+  [normalizeValue]="true"
+  [errors]="innerErrors()"
+  [invalid]="invalid()"
+  [disabled]="disabled()"
+  [readonly]="readonly()"
+  [required]="required()"
+  [touched]="touched()"
+  [placeholder]="placeholder()"
+  [ariaLabel]="ariaLabel()"
+  [prefixTemplate]="prefixTpl()"
+  [suffixTemplate]="suffixTpl()"
+  [hintTemplate]="preview() ? previewTpl : undefined"
+  [menuTemplate]="showDateMenu() ? dateMenu : undefined"
+  (touch)="touch.emit()"
+  (saved)="handleInnerSaved($event)"
+>
+  <ng-content select="[editable-error]" ngProjectAs="[editable-error]" />
+</angular-inline-text>

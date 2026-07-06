@@ -467,6 +467,57 @@ min vs custom metadata.
    only while editing? Leaning: idle too — deciphering `+49` at a glance is
    exactly the idle use case.
 
+## Shipped — `angular-inline-date` & `angular-inline-duration` (sandbox prep)
+
+Prepared for sandboxing the future `m-editable-date-v2` / duration
+migrations. The surprise finding: neither needed a new approach — both are
+**codec compositions over the text core**, exactly like number and phone.
+"Fundamentally different" applied to the OLD widget-based implementations
+(mat-datepicker/segmented inputs), not to this architecture. Same styling
+for free (they render through the same panel/display chrome).
+
+**`angular-inline-duration`** — the number control's sibling:
+- Canonical value: **SECONDS** (`number | null`, matching the existing
+  `m-editable-time-duration`); empty commits `null`.
+- Codec: colon notation positional by `durationFormat`
+  (`h:mm`/`h:mm:ss`/`mm:ss` — `'1:30'` means 1 h 30 min or 1 min 30 s
+  accordingly), unit tokens (`'1h 30m'`, `'1.5h'`, `'90s'`), bare numbers
+  (minutes under hour formats). Sexagesimal overflow (`1:75`) hits the
+  parse gate.
+- `step` input snaps commits (e.g. 60 = whole minutes, the old
+  `intervalStep`); live preview reads the draft (`✓ 2 h 15 min`).
+
+**`angular-inline-date`** — the phone pattern applied to calendars:
+- Canonical value: **ISO `'yyyy-MM-dd'` (`| null`)** — the E.164 of dates:
+  serializable, locale- and timezone-free. Luxon/Date live at consumer
+  boundaries (the iusta date-v2 currently emits Luxon `DateTime` — the
+  migration will convert at the wrapper).
+- Typed drafts (`'24.12.'` auto-completes the year, `'12.5.26'`,
+  ISO); impossible calendar dates (`31.2.`) hit the parse gate; the live
+  preview reads the full date back (`✓ Thursday, December 24, 2026`).
+- **Slash menu as the quick-pick**: `/today`, `/tomorrow`, `/yesterday` +
+  the next seven weekdays — labels localized via `Intl.RelativeTimeFormat`
+  / `DateTimeFormat` (zero bundled translations, the phone lesson), always
+  matching the English names too. Picking inserts the ISO date; the preview
+  interprets it.
+- `now` is an injectable input (`() => Date`) so specs are deterministic.
+
+Demo: `/temporal` page (Date & Duration) with locale/format toggles and the
+typed event console. 93/93 sandbox tests.
+
+**Also shipped: `angular-inline-time`** — typed drafts (`'930'`, `'9'`,
+`'21:05'`), canonical `'HH:mm'`, `Intl`-localized display/preview, and the
+**native OS time picker** behind a 🕐 suffix affix (visually-hidden
+`<input type="time">` + `showPicker()` with a focus fallback; idle picks
+commit immediately, in-session picks replace the draft).
+
+**The temporal program continues in [ROADMAP-DATETIME.md](ROADMAP-DATETIME.md):**
+calendar overlay picker on `@angular/aria` Grid + `DateAdapter` (required),
+mat-form-field hosting for all three controls (via iusta's
+`MatFormFieldAdapterContract` pattern), the two-field date range with
+drag/Ctrl+click gestures and the linked `DateTimeRangeGroup`
+(day/start/end/duration speaking to each other), and datetime+timezones.
+
 ### Manual QA — Safari / iOS pass
 
 The `plaintext-only` probe falls back to `contenteditable="true"` + manual

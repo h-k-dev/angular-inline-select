@@ -84,6 +84,18 @@
     cursor: default;
   }
 
+  // Empty field: an empty `display: inline` element has no line box, so the
+  // browser paints NO caret when focused (the ::before placeholder is
+  // generated content — it renders, but it isn't caret-able content). An
+  // empty field has nothing to wrap, so promoting it to inline-block costs
+  // nothing and gives the caret a box to render in — same reason the
+  // single-line variant (always inline-block) never had this problem.
+  &:empty {
+    display: inline-block;
+    min-width: 1px; // caret-able even with an empty placeholder
+    min-height: 1em;
+  }
+
   // Placeholder for empty content (no ::placeholder on contenteditable)
   &:empty::before {
     content: attr(data-placeholder);

@@ -5,7 +5,6 @@ import {
   model,
   output,
   computed,
-  signal,
   linkedSignal,
   viewChild,
   contentChild,
@@ -139,8 +138,11 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
     return this.parse()(value) ?? null;
   });
 
-  /** Two-way `editing` bridge — freezes the string channel during a session. */
-  protected innerEditing = signal(false);
+  /**
+   * Whether an edit session is open. Two-way bindable — also the bridge that
+   * freezes the string channel while a session runs.
+   */
+  editing = model(false);
 
   /**
    * The string channel feeding the inner control. Follows the formatted
@@ -151,7 +153,7 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
    */
   protected innerValue = linkedSignal<string, string>({
     source: () => this.format()(this.numericValue()),
-    computation: (source, prev) => (this.innerEditing() ? (prev?.value ?? source) : source),
+    computation: (source, prev) => (this.editing() ? (prev?.value ?? source) : source),
   });
 
   /**

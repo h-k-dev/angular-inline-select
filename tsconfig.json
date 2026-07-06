@@ -5,7 +5,8 @@
   "compilerOptions": {
     "paths": {
       "angular-inline-select": ["./projects/angular-inline-select/src/public-api.ts"],
-      "angular-inline-select/phone": ["./projects/angular-inline-select/phone/src/public-api.ts"]
+      "angular-inline-select/phone": ["./projects/angular-inline-select/phone/src/public-api.ts"],
+      "angular-inline-select/temporal": ["./projects/angular-inline-select/temporal/src/public-api.ts"]
     },
     "resolveJsonModule": true,
     "strict": true,
