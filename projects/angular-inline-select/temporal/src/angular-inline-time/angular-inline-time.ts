@@ -20,9 +20,10 @@ import {
   EditableSuffix,
   type InlineTextSaved,
 } from 'angular-inline-select';
-import { parseTime, formatWallClock } from './time-codec';
+import { parseTime, parseTimeDraft, formatWallClock, type TimeDraft } from './time-codec';
 import { INLINE_TIME_DAY_OFFSET } from './day-offset';
 import {
+  addLocalDays,
   composeDbEntry,
   localDayOf,
   localTimeOf,
@@ -36,6 +37,12 @@ export interface InlineTimeSaved {
   value: DbDateTime | null;
   /** Whether the settled value differs from the session baseline. */
   changed: boolean;
+  /**
+   * The day over-count the user TYPED via overflow hours (`'24:30'` → 1,
+   * `'240:30'` → 10) — already applied to `value`, surfaced so a range
+   * group can anchor it on the start's day instead of this field's own.
+   */
+  dayOverflow: number;
 }
 
 /**
@@ -186,15 +193,24 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
 
   /**
    * The day anchoring a commit: the value's own local day, else `now`'s.
-   * The value model always carries a full datetime behind the local display.
+   * FROZEN while a session is open (the linkedSignal freeze pattern) — the
+   * live channel writes overflow days into the value, and a drifting
+   * anchor would apply them twice.
    */
-  #anchorDay = computed(
-    () => localDayOf(this.value()) ?? localDayOf(toDbEntry(this.now()()))!,
-  );
+  #anchorDay = linkedSignal<string, string>({
+    source: () => localDayOf(this.value()) ?? localDayOf(toDbEntry(this.now()()))!,
+    computation: (source, prev) => (this.editing() ? (prev?.value ?? source) : source),
+  });
 
-  /** Composes a typed local `'HH:mm'` onto the anchor day — the ONE outbound path. */
-  #toValue(time: string | null): DbDateTime | null {
-    return time === null ? null : composeDbEntry(this.#anchorDay(), time);
+  /**
+   * Composes a typed draft onto the anchor day — the ONE outbound path.
+   * Overflow hours shift the day (`'24:30'` → anchor + 1 at 00:30).
+   */
+  #toValue(draft: TimeDraft | null): DbDateTime | null {
+    if (draft === null) return null;
+
+    const day = draft.days === 0 ? this.#anchorDay() : addLocalDays(this.#anchorDay(), draft.days);
+    return composeDbEntry(day, draft.time);
   }
 
   /**
@@ -207,7 +223,7 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
   });
 
   /** The current draft's canonical reading (`null` empty, `undefined` unreadable). */
-  readonly parsedDraft = computed(() => parseTime(this.innerValue()));
+  readonly parsedDraft = computed(() => parseTimeDraft(this.innerValue()));
 
   /** The parse gate: whether the current draft fails the codec. Public for consumers. */
   readonly parseFailed = computed(() => this.parsedDraft() === undefined);
@@ -217,39 +233,43 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
     this.parseFailed() ? [...this.errors(), { kind: 'parse' }] : this.errors(),
   );
 
-  /** Live interpretation preview: `✓ 9:30 AM` / `… raw`. */
+  /** Live interpretation preview: `✓ 9:30 AM`, `✓ 00:30 +1 day` / `… raw`. */
   protected preview = computed(() => {
     const raw = this.innerValue().trim();
     if (!raw) return '';
 
-    const time = this.parsedDraft();
-    if (time === null || time === undefined) return `… ${raw}`;
+    const draft = this.parsedDraft();
+    if (draft === null || draft === undefined) return `… ${raw}`;
 
-    return `✓ ${formatWallClock(time, this.locale())}`;
+    const reading = `✓ ${formatWallClock(draft.time, this.locale())}`;
+    if (draft.days === 0) return reading;
+
+    return `${reading} +${draft.days} ${draft.days === 1 ? 'day' : 'days'}`;
   });
 
   /** Live channel: readable drafts flow into the model as DB entries. */
   protected handleInnerValue(raw: string) {
     this.innerValue.set(raw);
 
-    const time = parseTime(raw);
-    if (time === undefined) return;
+    const draft = parseTimeDraft(raw);
+    if (draft === undefined) return;
 
-    const value = this.#toValue(time);
+    const value = this.#toValue(draft);
     if (value !== this.value()) this.value.set(value);
   }
 
   /** Retype the settled session: local strings inside, DB entries outside. */
   protected handleInnerSaved(session: InlineTextSaved) {
-    const time = parseTime(session.value);
-    const value = time === undefined ? this.value() : this.#toValue(time);
+    const draft = parseTimeDraft(session.value);
+    const value = draft === undefined ? this.value() : this.#toValue(draft);
+    const dayOverflow = draft === null || draft === undefined ? 0 : draft.days;
 
     if (session.changed) {
       this.value.set(value);
       this.savedModelChange.emit(value);
     }
 
-    this.saved.emit({ value, changed: session.changed });
+    this.saved.emit({ value, changed: session.changed, dayOverflow });
   }
 
   /** Opens the OS time picker (or focuses the native input where unsupported). */
@@ -275,7 +295,7 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
     const time = parseTime(raw);
     if (time === undefined) return;
 
-    const value = this.#toValue(time);
+    const value = time === null ? null : this.#toValue({ time, days: 0 });
 
     if (this.editing()) {
       this.innerValue.set(raw);
@@ -286,7 +306,7 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
     if (value !== this.value()) {
       this.value.set(value);
       this.savedModelChange.emit(value);
-      this.saved.emit({ value, changed: true });
+      this.saved.emit({ value, changed: true, dayOverflow: 0 });
     }
   }
 

@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineTime, type InlineTimeSaved } from './angular-inline-time';
-import { parseTime, formatWallClock } from './time-codec';
+import { parseTime, parseTimeDraft, formatWallClock } from './time-codec';
 import { composeDbEntry, localTimeOf, localDayOf } from '../datetime/db-entry';
 import { AngularInlineText } from 'angular-inline-select';
 
@@ -28,9 +28,25 @@ describe('time codec', () => {
 
   it('empty is null; impossible times and garbage are undefined', () => {
     expect(parseTime('')).toBeNull();
-    expect(parseTime('25:00')).toBeUndefined();
+    expect(parseTime('25:00')).toBeUndefined(); // overflow — only parseTimeDraft carries it
     expect(parseTime('9:75')).toBeUndefined();
+    expect(parseTimeDraft('9:75')).toBeUndefined();
     expect(parseTime('soon')).toBeUndefined();
+  });
+
+  it('overflow hours declare the day over-count by hand', () => {
+    expect(parseTimeDraft('24:30')).toEqual({ time: '00:30', days: 1 });
+    expect(parseTimeDraft('2430')).toEqual({ time: '00:30', days: 1 });
+    expect(parseTimeDraft('240:30')).toEqual({ time: '00:30', days: 10 });
+    expect(parseTimeDraft('30:00')).toEqual({ time: '06:00', days: 1 });
+    expect(parseTimeDraft('9:30')).toEqual({ time: '09:30', days: 0 });
+
+    // Bare 1-2 digit hours stay strict; bad minutes still gate.
+    expect(parseTimeDraft('99')).toBeUndefined();
+    expect(parseTimeDraft('24:75')).toBeUndefined();
+
+    // The overflow-free convenience rejects what it cannot carry.
+    expect(parseTime('24:30')).toBeUndefined();
   });
 
   it('formats through Intl per locale', () => {
@@ -130,13 +146,13 @@ describe('AngularInlineTime', () => {
     accept(h);
 
     expect(h.host.saved).toEqual([at('21:05')]);
-    expect(h.host.sessions).toEqual([{ value: at('21:05'), changed: true }]);
+    expect(h.host.sessions).toEqual([{ value: at('21:05'), changed: true, dayOverflow: 0 }]);
     expect(h.host.model()).toBe(at('21:05'));
     expect(localDayOf(h.host.model())).toBe(DAY); // the day survives the edit
   });
 
   it('the parse gate blocks impossible times', async () => {
-    await typeText(h, '25:00');
+    await typeText(h, '9:75');
     accept(h);
 
     expect(h.host.saved).toEqual([]);
@@ -151,7 +167,7 @@ describe('AngularInlineTime', () => {
 
     expect(h.host.model()).toBe(at('14:45'));
     expect(h.host.saved).toEqual([at('14:45')]);
-    expect(h.host.sessions).toEqual([{ value: at('14:45'), changed: true }]);
+    expect(h.host.sessions).toEqual([{ value: at('14:45'), changed: true, dayOverflow: 0 }]);
     expect(h.display().textContent).toBe('14:45');
   });
 
@@ -170,6 +186,20 @@ describe('AngularInlineTime', () => {
 
     accept(h);
     expect(h.host.saved).toEqual([at('10:15')]);
+  });
+
+  it('an overflow draft commits onto the anchor day + n with a +n preview', async () => {
+    await typeText(h, '24:30');
+
+    const hint = document.querySelector('.editable-panel__message--hint');
+    expect(hint?.textContent?.trim()).toBe('✓ 00:30 +1 day');
+
+    accept(h);
+
+    expect(h.host.model()).toBe(composeDbEntry('2026-07-22', '00:30'));
+    expect(h.host.sessions).toEqual([
+      { value: composeDbEntry('2026-07-22', '00:30'), changed: true, dayOverflow: 1 },
+    ]);
   });
 
   it('a time typed into an EMPTY field anchors on the reference clock day', async () => {

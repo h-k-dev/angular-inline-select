@@ -107,3 +107,11 @@ export function moveDbEntryToDay(value: DbDateTime, day: string): DbDateTime {
   const time = localTimeOf(value);
   return time === null ? value : composeDbEntry(day, time);
 }
+
+/** Shifts a `'yyyy-MM-dd'` LOCAL day by whole calendar days. */
+export function addLocalDays(day: string, days: number): string {
+  const [year, month, date] = day.split('-').map(Number);
+  const shifted = new Date(year, month - 1, date + days);
+
+  return `${shifted.getFullYear()}-${pad(shifted.getMonth() + 1)}-${pad(shifted.getDate())}`;
+}

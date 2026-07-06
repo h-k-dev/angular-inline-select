@@ -6,6 +6,7 @@ import { AngularInlineTime } from '../angular-inline-time/angular-inline-time';
 import { INLINE_TIME_DAY_OFFSET } from '../angular-inline-time/day-offset';
 import { AngularInlineDuration } from '../angular-inline-duration/angular-inline-duration';
 import {
+  addLocalDays,
   composeDbEntry,
   dayToDbEntry,
   dayEndToDbEntry,
@@ -18,11 +19,6 @@ import {
 } from '../datetime/db-entry';
 
 const DAY_SECONDS = 86_400;
-
-function addDays(day: string, days: number): string {
-  const [year, month, date] = day.split('-').map(Number);
-  return localDayOf(new Date(year, month - 1, date + days).toISOString())!;
-}
 
 /**
  * The group's composed DATE value: the stay's day boundaries as DB entries
@@ -118,7 +114,7 @@ export class DateTimeRangeGroup {
 
     return {
       start: dayToDbEntry(startDay),
-      end: dayEndToDbEntry(addDays(startDay, this.endDayOffset())),
+      end: dayEndToDbEntry(addLocalDays(startDay, this.endDayOffset())),
     };
   });
 
@@ -234,14 +230,17 @@ export class DateTimeRangeGroup {
    * The end settled: a typed end time is WALL-CLOCK intent — re-anchor it
    * onto the start's own day first, then roll forward while it does not
    * follow the start (`23:30` lands the same evening, `06:00` the next
-   * morning), then induce the duration.
+   * morning), then induce the duration. A typed OVERFLOW (`'24:30'` → +1,
+   * `'240:30'` → +10) is an explicit over-count: it anchors on the start's
+   * day directly.
    */
-  endCommitted() {
+  endCommitted(dayOverflow = 0) {
     const start = this.start();
     const end = this.end();
 
     if (start !== null && end !== null) {
-      this.#induceFrom(start, composeDbEntry(localDayOf(start)!, localTimeOf(end)!));
+      const day = addLocalDays(localDayOf(start)!, dayOverflow);
+      this.#induceFrom(start, composeDbEntry(day, localTimeOf(end)!));
     }
 
     this.#emitChanges();
@@ -269,7 +268,7 @@ export class DateTimeRangeGroup {
       const offset = start !== null && end !== null ? Math.max(0, localDayDiff(start, end) ?? 0) : 0;
 
       if (start !== null) this.#writeStart(composeDbEntry(day, localTimeOf(start)!));
-      if (end !== null) this.#writeEnd(composeDbEntry(addDays(day, offset), localTimeOf(end)!));
+      if (end !== null) this.#writeEnd(composeDbEntry(addLocalDays(day, offset), localTimeOf(end)!));
     }
 
     this.#emitChanges();
@@ -339,7 +338,7 @@ export class RangeEnd {
 
     group.attachEnd(control);
     control.saved.subscribe((session) => {
-      if (session.changed) group.endCommitted();
+      if (session.changed) group.endCommitted(session.dayOverflow);
     });
   }
 }

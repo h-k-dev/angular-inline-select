@@ -158,6 +158,24 @@ describe('DateTimeRangeGroup', () => {
     expect(h.group().endDayOffset()).toBe(1);
   });
 
+  it('typed overflow hours ARE the over-count, anchored on the start day', async () => {
+    // 24:30 = next day 00:30 — over computed from the typed hours.
+    await commitInto(h, END, '24:30');
+
+    expect(h.host.end()).toBe(at('2026-07-22', '00:30'));
+    expect(h.host.length()).toBe(3.5 * 3600); // 21:00 → +1 00:30
+    expect(h.group().endDayOffset()).toBe(1);
+
+    // 240:30 = ten days out at 00:30.
+    await commitInto(h, END, '240:30');
+
+    expect(h.host.end()).toBe(at('2026-07-31', '00:30'));
+    expect(h.group().endDayOffset()).toBe(10);
+    expect(
+      h.fixture.nativeElement.querySelector('.time-day-badge')?.textContent?.trim(),
+    ).toBe('+10');
+  });
+
   it('committing a duration MOVES the end instant; multi-day lengths grow the badge', async () => {
     await commitInto(h, LENGTH, '2:00');
     expect(h.host.end()).toBe(at('2026-07-21', '23:00'));

@@ -70,6 +70,16 @@ db-entry.ts` is the dictating core (Luxon-free `Date` math):
 | time | UTC ISO DB entry — the instant CARRIES its day (typed `'HH:mm'` re-anchors on the value's own day; `now`'s day when empty) | local wall-clock via `Intl` |
 | duration | seconds `number \| null` | `h:mm` etc. |
 
+**Overflow hours declare the over-count by hand:** the time codec's
+`parseTimeDraft` reads hours beyond 23 as typed day overflow — `'24:30'`
+(or `'2430'`) = next day 00:30, `'240:30'` = +10 days 00:30 — previewed
+live (`✓ 00:30 +10 days`), composed onto the anchor day (+n), and carried
+to the group via `InlineTimeSaved.dayOverflow` so an END overflow anchors
+on the START's day. Bare 1–2-digit hours stay strict (`'99'` is a typo).
+The anchor day is FROZEN while a session is open (linkedSignal freeze) —
+the live channel writes overflow into the value, and a drifting anchor
+would double-apply it.
+
 The difference between what the user sees and what is behind the back:
 controls keep local day/`'HH:mm'` machinery internally and convert ONLY at
 the value boundary. Overnight is intrinsic (an end instant on the next day
