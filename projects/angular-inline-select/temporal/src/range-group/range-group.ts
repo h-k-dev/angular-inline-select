@@ -1,10 +1,23 @@
-import { Directive, computed, effect, inject, output, signal } from '@angular/core';
+import {
+  Directive,
+  computed,
+  effect,
+  inject,
+  input,
+  linkedSignal,
+  model,
+  output,
+  signal,
+  untracked,
+} from '@angular/core';
+import { FormField, type ValidationError } from '@angular/forms/signals';
 
 import { AngularInlineDate } from '../angular-inline-date/angular-inline-date';
 import { toInternalRange } from '../angular-inline-date/date-codec';
 import { AngularInlineTime } from '../angular-inline-time/angular-inline-time';
 import { INLINE_TIME_DAY_OFFSET } from '../angular-inline-time/day-offset';
 import { AngularInlineDuration } from '../angular-inline-duration/angular-inline-duration';
+import { INLINE_TEMPORAL_LEAF_STATE, type TemporalLeafState } from '../leaf-state';
 import {
   addLocalDays,
   composeDbEntry,
@@ -44,6 +57,29 @@ function sameRange(
 }
 
 /**
+ * The group's OWN form value — the domain shape the server speaks
+ * (`DomainResult['model']` without the redundant `date`): DB entries +
+ * seconds. `duration` is SHAPE-ECHOED: bind `{ start, end }` and it stays
+ * internal-only; it is always computed inside and can never disagree with
+ * the range.
+ */
+export interface TemporalRangeValue {
+  start: DbDateTime | null;
+  end: DbDateTime | null;
+  duration?: number | null;
+}
+
+function sameTemporalValue(
+  a: TemporalRangeValue | null,
+  b: TemporalRangeValue | null,
+): boolean {
+  if (a === null || b === null) return a === b;
+  return a.start === b.start && a.end === b.end && a.duration === b.duration;
+}
+
+const NO_ERRORS = signal<readonly ValidationError.WithOptionalFieldTree[]>([]).asReadonly();
+
+/**
  * T5's group core: links SEPARATE temporal controls — a date (`rangeDay`),
  * two times (`rangeStart`/`rangeEnd`) and a duration (`rangeLength`) — via
  * DI. Every value is a UTC ISO DB entry (iusta's `toDBEntry`), so the
@@ -75,6 +111,53 @@ export class DateTimeRangeGroup {
   #start = signal<AngularInlineTime | null>(null);
   #end = signal<AngularInlineTime | null>(null);
   #length = signal<AngularInlineDuration | null>(null);
+
+  /** Present when the GROUP carries the `[formField]` — form-bound mode. */
+  #ownField = inject(FormField, { optional: true, self: true });
+
+  /**
+   * The group's OWN value channel. Outbound it always mirrors the composed
+   * leaves (harmless when nobody listens); inbound it only pushes down when
+   * the group is form-bound or the value is non-null — a `null` on an
+   * unbound group is silence, not a clear, so per-leaf-bound legacy setups
+   * stay untouched.
+   */
+  value = model<TemporalRangeValue | null>(null);
+
+  /** Form Value Contract — forwarded down to the leaves via role-provided state. */
+  errors = input<readonly ValidationError.WithOptionalFieldTree[]>([]);
+  disabled = input(false);
+  readonly = input(false);
+  touched = input(false);
+  invalid = input(false);
+
+  /** Form Value Contract: touch — any leaf touching bubbles up as the group's. */
+  touch = output<void>();
+
+  /** One commit event for the whole range: the composed `{start, end, duration?}`. */
+  savedModelChange = output<TemporalRangeValue | null>();
+
+  /**
+   * `duration` shape memory (the date control's `#lastShape` pattern):
+   * a non-null bound value declares whether the key participates; `null`
+   * remembers; cold start includes it (the `DomainResult['model']` shape).
+   */
+  #durationInShape = linkedSignal<TemporalRangeValue | null, boolean>({
+    source: this.value,
+    computation: (value, previous) =>
+      value === null ? (previous?.value ?? true) : 'duration' in value,
+  });
+
+  /** The composed domain value read live off the leaves, in the echoed shape. */
+  readonly composedValue = computed<TemporalRangeValue | null>(() => {
+    const start = this.start();
+    const end = this.end();
+    const duration = this.length();
+    if (start === null && end === null && duration === null) return null;
+
+    return this.#durationInShape() ? { start, end, duration } : { start, end };
+  });
+
 
   /** The stay's LOCAL calendar day, read off the date control. */
   readonly day = computed<string | null>(() => {
@@ -153,40 +236,105 @@ export class DateTimeRangeGroup {
         this.#lastLength = length;
       }
     });
+
+    // The TWO boundary effects of form-bound mode — both equality-guarded,
+    // both one-directional, converging in a single pass (a group write
+    // pushes down; the mirror reads back the same values and stops).
+
+    // INBOUND: the form's value → the leaf surfaces.
+    effect(() => {
+      const value = this.value();
+      if (this.#ownField === null && value === null) return;
+
+      untracked(() => this.#pushDown(value));
+    });
+
+    // OUTBOUND: the leaves' live values → the group's value (live channel).
+    effect(() => {
+      const composed = this.composedValue();
+      if (!sameTemporalValue(composed, untracked(this.value))) this.value.set(composed);
+    });
+  }
+
+  /** Writes the bound value onto the leaf surfaces (no-ops on equal values). */
+  #pushDown(value: TemporalRangeValue | null) {
+    const start = value?.start ?? null;
+    const end = value?.end ?? null;
+    const duration =
+      value === null
+        ? null
+        : value.duration !== undefined
+          ? value.duration
+          : start !== null && end !== null
+            ? diffDbEntrySeconds(start, end)
+            : null;
+
+    this.#start()?.value.set(start);
+    this.#end()?.value.set(end);
+    this.#length()?.value.set(duration);
+    this.#day()?.value.set(start === null ? null : dayToDbEntry(localDayOf(start)!));
   }
 
   #emitChanges() {
+    let changed = false;
+
     const date = this.dateRange();
     if (this.#lastDate === undefined || !sameRange(date, this.#lastDate)) {
       this.#lastDate = date;
       this.dateRangeChange.emit(date);
+      changed = true;
     }
 
     const time = this.timeRange();
     if (this.#lastTime === undefined || !sameRange(time, this.#lastTime)) {
       this.#lastTime = time;
       this.timeRangeChange.emit(time);
+      changed = true;
     }
 
     const length = this.length();
     if (this.#lastLength === undefined || length !== this.#lastLength) {
       this.#lastLength = length;
       this.durationChange.emit(length);
+      changed = true;
     }
+
+    if (!changed) return;
+
+    // The composite commit: value settles synchronously (the outbound
+    // mirror then finds it equal), one savedModelChange for the range.
+    const composed = this.composedValue();
+    if (!sameTemporalValue(composed, this.value())) this.value.set(composed);
+    this.savedModelChange.emit(composed);
   }
 
   // -- Registration (the role directives call these) --------------------------
 
-  attachDay(control: AngularInlineDate) {
+  /** Mixed mode is a bug: a field-bound leaf inside a field-bound group throws. */
+  #registerBinding(leafBound: boolean, role: string) {
+    if (leafBound && this.#ownField !== null) {
+      throw new Error(
+        `DateTimeRangeGroup: the ${role} leaf has its own [formField] inside a ` +
+          `form-bound group — bind EITHER the group (composed {start, end, duration}) ` +
+          `OR the leaves, never both.`,
+      );
+    }
+  }
+
+  attachDay(control: AngularInlineDate, leafBound = false) {
+    this.#registerBinding(leafBound, 'rangeDay');
     this.#day.set(control);
   }
-  attachStart(control: AngularInlineTime) {
+  attachStart(control: AngularInlineTime, leafBound = false) {
+    this.#registerBinding(leafBound, 'rangeStart');
     this.#start.set(control);
   }
-  attachEnd(control: AngularInlineTime) {
+  attachEnd(control: AngularInlineTime, leafBound = false) {
+    this.#registerBinding(leafBound, 'rangeEnd');
     this.#end.set(control);
   }
-  attachLength(control: AngularInlineDuration) {
+  attachLength(control: AngularInlineDuration, leafBound = false) {
+    this.#registerBinding(leafBound, 'rangeLength');
     this.#length.set(control);
   }
 
@@ -290,14 +438,39 @@ export class DateTimeRangeGroup {
   }
 }
 
+/**
+ * The role-provided leaf state (the day-offset pattern): the group's
+ * contract inputs, pulled by the leaf via a per-element token — no
+ * effects, no writes. Ordering/range errors route to the END leaf only.
+ */
+function provideLeafState(withErrors: boolean) {
+  return {
+    provide: INLINE_TEMPORAL_LEAF_STATE,
+    useFactory: (): TemporalLeafState => {
+      const group = inject(DateTimeRangeGroup);
+      return {
+        disabled: group.disabled,
+        readonly: group.readonly,
+        touched: group.touched,
+        invalid: group.invalid,
+        errors: withErrors ? group.errors : NO_ERRORS,
+      };
+    },
+  };
+}
+
+/** Whether THIS leaf element carries its own `[formField]` (legacy per-leaf mode). */
+const leafHasOwnField = () => inject(FormField, { optional: true, self: true }) !== null;
+
 /** Marks the group's date control: `<angular-inline-date rangeDay />`. */
-@Directive({ selector: 'angular-inline-date[rangeDay]' })
+@Directive({ selector: 'angular-inline-date[rangeDay]', providers: [provideLeafState(false)] })
 export class RangeDay {
   constructor() {
     const group = inject(DateTimeRangeGroup);
     const control = inject(AngularInlineDate);
 
-    group.attachDay(control);
+    group.attachDay(control, leafHasOwnField());
+    control.touch.subscribe(() => group.touch.emit());
     control.saved.subscribe((session) => {
       if (session.changed) group.dayCommitted();
     });
@@ -305,13 +478,14 @@ export class RangeDay {
 }
 
 /** Marks the group's start time: `<angular-inline-time rangeStart />`. */
-@Directive({ selector: 'angular-inline-time[rangeStart]' })
+@Directive({ selector: 'angular-inline-time[rangeStart]', providers: [provideLeafState(false)] })
 export class RangeStart {
   constructor() {
     const group = inject(DateTimeRangeGroup);
     const control = inject(AngularInlineTime);
 
-    group.attachStart(control);
+    group.attachStart(control, leafHasOwnField());
+    control.touch.subscribe(() => group.touch.emit());
     control.saved.subscribe((session) => {
       if (session.changed) group.startCommitted();
     });
@@ -320,11 +494,13 @@ export class RangeStart {
 
 /**
  * Marks the group's end time: `<angular-inline-time rangeEnd />`. Also
- * feeds the control's `+n` day-overflow badge via `INLINE_TIME_DAY_OFFSET`.
+ * feeds the control's `+n` day-overflow badge via `INLINE_TIME_DAY_OFFSET`
+ * and receives the group's range errors.
  */
 @Directive({
   selector: 'angular-inline-time[rangeEnd]',
   providers: [
+    provideLeafState(true),
     {
       provide: INLINE_TIME_DAY_OFFSET,
       useFactory: () => inject(DateTimeRangeGroup).endDayOffset,
@@ -336,7 +512,8 @@ export class RangeEnd {
     const group = inject(DateTimeRangeGroup);
     const control = inject(AngularInlineTime);
 
-    group.attachEnd(control);
+    group.attachEnd(control, leafHasOwnField());
+    control.touch.subscribe(() => group.touch.emit());
     control.saved.subscribe((session) => {
       if (session.changed) group.endCommitted(session.dayOverflow);
     });
@@ -344,13 +521,17 @@ export class RangeEnd {
 }
 
 /** Marks the group's duration: `<angular-inline-duration rangeLength />`. */
-@Directive({ selector: 'angular-inline-duration[rangeLength]' })
+@Directive({
+  selector: 'angular-inline-duration[rangeLength]',
+  providers: [provideLeafState(false)],
+})
 export class RangeLength {
   constructor() {
     const group = inject(DateTimeRangeGroup);
     const control = inject(AngularInlineDuration);
 
-    group.attachLength(control);
+    group.attachLength(control, leafHasOwnField());
+    control.touch.subscribe(() => group.touch.emit());
     control.saved.subscribe((session) => {
       if (session.changed) group.lengthCommitted();
     });

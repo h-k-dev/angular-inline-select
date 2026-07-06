@@ -229,7 +229,34 @@ two-field date UI, the maximal end-day field, and `end >= start`
 violation ERRORS (the quartet can't violate it — propagation keeps it
 consistent by construction; errors become real with an end-day field).
 
-### T5b — the group IS the form control (DECIDED, next up)
+### T5b — the group IS the form control — SHIPPED
+
+Verified viable at the framework level first: Angular core's custom-control
+scan (`initializeCustomControlStatus`) checks ALL directives on the
+`[formField]` node for a `value` model — a DIRECTIVE group is a
+first-class custom control, no component wrapper needed. Implementation
+(136 tests, browser-verified):
+- `value = model<TemporalRangeValue | null>` + contract inputs
+  (`errors`/`disabled`/`readonly`/`touched`/`invalid`) + `touch` +
+  ONE `savedModelChange` per settled commit (the composed value).
+- TWO boundary effects only, both equality-guarded, one-directional,
+  converging in a single pass: inbound (form value → leaf surfaces;
+  skipped when unbound AND null — a null on an unbound group is silence,
+  not a clear, so legacy per-leaf setups stay untouched) and outbound
+  (leaves' live values → group value). Commits write synchronously in
+  the commit handler; the mirror then finds them equal.
+- Contract flows DOWN by PULL: role directives provide
+  `INLINE_TEMPORAL_LEAF_STATE` per leaf element (the day-offset pattern);
+  leaves merge it with their own inputs via computeds — zero effects,
+  standalone controls never see it. Range errors route to the END leaf.
+- Duration is shape-echoed (`#durationInShape` linkedSignal): a
+  `{start, end}` binding never grows a duration key; the length leaf
+  still displays the derived value.
+- Mixed mode THROWS at registration ([formField] on a leaf inside a
+  form-bound group); `[(value)]`-bound leaves inside a bound group are
+  undetectable and unsupported by contract.
+
+### T5b original design notes (executed above)
 
 Binding four sub-fields (day/start/end/length) is a normalization smell:
 the domain value is `{start, end, duration}` (one PATCH, one DB shape;

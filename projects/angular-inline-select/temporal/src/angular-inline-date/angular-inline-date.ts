@@ -1,5 +1,6 @@
 import {
   Component,
+  inject,
   TemplateRef,
   input,
   model,
@@ -31,6 +32,7 @@ import {
   type DateValueShape,
   type InternalDateRange,
 } from './date-codec';
+import { INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 import { dayToDbEntry, dayEndToDbEntry, localDayOf } from '../datetime/db-entry';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
@@ -122,6 +124,26 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   protected prefixTpl = computed(() => this.prefixTemplate() ?? this.contentPrefix()?.templateRef);
   protected suffixTpl = computed(() => this.suffixTemplate() ?? this.contentSuffix()?.templateRef);
 
+
+  /**
+   * Group-forwarded contract state (role-provided; absent standalone).
+   * Merged by PULL — the leaf stays decoupled, no effects involved.
+   */
+  #leafState = inject(INLINE_TEMPORAL_LEAF_STATE, { optional: true, self: true });
+
+  protected effectiveDisabled = computed(
+    () => this.disabled() || (this.#leafState?.disabled() ?? false),
+  );
+  protected effectiveReadonly = computed(
+    () => this.readonly() || (this.#leafState?.readonly() ?? false),
+  );
+  protected effectiveTouched = computed(
+    () => this.touched() || (this.#leafState?.touched() ?? false),
+  );
+  protected effectiveInvalid = computed(
+    () => this.invalid() || (this.#leafState?.invalid() ?? false),
+  );
+
   /** Form Value Contract: touch — forwarded from the inner control. */
   touch = output<void>();
 
@@ -186,10 +208,13 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   /** The parse gate: whether the current draft fails the codec. Public for consumers. */
   readonly parseFailed = computed(() => this.parsedDraft() === undefined);
 
-  /** Errors forwarded inward: contract errors + the synthetic parse gate. */
-  protected innerErrors = computed<readonly ValidationError.WithOptionalFieldTree[]>(() =>
-    this.parseFailed() ? [...this.errors(), { kind: 'parse' }] : this.errors(),
-  );
+  /** Errors forwarded inward: contract + group-routed errors + the parse gate. */
+  protected innerErrors = computed<readonly ValidationError.WithOptionalFieldTree[]>(() => {
+    const groupErrors = this.#leafState?.errors() ?? [];
+    const base = groupErrors.length ? [...this.errors(), ...groupErrors] : this.errors();
+
+    return this.parseFailed() ? [...base, { kind: 'parse' }] : base;
+  });
 
   /** Live interpretation preview: `✓ Tuesday, 12 May 2026` / `… raw`. */
   protected preview = computed(() => {

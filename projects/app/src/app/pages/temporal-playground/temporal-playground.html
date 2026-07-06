@@ -102,14 +102,14 @@
         id="quartet-example"
         dateTimeRangeGroup
         #stayGroup="dateTimeRangeGroup"
-        (dateRangeChange)="logEmit('stay.dateRange', $event)"
-        (timeRangeChange)="logEmit('stay.timeRange', $event)"
-        (durationChange)="logEmit('stay.duration', $event)"
+        [formField]="stayForm"
+        (savedModelChange)="logEmit('stay.savedModelChange', $event)"
       >
-        <h3 class="example-card__title">The quartet — stay · start · end · length (linked: the T5 group core)</h3>
+        <h3 class="example-card__title">The quartet — ONE form field, the group is the control (T5b)</h3>
         <p class="prose">
-          What the user SEES vs the model BEHIND it — every temporal value is a UTC ISO DB entry
-          (<code>datetime.toUTC().toISO()</code>), the display is the local reading:
+          One <code>[formField]</code> on the group, model = the domain shape
+          <code>{{ '{' }} start, end, duration {{ '}' }}</code> (UTC ISO DB entries + seconds). The four leaves are
+          UNBOUND surfaces the group feeds — <em>Stay</em> is a rendering of <code>start</code>'s date part:
         </p>
 
         <table class="quartet-table">
@@ -124,60 +124,52 @@
             <tr>
               <th scope="row">Stay</th>
               <td>
-                <angular-inline-date
-                  rangeDay
-                  [formField]="stayForm.day"
-                  [locale]="dateLocale()"
-                  ariaLabel="Stay day"
-                />
+                <angular-inline-date rangeDay [locale]="dateLocale()" ariaLabel="Stay day" />
               </td>
-              <td><code>{{ stayModel().day ?? '∅' }}</code></td>
+              <td><code>— derived from start —</code></td>
             </tr>
             <tr>
               <th scope="row">Starts</th>
               <td>
                 <angular-inline-time
                   rangeStart
-                  [formField]="stayForm.starts"
                   [locale]="militaryLocale()"
                   ariaLabel="Stay start in 24-hour time"
                 />
               </td>
-              <td><code>{{ stayModel().starts ?? '∅' }}</code></td>
+              <td><code>{{ stayModel()?.start ?? '∅' }}</code></td>
             </tr>
             <tr>
               <th scope="row">Ends</th>
               <td>
                 <angular-inline-time
                   rangeEnd
-                  [formField]="stayForm.ends"
                   [locale]="militaryLocale()"
                   ariaLabel="Stay end in 24-hour time"
                 />
               </td>
-              <td><code>{{ stayModel().ends ?? '∅' }}</code></td>
+              <td><code>{{ stayModel()?.end ?? '∅' }}</code></td>
             </tr>
             <tr>
               <th scope="row">Length</th>
               <td>
                 <angular-inline-duration
                   rangeLength
-                  [formField]="stayForm.length"
                   durationFormat="h:mm"
                   [step]="60"
                   ariaLabel="Stay length"
                 />
               </td>
-              <td><code>{{ stayModel().length ?? '∅' }}s</code></td>
+              <td><code>{{ stayModel()?.duration ?? '∅' }}s</code></td>
             </tr>
           </tbody>
         </table>
 
         <p class="form-toggles__hint">
-          Linked by <code>DateTimeRangeGroup</code>: a typed end is wall-clock intent (at-or-before the start rolls to
-          the next day — the <code>+{{ stayGroup.endDayOffset() }}</code> badge); a length commit moves the end (try
-          “30h”); a day commit shifts both instants preserving wall-clock times. The log shows the group's composed
-          emissions — date range, time range (UTC ISO), duration (seconds) — each stream only when it changed.
+          The group owns the invariants: a typed end is wall-clock intent (at-or-before the start rolls to the next
+          day — the <code>+{{ stayGroup.endDayOffset() }}</code> badge; overflow hours like “240:30” type the
+          over-count by hand); a length commit moves the end; a day commit shifts both instants. Each settled commit
+          writes ONE composed model and emits ONE <code>savedModelChange</code> — see the log.
         </p>
       </div>
 

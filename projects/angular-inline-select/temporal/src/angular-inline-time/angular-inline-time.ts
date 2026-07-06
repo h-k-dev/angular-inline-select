@@ -22,6 +22,7 @@ import {
 } from 'angular-inline-select';
 import { parseTime, parseTimeDraft, formatWallClock, type TimeDraft } from './time-codec';
 import { INLINE_TIME_DAY_OFFSET } from './day-offset';
+import { INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 import {
   addLocalDays,
   composeDbEntry,
@@ -163,6 +164,25 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
    */
   #groupDayOffset = inject(INLINE_TIME_DAY_OFFSET, { optional: true, self: true });
 
+  /**
+   * Group-forwarded contract state (role-provided; absent standalone).
+   * Merged by PULL — the leaf stays decoupled, no effects involved.
+   */
+  #leafState = inject(INLINE_TEMPORAL_LEAF_STATE, { optional: true, self: true });
+
+  protected effectiveDisabled = computed(
+    () => this.disabled() || (this.#leafState?.disabled() ?? false),
+  );
+  protected effectiveReadonly = computed(
+    () => this.readonly() || (this.#leafState?.readonly() ?? false),
+  );
+  protected effectiveTouched = computed(
+    () => this.touched() || (this.#leafState?.touched() ?? false),
+  );
+  protected effectiveInvalid = computed(
+    () => this.invalid() || (this.#leafState?.invalid() ?? false),
+  );
+
   /** Days the composed end overflows past the start's calendar day (`+1` badge). */
   readonly dayOffset = computed(() => this.#groupDayOffset?.() ?? 0);
 
@@ -228,10 +248,13 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
   /** The parse gate: whether the current draft fails the codec. Public for consumers. */
   readonly parseFailed = computed(() => this.parsedDraft() === undefined);
 
-  /** Errors forwarded inward: contract errors + the synthetic parse gate. */
-  protected innerErrors = computed<readonly ValidationError.WithOptionalFieldTree[]>(() =>
-    this.parseFailed() ? [...this.errors(), { kind: 'parse' }] : this.errors(),
-  );
+  /** Errors forwarded inward: contract + group-routed errors + the parse gate. */
+  protected innerErrors = computed<readonly ValidationError.WithOptionalFieldTree[]>(() => {
+    const groupErrors = this.#leafState?.errors() ?? [];
+    const base = groupErrors.length ? [...this.errors(), ...groupErrors] : this.errors();
+
+    return this.parseFailed() ? [...base, { kind: 'parse' }] : base;
+  });
 
   /** Live interpretation preview: `✓ 9:30 AM`, `✓ 00:30 +1 day` / `… raw`. */
   protected preview = computed(() => {

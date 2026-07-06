@@ -1,5 +1,6 @@
-import { Component, signal, viewChild } from '@angular/core';
+import { Component, signal, viewChild, type Type } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineDate } from '../angular-inline-date/angular-inline-date';
 import { AngularInlineTime } from '../angular-inline-time/angular-inline-time';
@@ -13,6 +14,7 @@ import {
   RangeLength,
   type ComposedDateRange,
   type ComposedTimeRange,
+  type TemporalRangeValue,
 } from './range-group';
 
 const NOW = new Date(2026, 6, 21);
@@ -263,5 +265,223 @@ describe('DateTimeRangeGroup', () => {
 
     expect(h.host.end()).toBe(at('2026-07-22', '00:00'));
     expect(endSessions).toBe(0);
+  });
+});
+
+// =============================================================================
+// T5b — the group IS the form control
+// =============================================================================
+
+@Component({
+  imports: [
+    AngularInlineDate,
+    AngularInlineTime,
+    AngularInlineDuration,
+    DateTimeRangeGroup,
+    RangeDay,
+    RangeStart,
+    RangeEnd,
+    RangeLength,
+    FormField,
+  ],
+  template: `
+    <div dateTimeRangeGroup [formField]="field" (savedModelChange)="commits.push($event)">
+      <angular-inline-date rangeDay locale="en" [now]="now" />
+      <angular-inline-time rangeStart locale="en-u-hc-h23" [now]="now" />
+      <angular-inline-time rangeEnd locale="en-u-hc-h23" [now]="now" />
+      <angular-inline-duration rangeLength />
+    </div>
+  `,
+})
+class BoundGroupHost {
+  group = viewChild.required(DateTimeRangeGroup);
+
+  model = signal<TemporalRangeValue | null>({
+    start: at('2026-07-21', '21:00'),
+    end: at('2026-07-22', '06:00'),
+    duration: 32_400,
+  });
+  field = form(this.model);
+
+  commits: (TemporalRangeValue | null)[] = [];
+
+  now = () => NOW;
+}
+
+// The consumer's model has NO duration key — the shape-echo case.
+@Component({
+  imports: [
+    AngularInlineDate,
+    AngularInlineTime,
+    AngularInlineDuration,
+    DateTimeRangeGroup,
+    RangeDay,
+    RangeStart,
+    RangeEnd,
+    RangeLength,
+    FormField,
+  ],
+  template: `
+    <div dateTimeRangeGroup [formField]="field">
+      <angular-inline-date rangeDay locale="en" [now]="now" />
+      <angular-inline-time rangeStart locale="en-u-hc-h23" [now]="now" />
+      <angular-inline-time rangeEnd locale="en-u-hc-h23" [now]="now" />
+      <angular-inline-duration rangeLength />
+    </div>
+  `,
+})
+class RangeOnlyHost {
+  model = signal<TemporalRangeValue | null>({
+    start: at('2026-07-21', '21:00'),
+    end: at('2026-07-22', '06:00'),
+  });
+  field = form(this.model);
+
+  now = () => NOW;
+}
+
+// Mixed mode: a field-bound leaf inside a field-bound group — must throw.
+@Component({
+  imports: [AngularInlineTime, DateTimeRangeGroup, RangeStart, FormField],
+  template: `
+    <div dateTimeRangeGroup [formField]="field">
+      <angular-inline-time rangeStart [formField]="leafField" />
+    </div>
+  `,
+})
+class MixedModeHost {
+  model = signal<TemporalRangeValue | null>(null);
+  field = form(this.model);
+
+  leafModel = signal<string | null>(null);
+  leafField = form(this.leafModel);
+}
+
+function boundSetup<T>(type: Type<T>) {
+  const fixture = TestBed.createComponent(type);
+  fixture.detectChanges();
+
+  return {
+    fixture,
+    host: fixture.componentInstance,
+    displays: () =>
+      [...fixture.nativeElement.querySelectorAll('.editable-text__display')] as HTMLElement[],
+  };
+}
+
+async function commitIntoBound(
+  fixture: ComponentFixture<unknown>,
+  displays: () => HTMLElement[],
+  index: number,
+  text: string,
+) {
+  const before = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
+  Object.defineProperty(before, 'inputType', { value: 'insertText' });
+  Object.defineProperty(before, 'data', { value: 'x' });
+  displays()[index].dispatchEvent(before);
+  fixture.detectChanges();
+  await fixture.whenStable();
+  fixture.detectChanges();
+
+  const editor = document.querySelector('.editable-text__editor') as HTMLElement;
+  editor.textContent = text;
+  const selection = document.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  range.collapse(false);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  editor.dispatchEvent(new Event('input', { bubbles: true }));
+  fixture.detectChanges();
+
+  editor.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+  );
+  fixture.detectChanges();
+  await fixture.whenStable();
+  fixture.detectChanges();
+}
+
+describe('DateTimeRangeGroup as FormValueControl (T5b)', () => {
+  it('the bound value flows DOWN: unbound leaves render the composed model', async () => {
+    const h = boundSetup(BoundGroupHost);
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    const texts = h.displays().map((display) => display.textContent?.trim());
+    expect(texts).toEqual(['Jul 21, 2026', '21:00', '06:00', '9:00']);
+  });
+
+  it('a leaf commit flows UP: one composed model write, one savedModelChange', async () => {
+    const h = boundSetup(BoundGroupHost);
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    await commitIntoBound(h.fixture, h.displays, 2, '23:30'); // end field
+
+    expect(h.host.model()).toEqual({
+      start: at('2026-07-21', '21:00'),
+      end: at('2026-07-21', '23:30'),
+      duration: 2.5 * 3600,
+    });
+    expect(h.host.commits).toEqual([
+      { start: at('2026-07-21', '21:00'), end: at('2026-07-21', '23:30'), duration: 2.5 * 3600 },
+    ]);
+  });
+
+  it('a duration commit moves the end in the SAME composed write', async () => {
+    const h = boundSetup(BoundGroupHost);
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    await commitIntoBound(h.fixture, h.displays, 3, '2:00'); // length field
+
+    expect(h.host.model()).toEqual({
+      start: at('2026-07-21', '21:00'),
+      end: at('2026-07-21', '23:00'),
+      duration: 2 * 3600,
+    });
+  });
+
+  it('the form value flows DOWN on external writes', async () => {
+    const h = boundSetup(BoundGroupHost);
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    h.host.model.set({
+      start: at('2026-08-01', '08:00'),
+      end: at('2026-08-01', '12:00'),
+      duration: 4 * 3600,
+    });
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    const texts = h.displays().map((display) => display.textContent?.trim());
+    expect(texts).toEqual(['Aug 1, 2026', '08:00', '12:00', '4:00']);
+  });
+
+  it('shape-echo: a {start, end} binding never grows a duration key', async () => {
+    const h = boundSetup(RangeOnlyHost);
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    // The duration leaf still DISPLAYS the derived length…
+    expect(h.displays()[3].textContent?.trim()).toBe('9:00');
+
+    await commitIntoBound(h.fixture, h.displays, 2, '23:30');
+
+    // …but the model echoes the bound shape: no duration key.
+    expect(h.host.model()).toEqual({
+      start: at('2026-07-21', '21:00'),
+      end: at('2026-07-21', '23:30'),
+    });
+  });
+
+  it('mixed mode throws: a field-bound leaf inside a field-bound group', () => {
+    expect(() => {
+      const fixture = TestBed.createComponent(MixedModeHost);
+      fixture.detectChanges();
+    }).toThrowError(/bind EITHER the group/);
   });
 });

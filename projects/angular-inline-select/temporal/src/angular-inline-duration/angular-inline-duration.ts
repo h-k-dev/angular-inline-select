@@ -1,5 +1,6 @@
 import {
   Component,
+  inject,
   TemplateRef,
   input,
   model,
@@ -23,6 +24,7 @@ import {
   describeDuration,
   type DurationFormat,
 } from './duration-codec';
+import { INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineDurationSaved {
@@ -91,6 +93,26 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   protected prefixTpl = computed(() => this.prefixTemplate() ?? this.contentPrefix()?.templateRef);
   protected suffixTpl = computed(() => this.suffixTemplate() ?? this.contentSuffix()?.templateRef);
 
+
+  /**
+   * Group-forwarded contract state (role-provided; absent standalone).
+   * Merged by PULL — the leaf stays decoupled, no effects involved.
+   */
+  #leafState = inject(INLINE_TEMPORAL_LEAF_STATE, { optional: true, self: true });
+
+  protected effectiveDisabled = computed(
+    () => this.disabled() || (this.#leafState?.disabled() ?? false),
+  );
+  protected effectiveReadonly = computed(
+    () => this.readonly() || (this.#leafState?.readonly() ?? false),
+  );
+  protected effectiveTouched = computed(
+    () => this.touched() || (this.#leafState?.touched() ?? false),
+  );
+  protected effectiveInvalid = computed(
+    () => this.invalid() || (this.#leafState?.invalid() ?? false),
+  );
+
   /** Form Value Contract: touch — forwarded from the inner control. */
   touch = output<void>();
 
@@ -117,10 +139,13 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
     () => parseDuration(this.innerValue(), this.durationFormat()) === undefined,
   );
 
-  /** Errors forwarded inward: contract errors + the synthetic parse gate. */
-  protected innerErrors = computed<readonly ValidationError.WithOptionalFieldTree[]>(() =>
-    this.parseFailed() ? [...this.errors(), { kind: 'parse' }] : this.errors(),
-  );
+  /** Errors forwarded inward: contract + group-routed errors + the parse gate. */
+  protected innerErrors = computed<readonly ValidationError.WithOptionalFieldTree[]>(() => {
+    const groupErrors = this.#leafState?.errors() ?? [];
+    const base = groupErrors.length ? [...this.errors(), ...groupErrors] : this.errors();
+
+    return this.parseFailed() ? [...base, { kind: 'parse' }] : base;
+  });
 
   /** Live interpretation preview: `✓ 1 h 30 min` / `… raw`. */
   protected preview = computed(() => {

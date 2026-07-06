@@ -24,6 +24,7 @@ import {
   composeDbEntry,
   dayToDbEntry,
   type DurationFormat,
+  type TemporalRangeValue,
 } from 'angular-inline-select/temporal';
 
 @Component({
@@ -78,25 +79,15 @@ export class TemporalPlayground {
   protected estimate = signal<number | null>(5400);
 
   // ---------------------------------------------------------------------------
-  // The quartet — stay · start · end · length in one signal form, LINKED by
-  // the DateTimeRangeGroup: duration = end − start, duration edits move the
-  // end, day edits shift the stay. Seeded OVERNIGHT: the end is
-  // wall-clock-earlier than the start, so the end field wears the +1 badge.
+  // The quartet — T5b: the GROUP is the form control. ONE field, the domain
+  // shape ({start, end, duration} — DB entries + seconds); the four leaves
+  // are unbound surfaces the group feeds. Seeded OVERNIGHT: the end instant
+  // is on the next day, so the end field wears the +1 badge.
   // ---------------------------------------------------------------------------
-  protected stayModel = signal<{
-    /** UTC ISO DB entry — local `startOf('day')`. */
-    day: string | null;
-    /** UTC ISO DB entry — the instant carries its own date. */
-    starts: string | null;
-    /** UTC ISO DB entry — overnight lives IN the value (+1 badge derives from it). */
-    ends: string | null;
-    /** Seconds. */
-    length: number | null;
-  }>({
-    day: dayToDbEntry('2026-07-21'),
-    starts: composeDbEntry('2026-07-21', '21:00'),
-    ends: composeDbEntry('2026-07-22', '06:00'),
-    length: 32_400,
+  protected stayModel = signal<TemporalRangeValue | null>({
+    start: composeDbEntry('2026-07-21', '21:00'),
+    end: composeDbEntry('2026-07-22', '06:00'),
+    duration: 32_400,
   });
 
   protected stayForm = form(this.stayModel);
