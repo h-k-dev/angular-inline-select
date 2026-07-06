@@ -97,43 +97,51 @@
         </div>
       </div>
 
-      <div class="example-card" id="trio-example">
-        <h3 class="example-card__title">The trio — day · start · length (unlinked, the T5 fixture)</h3>
+      <div class="example-card" id="quartet-example">
+        <h3 class="example-card__title">The quartet — stay · start · end · length (unlinked, the T5 fixture)</h3>
         <p class="prose">
-          Workshop on
+          Stay on
           <angular-inline-date
-            [formField]="workshopForm.day"
+            [formField]="stayForm.day"
             [locale]="dateLocale()"
-            ariaLabel="Workshop day"
-            (saved)="logEmit('trio.day saved', $event)"
+            ariaLabel="Stay day"
+            (saved)="logEmit('stay.day saved', $event)"
           />
-          starting at
+          from
           <angular-inline-time
-            [formField]="workshopForm.starts"
+            [formField]="stayForm.starts"
             [locale]="militaryLocale()"
-            ariaLabel="Workshop start in 24-hour time"
-            (saved)="logEmit('trio.starts saved', $event)"
+            ariaLabel="Stay start in 24-hour time"
+            (saved)="logEmit('stay.starts saved', $event)"
+          />
+          to
+          <angular-inline-time
+            [formField]="stayForm.ends"
+            [locale]="militaryLocale()"
+            ariaLabel="Stay end in 24-hour time"
+            (saved)="logEmit('stay.ends saved', $event)"
           />
           for
           <angular-inline-duration
-            [formField]="workshopForm.length"
+            [formField]="stayForm.length"
             durationFormat="h:mm"
             [step]="60"
-            ariaLabel="Workshop length"
-            (saved)="logEmit('trio.length saved', $event)"
+            ariaLabel="Stay length"
+            (saved)="logEmit('stay.length saved', $event)"
           />
-          — one signal form, three temporal fields, start in military time (24&nbsp;h via the
-          <code>hc-h23</code> locale extension). Model:
+          — one signal form, four temporal fields, times in military (24&nbsp;h via the <code>hc-h23</code> locale
+          extension). Model:
           <code
-            >{{ workshopModel().day ?? '∅' }} · {{ workshopModel().starts ?? '∅' }} ·
-            {{ workshopModel().length ?? '∅' }}s</code
+            >{{ stayModel().day ?? '∅' }} · {{ stayModel().starts ?? '∅' }}–{{ stayModel().ends ?? '∅' }} ·
+            {{ stayModel().length ?? '∅' }}s</code
           >.
         </p>
 
         <p class="form-toggles__hint">
-          Deliberately NOT linked yet — this is the fixture T5's <code>DateTimeRangeGroup</code> grows on: date range +
-          time range + duration speaking to each other, the end time wearing a <code>+1</code> day badge when it
-          crosses midnight (the airline arrival pattern). See ROADMAP-DATETIME.
+          Deliberately NOT linked yet — this is the fixture T5's <code>DateTimeRangeGroup</code> grows on: end ≥ start
+          over the composed datetimes, duration = end − start, day edits shifting both sides. The seed is an OVERNIGHT
+          stay (21:00 → 06:00): once linked, the end field wears a <code>+1</code> day badge (the airline arrival
+          pattern) instead of reading as an error. See ROADMAP-DATETIME.
         </p>
       </div>
 

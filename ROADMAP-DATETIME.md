@@ -174,11 +174,14 @@ derives `errorState = (field invalid || local invalid) && touched`. Plan:
 
 ## T5 — Range & linked fields ("they speak to each other")
 
-**Sandbox setup exists:** the demo's sign-in dialog carries the UNLINKED
-trio — date of birth, a military-time field (24 h via the `en-u-hc-h23`
-locale extension, zero codec changes) and a duration — as the fixture the
-group directive will be developed against; it grows into the maximal
-date-range + time-range + duration composition below. (The dialog is dynamically
+**Sandbox fixtures exist:** the temporal playground carries the UNLINKED
+quartet — stay · start · end · length in one signal form, seeded with an
+overnight stay (21:00 → 06:00, the +1-badge case) — as THE fixture the
+group directive will be developed against. The sign-in dialog additionally
+hosts an unlinked trio (date of birth / military time via the
+`en-u-hc-h23` locale extension / duration) for the dialog-hosted form
+angle. Both grow into the maximal date-range + time-range + duration
+composition below. (The dialog is dynamically
 imported: it carries the phone metadata AND the temporal entry point, so
 a static import would drag both into main — it did, until it didn't.)
 

@@ -66,24 +66,29 @@ export class TemporalPlayground {
   protected estimate = signal<number | null>(5400);
 
   // ---------------------------------------------------------------------------
-  // The trio — one signal form, three temporal fields, deliberately UNLINKED:
-  // the T5 DateTimeRangeGroup fixture (day/start/end/duration speaking to
-  // each other; end times get a +1 day badge when they cross midnight).
+  // The quartet — stay · start · end · length in one signal form, deliberately
+  // UNLINKED: the T5 DateTimeRangeGroup fixture (end >= start over composed
+  // datetimes, duration = end − start, day edits shift both sides). Seeded
+  // OVERNIGHT: the end is wall-clock-earlier than the start — exactly the
+  // case the +1 day badge on the end field will make legible.
   // ---------------------------------------------------------------------------
-  protected workshopModel = signal<{
+  protected stayModel = signal<{
     /** ISO `'yyyy-MM-dd'`. */
     day: string | null;
     /** `'HH:mm'` — shown in 24 h via the `hc-h23` locale extension. */
     starts: string | null;
+    /** `'HH:mm'` — the future +1 badge carrier. */
+    ends: string | null;
     /** Seconds. */
     length: number | null;
   }>({
     day: '2026-07-21',
-    starts: '14:00',
-    length: 5400,
+    starts: '21:00',
+    ends: '06:00',
+    length: 32_400,
   });
 
-  protected workshopForm = form(this.workshopModel);
+  protected stayForm = form(this.stayModel);
 
   /** The page's locale toggle, pinned to 24 h — military time survives `en`. */
   protected militaryLocale = computed(() => `${this.dateLocale()}-u-hc-h23`);
