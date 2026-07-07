@@ -7,10 +7,14 @@
     "@angular/forms": "^22.0.3",
     "@angular/cdk": "^22.0.2",
     "@angular/material": "^22.0.2",
-    "libphonenumber-js": "^1.13.0"
+    "libphonenumber-js": "^1.13.0",
+    "luxon": "^3.0.0"
   },
   "peerDependenciesMeta": {
     "libphonenumber-js": {
+      "optional": true
+    },
+    "luxon": {
       "optional": true
     }
   },

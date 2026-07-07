@@ -11,6 +11,8 @@ import {
   signal,
 } from '@angular/core';
 
+import { DateTime } from 'luxon';
+
 import { toIsoDate, formatIsoDate, type IsoDate } from './date-codec';
 
 interface CalendarDay {
@@ -20,21 +22,20 @@ interface CalendarDay {
   today: boolean;
 }
 
+const ISO_DAY = 'yyyy-MM-dd';
+
 function parts(iso: IsoDate): [number, number, number] {
   const [year, month, day] = iso.split('-').map(Number);
   return [year, month, day];
 }
 
 function shiftDay(iso: IsoDate, days: number): IsoDate {
-  const [year, month, day] = parts(iso);
-  return toIsoDate(new Date(year, month - 1, day + days));
+  return DateTime.fromISO(iso).plus({ days }).toFormat(ISO_DAY);
 }
 
+// Luxon clamps month arithmetic natively (Jan 31 + 1 month = Feb 28/29).
 function shiftMonth(iso: IsoDate, months: number): IsoDate {
-  const [year, month, day] = parts(iso);
-  // Clamp to the target month's length (Jan 31 + 1 month = Feb 28/29).
-  const lastDay = new Date(year, month - 1 + months + 1, 0).getDate();
-  return toIsoDate(new Date(year, month - 1 + months, Math.min(day, lastDay)));
+  return DateTime.fromISO(iso).plus({ months }).toFormat(ISO_DAY);
 }
 
 /** Locale-correct first day of week: JS convention (0 = Sunday). */
@@ -221,26 +222,26 @@ export class AngularInlineCalendar {
   });
 
   protected weeks = computed<CalendarDay[][]>(() => {
-    const [year, month] = parts(this.active());
+    const [, month] = parts(this.active());
     const first = firstDayOfWeek(this.locale());
     const today = toIsoDate(this.now()());
 
-    const firstOfMonth = new Date(year, month - 1, 1);
-    const lead = (firstOfMonth.getDay() - first + 7) % 7;
+    const firstOfMonth = DateTime.fromISO(this.active()).startOf('month');
+    // Luxon weekday: 1=Mon…7=Sun → JS convention (0=Sun) for the lead math.
+    const lead = ((firstOfMonth.weekday % 7) - first + 7) % 7;
 
     const weeks: CalendarDay[][] = [];
-    const cursor = new Date(year, month - 1, 1 - lead);
+    let cursor = firstOfMonth.minus({ days: lead });
     for (let week = 0; week < 6; week++) {
       const days: CalendarDay[] = [];
       for (let day = 0; day < 7; day++) {
-        const iso = toIsoDate(cursor);
         days.push({
-          iso,
-          day: cursor.getDate(),
-          outside: cursor.getMonth() !== month - 1,
-          today: iso === today,
+          iso: cursor.toFormat(ISO_DAY),
+          day: cursor.day,
+          outside: cursor.month !== month,
+          today: cursor.toFormat(ISO_DAY) === today,
         });
-        cursor.setDate(cursor.getDate() + 1);
+        cursor = cursor.plus({ days: 1 });
       }
       weeks.push(days);
     }

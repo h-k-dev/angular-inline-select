@@ -62,7 +62,12 @@ Rules that make it deterministic:
 dt.toUTC().toISO()`; the time-entry table binds
 `FieldTree<DomainResult['model']>` = `{date, range: {start, end},
 duration}`), and the sandbox now mirrors it — `temporal/src/datetime/
-db-entry.ts` is the dictating core (Luxon-free `Date` math):
+db-entry.ts` is the dictating core, built ON LUXON (decided 2026-07-07:
+Luxon is the house engine — iusta's core/datetime is Luxon end to end
+and T6's timezone story needs a real tz engine; it ships as an optional
+peer dep contained in the temporal entry point, exactly like
+libphonenumber in /phone — prod-verified absent from main). Values stay
+plain strings; `toDateTime`/`fromDateTime` are the consumer bridge:
 
 | Control | `value` / `savedModelChange` | Display |
 | --- | --- | --- |

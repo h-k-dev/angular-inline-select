@@ -1,7 +1,11 @@
+import { DateTime } from 'luxon';
+
 /**
  * The DB-entry core — the sandbox mirror of iusta's `core/datetime`
- * (`toDBEntry(dt) = dt.toUTC().toISO()`), Luxon-free. It dictates the ONE
- * model format every temporal control speaks:
+ * (`toDBEntry(dt) = dt.toUTC().toISO()`), built ON LUXON (decided: iusta's
+ * datetime house engine is Luxon end to end, and T6's server-side timezone
+ * story needs a real tz engine). It dictates the ONE model format every
+ * temporal control speaks:
  *
  *   value / savedModelChange  =  UTC ISO datetime string ('…Z') | null
  *   display                   =  localized local-time strings
@@ -9,53 +13,57 @@
  *
  * The difference between what the user sees and what is behind the back:
  * controls keep their local day/'HH:mm' machinery internally and convert
- * at the value boundary through these functions only.
+ * at the value boundary through these functions only. Luxon itself is
+ * CONTAINED here (and consumed via the `toDateTime`/`fromDateTime`
+ * bridge) — values stay plain strings, and the engine ships only with the
+ * temporal entry point, exactly like libphonenumber ships only with
+ * `/phone`.
  */
 
 /** `'2026-07-20T19:00:00.000Z'` — `datetime.toUTC().toISO()`, SQL-friendly. */
 export type DbDateTime = string;
 
-/** Parses a DB entry (or any ISO 8601 the platform accepts) into a local `Date`. */
-export function parseDbEntry(value: DbDateTime | null): Date | null {
+/** The Luxon bridge, inbound: a DB entry (or any ISO 8601) as a local-zone `DateTime`. */
+export function toDateTime(value: DbDateTime | null): DateTime | null {
   if (value === null || value === '') return null;
 
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+  const parsed = DateTime.fromISO(value);
+  return parsed.isValid ? parsed : null;
 }
 
-/** The wire format: UTC ISO with `Z` — what iusta's `toDBEntry` produces. */
+/** The Luxon bridge, outbound: iusta's `toDBEntry`, verbatim. */
+export function fromDateTime(dateTime: DateTime): DbDateTime {
+  return dateTime.toUTC().toISO()!;
+}
+
+/** Parses a DB entry into a local `Date` (consumer convenience). */
+export function parseDbEntry(value: DbDateTime | null): Date | null {
+  return toDateTime(value)?.toJSDate() ?? null;
+}
+
+/** The wire format from a JS `Date` — `toDBEntry(DateTime.fromJSDate(date))`. */
 export function toDbEntry(date: Date): DbDateTime {
-  return date.toISOString();
+  return fromDateTime(DateTime.fromJSDate(date));
 }
-
-const pad = (value: number) => String(value).padStart(2, '0');
 
 /** The LOCAL calendar day of a DB entry: `'yyyy-MM-dd'`. */
 export function localDayOf(value: DbDateTime | null): string | null {
-  const date = parseDbEntry(value);
-  if (date === null) return null;
-
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return toDateTime(value)?.toFormat('yyyy-MM-dd') ?? null;
 }
 
 /** The LOCAL wall-clock time of a DB entry: `'HH:mm'`. */
 export function localTimeOf(value: DbDateTime | null): string | null {
-  const date = parseDbEntry(value);
-  if (date === null) return null;
-
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return toDateTime(value)?.toFormat('HH:mm') ?? null;
 }
 
 /** Local midnight of a `'yyyy-MM-dd'` day, as a DB entry (`startOf('day')`). */
 export function dayToDbEntry(day: string): DbDateTime {
-  const [year, month, date] = day.split('-').map(Number);
-  return toDbEntry(new Date(year, month - 1, date));
+  return fromDateTime(DateTime.fromISO(day).startOf('day'));
 }
 
 /** Local end-of-day of a `'yyyy-MM-dd'` day, as a DB entry (`endOf('day')`). */
 export function dayEndToDbEntry(day: string): DbDateTime {
-  const [year, month, date] = day.split('-').map(Number);
-  return toDbEntry(new Date(year, month - 1, date, 23, 59, 59, 999));
+  return fromDateTime(DateTime.fromISO(day).endOf('day'));
 }
 
 /**
@@ -64,27 +72,23 @@ export function dayEndToDbEntry(day: string): DbDateTime {
  * preserved time).
  */
 export function composeDbEntry(day: string, time: string): DbDateTime {
-  const [year, month, date] = day.split('-').map(Number);
-  const [hours, minutes] = time.split(':').map(Number);
-
-  return toDbEntry(new Date(year, month - 1, date, hours, minutes));
+  const [hour, minute] = time.split(':').map(Number);
+  return fromDateTime(DateTime.fromISO(day).set({ hour, minute, second: 0, millisecond: 0 }));
 }
 
 /** Shifts a DB entry by whole seconds (`shiftFromDuration`'s primitive). */
 export function shiftDbEntry(value: DbDateTime, seconds: number): DbDateTime {
-  const date = parseDbEntry(value);
-  if (date === null) return value;
-
-  return toDbEntry(new Date(date.getTime() + seconds * 1000));
+  const dateTime = toDateTime(value);
+  return dateTime === null ? value : fromDateTime(dateTime.plus({ seconds }));
 }
 
 /** Whole seconds between two DB entries (`induceFromTimeRange`'s primitive). */
 export function diffDbEntrySeconds(start: DbDateTime, end: DbDateTime): number | null {
-  const from = parseDbEntry(start);
-  const to = parseDbEntry(end);
+  const from = toDateTime(start);
+  const to = toDateTime(end);
   if (from === null || to === null) return null;
 
-  return Math.round((to.getTime() - from.getTime()) / 1000);
+  return Math.round(to.diff(from, 'seconds').seconds);
 }
 
 /**
@@ -92,14 +96,11 @@ export function diffDbEntrySeconds(start: DbDateTime, end: DbDateTime): number |
  * `+n` over-count, now intrinsic to the values.
  */
 export function localDayDiff(start: DbDateTime, end: DbDateTime): number | null {
-  const from = parseDbEntry(start);
-  const to = parseDbEntry(end);
+  const from = toDateTime(start);
+  const to = toDateTime(end);
   if (from === null || to === null) return null;
 
-  const dayStart = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-  const dayEnd = new Date(to.getFullYear(), to.getMonth(), to.getDate());
-
-  return Math.round((dayEnd.getTime() - dayStart.getTime()) / 86_400_000);
+  return Math.round(to.startOf('day').diff(from.startOf('day'), 'days').days);
 }
 
 /** Moves `value` onto the local day of `day`, preserving its wall-clock time. */
@@ -110,8 +111,5 @@ export function moveDbEntryToDay(value: DbDateTime, day: string): DbDateTime {
 
 /** Shifts a `'yyyy-MM-dd'` LOCAL day by whole calendar days. */
 export function addLocalDays(day: string, days: number): string {
-  const [year, month, date] = day.split('-').map(Number);
-  const shifted = new Date(year, month - 1, date + days);
-
-  return `${shifted.getFullYear()}-${pad(shifted.getMonth() + 1)}-${pad(shifted.getDate())}`;
+  return DateTime.fromISO(day).plus({ days }).toFormat('yyyy-MM-dd');
 }

@@ -5,6 +5,8 @@
  * localize through `Intl` at zero bundle bytes.
  */
 
+import { DateTime } from 'luxon';
+
 /** `'yyyy-MM-dd'`. */
 export type IsoDate = string;
 
@@ -73,20 +75,13 @@ export function dateValuesEqual(a: InlineDateValue, b: InlineDateValue): boolean
   return a.start === b.start && a.end === b.end;
 }
 
-const pad = (value: number) => String(value).padStart(2, '0');
-
 export function toIsoDate(date: Date): IsoDate {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return DateTime.fromJSDate(date).toFormat('yyyy-MM-dd');
 }
 
 function isoIfValid(year: number, month: number, day: number): IsoDate | undefined {
-  if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
-
-  const date = new Date(year, month - 1, day);
-  const roundTrips =
-    date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
-
-  return roundTrips ? toIsoDate(date) : undefined;
+  const date = DateTime.fromObject({ year, month, day });
+  return date.isValid ? date.toFormat('yyyy-MM-dd') : undefined;
 }
 
 // -----------------------------------------------------------------------------
