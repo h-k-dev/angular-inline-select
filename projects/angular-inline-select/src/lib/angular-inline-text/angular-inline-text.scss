@@ -1,0 +1,51 @@
+.action {
+  border: 0 solid;
+  background: transparent;
+  cursor: pointer;
+  font: var(--mat-sys-body-small, 0.875rem/calc(1.25 / 0.875) system-ui);
+  color: var(--mat-sys-on-surface, #1f1f1f);
+
+  background-color: var(
+    --editable-text-action-background,
+    oklch(from var(--mat-sys-surface-container-highest, #eee) l c h / 0.75)
+  );
+  color: var(--editable-text-action-color, var(--mat-sys-on-surface-variant, #5f6368));
+  padding-inline: calc(var(--mat-sys-spacing, 0.25rem) * 2.5);
+  border-radius: var(--mat-sys-radius, 0.625rem);
+  height: calc(var(--mat-sys-spacing, 0.25rem) * 8);
+
+  transition: scale 0.15s cubic-bezier(0.23, 1, 0.32, 1);
+  scale: 1;
+
+  &:active {
+    scale: 0.98;
+  }
+
+  &:hover,
+  :focus-visible {
+    background-color: var(
+      --editable-text-action-hover-background,
+      var(--mat-sys-surface-container-highest, #eee)
+    );
+
+    color: var(--editable-text-action-hover-color, var(--mat-sys-on-surface-variant, #5f6368));
+  }
+}
+
+.action-save {
+  min-width: calc(var(--mat-sys-spacing, 0.25rem) * 20);
+  background-color: var(--editable-text-action-save-background, var(--mat-sys-primary, #4285f4));
+  color: var(--editable-text-action-save-color, var(--mat-sys-on-primary, #fff));
+  &:hover,
+  :focus-visible {
+    background-color: var(
+      --editable-text-action-save-hover-background,
+      var(--mat-sys-primary, #4285f4)
+    );
+    color: var(--editable-text-action-save-hover-color, var(--mat-sys-on-primary, #fff));
+  }
+}
+
+.action-clear {
+  height: calc(var(--mat-sys-spacing, 0.25rem) * 6);
+}

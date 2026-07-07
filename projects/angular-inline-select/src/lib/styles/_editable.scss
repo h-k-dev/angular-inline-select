@@ -86,7 +86,10 @@
     // The control mirrors the active option to `aria-activedescendant` and
     // marks it for styling — keyboard highlight without moving focus.
     &[data-active='true'] {
-      background: var(--editable-menu-active-background, var(--mat-sys-secondary-container, #d7e3ff));
+      background: var(
+        --editable-menu-active-background,
+        var(--mat-sys-secondary-container, #d7e3ff)
+      );
       color: var(--editable-menu-active-color, var(--mat-sys-on-secondary-container, #001b3f));
     }
   }
@@ -194,12 +197,7 @@
   gap: calc(var(--mat-sys-inner-spacing, 16px) / 4);
   padding: calc(var(--mat-sys-inner-spacing, 16px) / 4);
 
-  background: var(--editable-bubble-background, var(--mat-sys-surface, #fff));
-  border: 1px solid var(--editable-bubble-border-color, var(--mat-sys-outline-variant, #c4c7c5));
-  border-radius: var(
-    --editable-bubble-radius,
-    var(--mat-sys-corner-small, calc(var(--radius, 0.625rem) * 0.6))
-  );
+  border: 0 solid;
 
   animation: editable-bubble-enter 0.15s var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
 }

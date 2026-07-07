@@ -1,6 +1,10 @@
 :host {
+  --_spacing: var(--mat-sys-spacing, 0.25rem);
+  --_radius: var(--mat-sys-corner-small, 0.625rem);
+  --_button-size: 2rem;
+
   display: block;
-  padding: 8px;
+  padding: var(--_spacing);
   user-select: none;
 }
 .cal__header {
@@ -8,20 +12,23 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 4px 6px;
+  padding-block-end: calc(var(--_spacing) * 2);
 }
 .cal__label {
   font: var(--mat-sys-title-small, 500 0.875rem/1.25 system-ui);
   text-transform: capitalize;
 }
 .cal__nav {
+  height: var(--_button-size);
+  width: var(--_button-size);
+
   border: 0;
   background: transparent;
   cursor: pointer;
   font-size: 1.1rem;
   line-height: 1;
   padding: 4px 8px;
-  border-radius: var(--mat-sys-corner-small, 0.5rem);
+  border-radius: var(--mat-sys-corner-small, calc(var(--_radius) * 2));
   color: var(--mat-sys-on-surface-variant, #5f6368);
 }
 .cal__nav:hover {
@@ -30,7 +37,8 @@
 .cal__weekdays,
 .cal__week {
   display: grid;
-  grid-template-columns: repeat(7, 2.1rem);
+  grid-template-columns: repeat(7, var(--_button-size));
+  margin-block-start: var(--_spacing);
 }
 .cal__weekday {
   text-align: center;
@@ -39,10 +47,12 @@
   padding-block: 2px;
 }
 .cal__day {
-  height: 2.1rem;
+  height: var(--_button-size);
+  width: var(--_button-size);
+
   border: 0;
   background: transparent;
-  border-radius: 50%;
+  border-radius: calc(var(--_radius) * 0.875);
   cursor: pointer;
   font: var(--mat-sys-body-small, 0.8125rem/1 system-ui);
   color: var(--mat-sys-on-surface, #1f1f1f);
@@ -70,7 +80,18 @@
   background: var(--mat-sys-secondary-container, #e8f0fe);
   color: var(--mat-sys-on-secondary-container, #174ea6);
   border-radius: 0;
+
+  &:first-child {
+    border-start-start-radius: calc(var(--_radius) * 0.875);
+    border-end-start-radius: calc(var(--_radius) * 0.875);
+  }
+
+  &:last-child {
+    border-start-end-radius: calc(var(--_radius) * 0.875);
+    border-end-end-radius: calc(var(--_radius) * 0.875);
+  }
 }
+
 .cal__day[data-range-start],
 .cal__day[data-range-end] {
   background: var(--mat-sys-primary, #4285f4);

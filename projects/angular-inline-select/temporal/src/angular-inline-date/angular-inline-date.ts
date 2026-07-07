@@ -424,7 +424,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const iso = parseDateInput(raw, this.now()(), this.locale(), this.effectiveZone());
     if (iso === null || iso === undefined) return `… ${raw}`;
 
-    return `✓ ${describeIsoDate(iso, this.locale())}`;
+    return `${describeIsoDate(iso, this.locale())}`;
   });
 
   /** The grid's pending day: the focused side's parsed draft, else its committed day. */
