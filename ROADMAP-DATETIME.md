@@ -151,6 +151,44 @@ BEFORE the popup collapses; a pick while editing REWRITES the live draft
 (session stays open), idle it COMMITS immediately. `showCalendar`
 input(true) opts out.
 
+### T2b — the grid moves INTO the panel (DECIDED, next up)
+
+The overlay-under-the-field was the flag-picker reflex, but the flag
+picker opens from IDLE — this grid lives inside an EDITING SESSION, so
+it belongs where the slash menu lives: in the panel ("no second overlay,
+no positioning math" — that decision already exists). Plan:
+- `angular-inline-text` grows a generic `panelTemplate` input — the
+  `menuTemplate` sibling (capability in the core, dormant unless fed),
+  rendered between the editor line and the footer. The date control
+  feeds the calendar into it; the CDK overlay integration is DELETED.
+- **Slim chrome**: a `showActions` input (default true); the date
+  control drops the Accept/Discard footer buttons — the user either
+  MOUSE-CLICKS a day (= choose = the pick COMMITS the session) or types
+  and commits with Enter/Ctrl+Enter as usual. Escape is naturally
+  two-stage: grid → editor, editor → discard.
+- Grid gets a compact density (thinner cells); the panel takes a
+  min-width when a panel template is present (7 columns ≈ 14rem).
+- The 📅 idle affix simplifies: it just OPENS the session (panel + grid
+  are one surface); since picks commit, idle-pick-commits-immediately
+  survives with less machinery. ArrowDown handoff unchanged.
+
+## The round-trip typing law (DECIDED — applies to every codec)
+
+**`parse(format(value))` must equal `value`, per locale.** Whatever the
+display shows, the user must be able to type back — TODAY this is
+violated by our own draft seeding: a session opens with the DISPLAY
+string as the draft ('Dec 24, 2026') and the parser rejects it, forcing
+a full numeric retype to change one character.
+- Date: month-name parsing via `Intl` REVERSE lookup — build the
+  locale's month table (long + short) by formatting 12 dates, match it
+  AND the English names (the slash-menu matching lesson), strip weekday
+  tokens the same way. `'jun 07, 2024'`, `'7. Juni 2024'`, `'24.12.'`
+  and ISO all parse. Zero bundled translations.
+- Time: day-period parsing — `'9:30 AM'` parses under `en` (extract the
+  locale's dayPeriod strings via `formatToParts`, shift the hour).
+- Duration: already close; joins the per-locale spec matrix that pins
+  the law for all three codecs.
+
 ## T2 — original spec (executed above)
 
 The typed draft stays primary; the calendar is the pointer affordance —
@@ -349,7 +387,15 @@ into five inline fields. Everything below scales to that shape.
 
 The particular UX, verbatim requirements:
 - **Two separate editing fields** for start and end — never one combined
-  range input.
+  range input. PRIORITY PULLED FORWARD by the clear-ownership decision:
+  **each side owns its clear** — clearing the start emits
+  `{ start: null, end }`, clearing the end `{ start, end: null }`; the
+  other side is NEVER nuked. Half-open ranges are legitimate states
+  (display: `'Jul 21 – …'` / `'… – Jul 24'`); the interim single-field
+  range UI structurally cannot express per-side clearing, which is the
+  strongest argument for building the two-field UI next. Group
+  refinement: a missing endpoint NULLS the derived duration
+  (underivable) — never leave a stale one standing.
 - **Tab advances start → end when the draft is valid**: typing a parseable
   date(time) into the start field and pressing Tab commits it and moves the
   session to the end field in one gesture (keyboard flow mirrors the
