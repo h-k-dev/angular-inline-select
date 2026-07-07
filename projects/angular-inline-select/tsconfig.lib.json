@@ -8,7 +8,12 @@
     "declarationMap": true,
     "types": []
   },
-  "include": ["src/**/*.ts", "phone/src/**/*.ts", "temporal/src/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "phone/src/**/*.ts",
+    "temporal/src/**/*.ts",
+    "temporal-mat/src/**/*.ts"
+  ],
   "exclude": ["**/*.spec.ts"],
   "angularCompilerOptions": {
     "extendedDiagnostics": {

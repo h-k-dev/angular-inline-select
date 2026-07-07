@@ -106,17 +106,6 @@
       </div>
     }
 
-    <!--
-      Panel body widget (calendar grid, …) — rendered where the menu lives,
-      between the editor line and the footer. The widget owns its own focus
-      and pointer behavior; the panel just gives it a home.
-    -->
-    @if (panelTemplate(); as panel) {
-      <div class="editable-panel__body">
-        <ng-container *ngTemplateOutlet="panel" />
-      </div>
-    }
-
     <div class="editable-panel__footer" [attr.id]="panelId + '-messages'">
       <!--
         Mat-form-field rule: the field decides WHEN errors show (touched or a
@@ -147,30 +136,28 @@
         <div class="editable-panel__message editable-panel__message--hint">Unsaved changes</div>
       }
 
-      @if (showActions()) {
-        <div class="editable-panel__actions">
-          <button
-            type="button"
-            class="action action-reset"
-            (mousedown)="$event.preventDefault(); $event.stopPropagation()"
-            (click)="cancel()"
-            aria-label="Discard"
-          >
-            Discard
-          </button>
+      <div class="editable-panel__actions">
+        <button
+          type="button"
+          class="action action-reset"
+          (mousedown)="$event.preventDefault(); $event.stopPropagation()"
+          (click)="cancel()"
+          aria-label="Discard"
+        >
+          Discard
+        </button>
 
-          <!-- Stays clickable while invalid: a save attempt reveals the errors (mat submit semantics) -->
-          <button
-            type="button"
-            class="action action-save"
-            (mousedown)="$event.preventDefault(); $event.stopPropagation()"
-            (click)="accept()"
-            aria-label="Save"
-          >
-            Save
-          </button>
-        </div>
-      }
+        <!-- Stays clickable while invalid: a save attempt reveals the errors (mat submit semantics) -->
+        <button
+          type="button"
+          class="action action-save"
+          (mousedown)="$event.preventDefault(); $event.stopPropagation()"
+          (click)="accept()"
+          aria-label="Save"
+        >
+          Save
+        </button>
+      </div>
     </div>
   </div>
 </ng-template>

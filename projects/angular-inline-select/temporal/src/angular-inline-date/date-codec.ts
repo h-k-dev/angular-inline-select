@@ -130,7 +130,7 @@ function nameTable(locale: string | string[] | undefined) {
 /** `'Dec 24, 2026'`, `'24. Dezember 2026'`, `'Thursday, December 24, 2026'` … */
 function parseNamedDate(
   raw: string,
-  now: Date,
+  nowYear: number,
   locale: string | string[] | undefined,
 ): IsoDate | undefined {
   const { months, weekdays } = nameTable(locale);
@@ -167,7 +167,7 @@ function parseNamedDate(
   }
 
   if (month === undefined || day === undefined) return undefined;
-  return isoIfValid(year ?? now.getFullYear(), month, day);
+  return isoIfValid(year ?? nowYear, month, day);
 }
 
 /**
@@ -183,9 +183,20 @@ export function parseDateInput(
   raw: string,
   now: Date = new Date(),
   locale?: string | string[],
+  zone?: string,
 ): IsoDate | null | undefined {
   const trimmed = raw.trim();
   if (trimmed === '') return null;
+
+  // A FULL ISO datetime (pasted) decomposes: the DISPLAY-ZONE day of the instant.
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(trimmed)) {
+    const iso = trimmed.replace(' ', 'T');
+    const instant = zone ? DateTime.fromISO(iso, { zone }) : DateTime.fromISO(iso);
+    return instant.isValid ? instant.toFormat('yyyy-MM-dd') : undefined;
+  }
+
+  // Year-less shapes complete from `now` — read in the display zone.
+  const nowYear = zone ? DateTime.fromJSDate(now, { zone }).year : now.getFullYear();
 
   // ISO: yyyy-M-d
   let match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(trimmed);
@@ -198,7 +209,7 @@ export function parseDateInput(
     const month = Number(match[2]);
     const year =
       match[3] === undefined
-        ? now.getFullYear()
+        ? nowYear
         : match[3].length === 2
           ? 2000 + Number(match[3])
           : Number(match[3]);
@@ -207,9 +218,58 @@ export function parseDateInput(
   }
 
   // Named months (the display's own format, localized + English).
-  if (/[\p{L}]/u.test(trimmed)) return parseNamedDate(trimmed, now, locale);
+  if (/[\p{L}]/u.test(trimmed)) return parseNamedDate(trimmed, nowYear, locale);
 
   return undefined;
+}
+
+const placeholderCache = new Map<string, string>();
+
+/**
+ * The locale's NUMERIC date pattern as a fixed-size typing hint:
+ * `'dd.mm.yyyy'` for German, `'mm/dd/yyyy'` for en-US, `'yyyy. mm. dd.'`
+ * for Korean — order and separators from `Intl.formatToParts`, zero
+ * bundled tables. Four-digit year on purpose: it is what a commit
+ * displays back (the parser reads 2-digit years as 20xx regardless).
+ * Used as the control's default placeholder, which also floors the
+ * field width — same locale, same size, every render.
+ */
+export function localeDatePlaceholder(locale?: string | string[]): string {
+  const key = JSON.stringify(locale ?? '');
+  const cached = placeholderCache.get(key);
+  if (cached !== undefined) return cached;
+
+  // The reference day needs 2-digit day AND month — else a locale that
+  // ignores the '2-digit' request would produce a lying width floor.
+  let pattern = 'yyyy-mm-dd';
+  try {
+    pattern = new Intl.DateTimeFormat(locale, {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })
+      .formatToParts(new Date(2024, 11, 31))
+      .map((part) => {
+        switch (part.type) {
+          case 'day':
+            return 'dd';
+          case 'month':
+            return 'mm';
+          case 'year':
+            return 'yyyy';
+          case 'literal':
+            return part.value;
+          default:
+            return ''; // era etc. — not typing hints
+        }
+      })
+      .join('');
+  } catch {
+    // Unknown locale tag — the ISO fallback stands.
+  }
+
+  placeholderCache.set(key, pattern);
+  return pattern;
 }
 
 /** Localized display of an ISO date (`'12 May 2026'` / `'12. Mai 2026'`). */
@@ -289,42 +349,49 @@ function weekdayLabel(date: Date, locale?: string | string[]): string {
 }
 
 /**
- * The built-in slash commands: yesterday/today/tomorrow plus the next seven
- * weekdays. Labels localize to `locale` (browser default when omitted); the
- * matching basis always includes the English name and the ISO date.
+ * The built-in quick-pick commands: yesterday/today/tomorrow plus the next
+ * seven weekdays. Labels localize to `locale` (browser default when
+ * omitted); the matching basis always includes the English name and the
+ * ISO date. "Today" is the DISPLAY ZONE's today when a zone is given.
  */
-export function buildDateCommands(now: Date, locale?: string | string[]): DateCommand[] {
+export function buildDateCommands(
+  now: Date,
+  locale?: string | string[],
+  zone?: string,
+): DateCommand[] {
+  const base = zone ? DateTime.fromJSDate(now, { zone }) : DateTime.fromJSDate(now);
+  // Label formatting runs over a machine-local Date REBUILT from the
+  // calendar-day parts — weekday names are day-of-calendar facts, zone-free.
   const at = (offset: number) => {
-    const date = new Date(now);
-    date.setDate(date.getDate() + offset);
-    return date;
+    const day = base.plus({ days: offset });
+    return { iso: day.toFormat('yyyy-MM-dd'), date: new Date(day.year, day.month - 1, day.day) };
   };
 
   const english = (date: Date) =>
     new Intl.DateTimeFormat('en', { weekday: 'long' }).format(date).toLowerCase();
 
   const relatives: DateCommand[] = ([-1, 0, 1] as const).map((offset) => {
-    const date = at(offset);
+    const { iso } = at(offset);
     const label = relativeLabel(offset, locale);
     const englishName = offset === 0 ? 'today' : offset === 1 ? 'tomorrow' : 'yesterday';
 
     return {
       id: `ai-date-${englishName}`,
       label,
-      match: `${label} ${englishName} ${toIsoDate(date)}`.toLowerCase(),
-      iso: toIsoDate(date),
+      match: `${label} ${englishName} ${iso}`.toLowerCase(),
+      iso,
     };
   });
 
   const weekdays: DateCommand[] = Array.from({ length: 7 }, (_, index) => {
-    const date = at(index + 1);
+    const { iso, date } = at(index + 1);
     const label = weekdayLabel(date, locale);
 
     return {
       id: `ai-date-weekday-${index}`,
       label,
-      match: `${label} ${english(date)} ${toIsoDate(date)}`.toLowerCase(),
-      iso: toIsoDate(date),
+      match: `${label} ${english(date)} ${iso}`.toLowerCase(),
+      iso,
     };
   });
 

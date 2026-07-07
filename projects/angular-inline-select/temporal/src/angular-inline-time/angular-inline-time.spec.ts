@@ -4,8 +4,15 @@ import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineTime, type InlineTimeSaved } from './angular-inline-time';
 import { parseTime, parseTimeDraft, formatWallClock } from './time-codec';
-import { composeDbEntry, localTimeOf, localDayOf } from '../datetime/db-entry';
-import { AngularInlineText } from 'angular-inline-select';
+import {
+  composeDbEntry,
+  dayToDbEntry,
+  localDayDiff,
+  localTimeOf,
+  localDayOf,
+  parseDbEntryDraft,
+  todayIn,
+} from '../datetime/db-entry';
 
 // The value contract: UTC ISO DB entries behind, local display in front.
 // Expectations compose through the same helpers, so specs are TZ-independent.
@@ -74,7 +81,101 @@ describe('time codec', () => {
 });
 
 // =============================================================================
-// Component
+// T6 — the display zone is configuration, the value is not
+// =============================================================================
+
+describe('db-entry zones (T6)', () => {
+  // 2026-07-21 is summer: New York = UTC-4 (EDT), Tokyo = UTC+9.
+  const NY = 'America/New_York';
+  const TOKYO = 'Asia/Tokyo';
+
+  it('the same instant reads as DIFFERENT calendar days per zone', () => {
+    const instant = '2026-07-21T23:30:00.000Z';
+    expect(localDayOf(instant, NY)).toBe('2026-07-21'); // 19:30 EDT
+    expect(localDayOf(instant, TOKYO)).toBe('2026-07-22'); // 08:30 JST
+    expect(localTimeOf(instant, NY)).toBe('19:30');
+  });
+
+  it('day boundaries and compositions run in the display zone', () => {
+    expect(dayToDbEntry('2026-07-21', NY)).toBe('2026-07-21T04:00:00.000Z');
+    expect(composeDbEntry('2026-07-21', '21:00', NY)).toBe('2026-07-22T01:00:00.000Z');
+    // An offset-less pasted draft reads in the display zone too.
+    expect(parseDbEntryDraft('2026-07-21 21:00', NY)).toBe('2026-07-22T01:00:00.000Z');
+  });
+
+  it('the +n over-count is a ZONE question — the same range differs per wall', () => {
+    const start = composeDbEntry('2026-07-21', '21:00', NY);
+    const end = composeDbEntry('2026-07-22', '06:00', NY);
+    expect(localDayDiff(start, end, NY)).toBe(1); // overnight in New York…
+    expect(localDayDiff(start, end, TOKYO)).toBe(0); // …same Tokyo afternoon/evening
+  });
+
+  it('todayIn reads the reference clock in the zone', () => {
+    // 23:30 UTC on Jul 21 is already Jul 22 in Tokyo.
+    const clock = new Date('2026-07-21T23:30:00.000Z');
+    expect(todayIn(clock, TOKYO)).toBe('2026-07-22');
+    expect(todayIn(clock, NY)).toBe('2026-07-21');
+  });
+});
+
+@Component({
+  imports: [AngularInlineTime, FormField],
+  template: `
+    <angular-inline-time
+      [formField]="field"
+      locale="en-u-hc-h23"
+      zone="America/New_York"
+      pickerMin="08:00"
+      pickerMax="18:00"
+      (saved)="sessions.push($event)"
+    />
+  `,
+})
+class ZonedTimeHost {
+  model = signal<string | null>(composeDbEntry('2026-07-21', '21:00', 'America/New_York'));
+  field = form(this.model);
+
+  sessions: InlineTimeSaved[] = [];
+}
+
+describe('AngularInlineTime with a display zone (T6) + native bounds (T3)', () => {
+  it('displays the ZONE wall clock and re-composes commits in it', () => {
+    const fixture = TestBed.createComponent(ZonedTimeHost);
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector('.inline-time__input') as HTMLInputElement;
+
+    expect(input.value).toBe('21:00'); // New York's 21:00, whatever the machine zone
+
+    input.focus();
+    fixture.detectChanges();
+    input.value = '9';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    );
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.model()).toBe(
+      composeDbEntry('2026-07-21', '09:00', 'America/New_York'),
+    );
+
+    input.blur();
+  });
+
+  it('T3: min/max forward to the native picker input', () => {
+    const fixture = TestBed.createComponent(ZonedTimeHost);
+    fixture.detectChanges();
+    const native = fixture.nativeElement.querySelector('.inline-time__native') as HTMLInputElement;
+
+    expect(native.getAttribute('min')).toBe('08:00');
+    expect(native.getAttribute('max')).toBe('18:00');
+    expect(native.getAttribute('step')).toBe('60');
+  });
+});
+
+// =============================================================================
+// Component — the input rehost: one real input, gesture-tiered sessions
 // =============================================================================
 
 @Component({
@@ -99,9 +200,9 @@ class TimeFormHost {
 interface Harness {
   fixture: ComponentFixture<TimeFormHost>;
   host: TimeFormHost;
-  display: () => HTMLElement;
-  editor: () => HTMLElement | null;
-  inner: () => AngularInlineText;
+  input: () => HTMLInputElement;
+  native: () => HTMLInputElement;
+  panel: () => HTMLElement | null;
 }
 
 function setup(): Harness {
@@ -111,120 +212,174 @@ function setup(): Harness {
   return {
     fixture,
     host: fixture.componentInstance,
-    display: () => fixture.nativeElement.querySelector('.editable-text__display') as HTMLElement,
-    editor: () => document.querySelector('.editable-text__editor') as HTMLElement | null,
-    inner: () =>
-      fixture.debugElement.children[0].children[0].componentInstance as AngularInlineText,
+    input: () => fixture.nativeElement.querySelector('.inline-time__input') as HTMLInputElement,
+    native: () => fixture.nativeElement.querySelector('.inline-time__native') as HTMLInputElement,
+    panel: () => document.querySelector('.inline-time__panel') as HTMLElement | null,
   };
 }
 
-async function typeText(h: Harness, text: string) {
-  const display = h.display();
-
-  const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
-  Object.defineProperty(event, 'inputType', { value: 'insertText' });
-  Object.defineProperty(event, 'data', { value: 'x' });
-
-  display.dispatchEvent(event);
+/** Focus settlement runs a macrotask behind (`setTimeout(0)`) — flush it. */
+async function settle(h: Harness) {
   h.fixture.detectChanges();
-  await h.fixture.whenStable();
-  h.fixture.detectChanges();
-
-  const editor = h.editor();
-  if (!editor) throw new Error('elevated editor not found');
-
-  editor.textContent = text;
-  editor.dispatchEvent(new Event('input', { bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve));
   h.fixture.detectChanges();
 }
 
-function accept(h: Harness) {
-  (h.inner() as unknown as { accept(): void }).accept();
+function type(h: Harness, text: string) {
+  const input = h.input();
+  input.focus();
+  h.fixture.detectChanges();
+  input.value = text;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
   h.fixture.detectChanges();
 }
 
-describe('AngularInlineTime', () => {
+function press(h: Harness, key: string) {
+  h.input().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  h.fixture.detectChanges();
+}
+
+async function blurAway(h: Harness) {
+  (document.activeElement as HTMLElement | null)?.blur();
+  await settle(h);
+}
+
+describe('AngularInlineTime (input rehost)', () => {
   let h: Harness;
 
   beforeEach(() => {
     h = setup();
   });
 
-  it('renders the committed time localized', () => {
-    expect(h.display().textContent).toBe('09:30');
+  afterEach(async () => {
+    await blurAway(h);
   });
 
-  it('commits typed drafts as DB entries anchored on the value own day', async () => {
-    await typeText(h, '2105');
+  it('renders the committed time localized in a real input', () => {
+    expect(h.input().value).toBe('09:30');
+  });
 
-    const hint = document.querySelector('.editable-panel__message--hint');
-    expect(hint?.textContent?.trim()).toBe('✓ 21:05');
+  it('Enter commits typed drafts as DB entries anchored on the value own day', async () => {
+    type(h, '2105');
 
-    accept(h);
+    expect(document.querySelector('.inline-time__preview')?.textContent?.trim()).toBe('✓ 21:05');
+
+    press(h, 'Enter');
 
     expect(h.host.saved).toEqual([at('21:05')]);
-    expect(h.host.sessions).toEqual([{ value: at('21:05'), changed: true, dayOverflow: 0 }]);
+    expect(h.host.sessions).toEqual([{ value: at('21:05'), changed: true, dayOverflow: 0, explicitDay: false }]);
     expect(h.host.model()).toBe(at('21:05'));
     expect(localDayOf(h.host.model())).toBe(DAY); // the day survives the edit
+    expect(h.input().value).toBe('21:05');
+    expect(h.panel()).toBeNull(); // Enter dismisses the panel
   });
 
-  it('the parse gate blocks impossible times', async () => {
-    await typeText(h, '9:75');
-    accept(h);
+  it('the parse gate blocks Enter on impossible times', () => {
+    type(h, '9:75');
+    press(h, 'Enter');
 
     expect(h.host.saved).toEqual([]);
     expect(h.host.field().value()).toBe(at('09:30'));
+    expect(h.input().getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('blur with an unreadable draft SNAPS BACK to the baseline', async () => {
+    type(h, '9:75');
+    await blurAway(h);
+
+    expect(h.host.field().value()).toBe(at('09:30'));
+    expect(h.input().value).toBe('09:30');
+    expect(h.host.saved).toEqual([]);
+    expect(h.host.sessions).toEqual([{ value: at('09:30'), changed: false, dayOverflow: 0, explicitDay: false }]);
+  });
+
+  it('blur with a readable draft COMMITS (navigation never traps)', async () => {
+    type(h, '2105');
+    await blurAway(h);
+
+    expect(h.host.saved).toEqual([at('21:05')]);
+    expect(h.host.sessions).toEqual([{ value: at('21:05'), changed: true, dayOverflow: 0, explicitDay: false }]);
+  });
+
+  it('Escape reverts to the session baseline', () => {
+    type(h, '2105');
+    press(h, 'Escape');
+
+    expect(h.host.field().value()).toBe(at('09:30'));
+    expect(h.input().value).toBe('09:30');
+    expect(h.host.saved).toEqual([]);
   });
 
   it('an OS-picker change while idle commits immediately', () => {
-    const native = h.fixture.nativeElement.querySelector('.time-native') as HTMLInputElement;
+    const native = h.native();
     native.value = '14:45';
     native.dispatchEvent(new Event('change', { bubbles: true }));
     h.fixture.detectChanges();
 
     expect(h.host.model()).toBe(at('14:45'));
     expect(h.host.saved).toEqual([at('14:45')]);
-    expect(h.host.sessions).toEqual([{ value: at('14:45'), changed: true, dayOverflow: 0 }]);
-    expect(h.display().textContent).toBe('14:45');
+    expect(h.host.sessions).toEqual([{ value: at('14:45'), changed: true, dayOverflow: 0, explicitDay: false }]);
+    expect(h.input().value).toBe('14:45');
   });
 
-  it('an OS-picker change while editing replaces the draft without committing', async () => {
-    await typeText(h, '9');
+  it('an OS-picker change during a session replaces the draft without committing', () => {
+    type(h, '9');
 
-    const native = h.fixture.nativeElement.querySelector('.time-native') as HTMLInputElement;
+    const native = h.native();
     native.value = '10:15';
     native.dispatchEvent(new Event('change', { bubbles: true }));
     h.fixture.detectChanges();
 
-    // Draft replaced, still an open session, nothing committed yet
+    // Draft replaced, session still open, nothing committed yet.
     expect(h.host.saved).toEqual([]);
-    expect(h.inner().editing()).toBe(true);
+    expect(h.input().value).toBe('10:15');
     expect(h.host.field().value()).toBe(at('10:15')); // live channel
 
-    accept(h);
+    press(h, 'Enter');
     expect(h.host.saved).toEqual([at('10:15')]);
   });
 
-  it('an overflow draft commits onto the anchor day + n with a +n preview', async () => {
-    await typeText(h, '24:30');
+  it('an overflow draft commits onto the anchor day + n with a +n preview', () => {
+    type(h, '24:30');
 
-    const hint = document.querySelector('.editable-panel__message--hint');
-    expect(hint?.textContent?.trim()).toBe('✓ 00:30 +1 day');
+    expect(document.querySelector('.inline-time__preview')?.textContent?.trim()).toBe(
+      '✓ 00:30 +1 day',
+    );
 
-    accept(h);
+    press(h, 'Enter');
 
     expect(h.host.model()).toBe(composeDbEntry('2026-07-22', '00:30'));
     expect(h.host.sessions).toEqual([
-      { value: composeDbEntry('2026-07-22', '00:30'), changed: true, dayOverflow: 1 },
+      { value: composeDbEntry('2026-07-22', '00:30'), changed: true, dayOverflow: 1, explicitDay: false },
     ]);
   });
 
-  it('a time typed into an EMPTY field anchors on the reference clock day', async () => {
+  it('a pasted FULL ISO datetime is an explicit instant — its own day, no anchor', () => {
+    type(h, '2026-07-25T08:00');
+
+    expect(document.querySelector('.inline-time__preview')?.textContent?.trim()).toContain('✓');
+    // Live channel already carries the full instant.
+    expect(h.host.field().value()).toBe(composeDbEntry('2026-07-25', '08:00'));
+
+    press(h, 'Enter');
+
+    expect(h.host.sessions).toEqual([
+      {
+        value: composeDbEntry('2026-07-25', '08:00'),
+        changed: true,
+        dayOverflow: 0,
+        explicitDay: true,
+      },
+    ]);
+    expect(localDayOf(h.host.model())).toBe('2026-07-25'); // the day CAME ALONG
+  });
+
+  it('a time typed into an EMPTY field anchors on the reference clock day', () => {
     h.host.model.set(null);
     h.fixture.detectChanges();
 
-    await typeText(h, '8');
-    accept(h);
+    type(h, '8');
+    press(h, 'Enter');
 
     const value = h.host.model();
     expect(localTimeOf(value)).toBe('08:00');

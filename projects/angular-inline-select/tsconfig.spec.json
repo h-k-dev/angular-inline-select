@@ -12,7 +12,9 @@
     "phone/src/**/*.d.ts",
     "phone/src/**/*.spec.ts",
     "temporal/src/**/*.d.ts",
-    "temporal/src/**/*.spec.ts"
+    "temporal/src/**/*.spec.ts",
+    "temporal-mat/src/**/*.d.ts",
+    "temporal-mat/src/**/*.spec.ts"
   ],
   "angularCompilerOptions": {
     "extendedDiagnostics": {

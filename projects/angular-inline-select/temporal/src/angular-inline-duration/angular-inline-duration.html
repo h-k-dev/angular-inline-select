@@ -1,30 +1,67 @@
-<!-- Live interpretation preview: what the draft means, on every keystroke. -->
-<ng-template #previewTpl>{{ preview() }}</ng-template>
-
 <!--
-  Composition, not inheritance: the inner text control owns the session
-  machinery; this component translates seconds ↔ clock strings at the
-  contract boundary.
+  The input rehost: one real <input> — the family look is CSS. The panel
+  carries the live reading and the error slot, appearing only when there
+  is something to say.
 -->
-<angular-inline-text
-  [value]="innerValue()"
-  (valueChange)="handleInnerValue($event)"
-  [(editing)]="editing"
-  [isSingleLine]="true"
-  [normalizeValue]="true"
-  [errors]="innerErrors()"
-  [invalid]="effectiveInvalid()"
-  [disabled]="effectiveDisabled()"
-  [readonly]="effectiveReadonly()"
-  [required]="required()"
-  [touched]="effectiveTouched()"
-  [placeholder]="placeholder()"
-  [ariaLabel]="ariaLabel()"
-  [prefixTemplate]="prefixTpl()"
-  [suffixTemplate]="suffixTpl()"
-  [hintTemplate]="preview() ? previewTpl : undefined"
-  (touch)="touch.emit()"
-  (saved)="handleInnerSaved($event)"
+<span
+  class="inline-duration"
+  cdkOverlayOrigin
+  #origin="cdkOverlayOrigin"
+  [class.inline-duration--invalid]="errorsVisible()"
 >
-  <ng-content select="[editable-error]" ngProjectAs="[editable-error]" />
-</angular-inline-text>
+  @if (prefixTpl(); as tpl) {
+    <span class="inline-duration__affix" aria-hidden="true">
+      <ng-container [ngTemplateOutlet]="tpl" />
+    </span>
+  }
+
+  <input
+    #durationInput
+    class="inline-duration__input"
+    [class.inline-duration__input--reverted]="revertFlash()"
+    type="text"
+    autocomplete="off"
+    autocapitalize="off"
+    spellcheck="false"
+    inputmode="decimal"
+    [attr.aria-label]="ariaLabel() ?? 'Duration'"
+    [attr.aria-invalid]="ariaInvalid() || null"
+    [attr.aria-required]="required() || null"
+    [attr.size]="sizeOf()"
+    [value]="draft()"
+    [placeholder]="placeholder()"
+    [disabled]="effectiveDisabled()"
+    [readonly]="effectiveReadonly()"
+    (input)="handleInput(durationInput.value)"
+    (focusin)="handleFocusIn()"
+    (focusout)="handleFocusOut()"
+    (keydown)="handleKeydown($event)"
+  />
+
+  @if (suffixTpl(); as tpl) {
+    <span class="inline-duration__affix" aria-hidden="true">
+      <ng-container [ngTemplateOutlet]="tpl" />
+    </span>
+  }
+
+  <!-- Snap-back is silent data-restoration — the announcement is not. -->
+  <span class="inline-duration__sr" aria-live="polite">{{ revertNotice() }}</span>
+</span>
+
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="origin"
+  [cdkConnectedOverlayOpen]="panelOpen()"
+  [cdkConnectedOverlayPositions]="overlayPositions"
+  (overlayOutsideClick)="dismissPanel()"
+>
+  <div #panel class="inline-duration__panel" (focusout)="handleFocusOut()">
+    @if (preview(); as reading) {
+      <div class="inline-duration__preview">{{ reading }}</div>
+    }
+
+    <div class="inline-duration__errors" [hidden]="!errorSlotVisible()">
+      <ng-content select="[editable-error]" />
+    </div>
+  </div>
+</ng-template>

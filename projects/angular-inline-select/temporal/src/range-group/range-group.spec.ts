@@ -9,6 +9,7 @@ import { composeDbEntry, dayToDbEntry, dayEndToDbEntry } from '../datetime/db-en
 import {
   DateTimeRangeGroup,
   RangeDay,
+  RangeEndDay,
   RangeStart,
   RangeEnd,
   RangeLength,
@@ -24,7 +25,8 @@ const NOW = new Date(2026, 6, 21);
 // 21 Jul 21:00 → 22 Jul 06:00, 9 h — the +1 lives IN the end value.
 const at = (day: string, time: string) => composeDbEntry(day, time);
 
-// The quartet fixture: stay · start · end · length.
+// The quintet fixture (the maximal form): stay · start · end · length · end day.
+// The end-day leaf appends LAST so the older tests' input indices survive.
 @Component({
   imports: [
     AngularInlineDate,
@@ -32,6 +34,7 @@ const at = (day: string, time: string) => composeDbEntry(day, time);
     AngularInlineDuration,
     DateTimeRangeGroup,
     RangeDay,
+    RangeEndDay,
     RangeStart,
     RangeEnd,
     RangeLength,
@@ -47,6 +50,7 @@ const at = (day: string, time: string) => composeDbEntry(day, time);
       <angular-inline-time rangeStart [(value)]="start" locale="en-u-hc-h23" [now]="now" />
       <angular-inline-time rangeEnd [(value)]="end" locale="en-u-hc-h23" [now]="now" />
       <angular-inline-duration rangeLength [(value)]="length" />
+      <angular-inline-date rangeEndDay [(value)]="endDay" locale="en" [now]="now" />
     </div>
   `,
 })
@@ -57,6 +61,7 @@ class QuartetHost {
   start = signal<string | null>(at('2026-07-21', '21:00'));
   end = signal<string | null>(at('2026-07-22', '06:00'));
   length = signal<number | null>(32_400);
+  endDay = signal<string | null>(dayToDbEntry('2026-07-22'));
 
   dateRanges: (ComposedDateRange | null)[] = [];
   timeRanges: (ComposedTimeRange | null)[] = [];
@@ -65,11 +70,14 @@ class QuartetHost {
   now = () => NOW;
 }
 
+// Every leaf is a REAL INPUT since the rehost — one selector, DOM order.
+const LEAF_INPUTS = '.inline-date__input, .inline-time__input, .inline-duration__input';
+
 interface Harness {
   fixture: ComponentFixture<QuartetHost>;
   host: QuartetHost;
   group: () => DateTimeRangeGroup;
-  displays: () => HTMLElement[];
+  inputs: () => HTMLInputElement[];
 }
 
 function setup(): Harness {
@@ -80,47 +88,38 @@ function setup(): Harness {
     fixture,
     host: fixture.componentInstance,
     group: () => fixture.componentInstance.group(),
-    displays: () => [...fixture.nativeElement.querySelectorAll('.editable-text__display')],
+    inputs: () => [...fixture.nativeElement.querySelectorAll(LEAF_INPUTS)] as HTMLInputElement[],
   };
 }
 
-/** Elevate the field at `index`, type `text`, commit with the accept action. */
+/**
+ * Type into the leaf input at `index` and commit with Enter (synchronous);
+ * the trailing blur flushes the focus-settlement timer.
+ */
 async function commitInto(h: Harness, index: number, text: string) {
-  const display = h.displays()[index];
-
-  const before = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
-  Object.defineProperty(before, 'inputType', { value: 'insertText' });
-  Object.defineProperty(before, 'data', { value: 'x' });
-  display.dispatchEvent(before);
-  h.fixture.detectChanges();
-  await h.fixture.whenStable();
+  const input = h.inputs()[index];
+  input.focus();
   h.fixture.detectChanges();
 
-  const editor = document.querySelector('.editable-text__editor') as HTMLElement | null;
-  if (!editor) throw new Error('elevated editor not found');
-
-  editor.textContent = text;
-  const selection = document.getSelection();
-  const range = document.createRange();
-  range.selectNodeContents(editor);
-  range.collapse(false);
-  selection?.removeAllRanges();
-  selection?.addRange(range);
-  editor.dispatchEvent(new Event('input', { bubbles: true }));
+  input.value = text;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
   h.fixture.detectChanges();
 
-  editor.dispatchEvent(
+  input.dispatchEvent(
     new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
   );
   h.fixture.detectChanges();
-  await h.fixture.whenStable();
+
+  input.blur();
+  await new Promise((resolve) => setTimeout(resolve));
   h.fixture.detectChanges();
 }
 
-// Field order in the template: 0 day · 1 start · 2 end · 3 length.
+// Leaf input order in the template: 0 day · 1 start · 2 end · 3 length · 4 end day.
 const START = 1;
 const END = 2;
 const LENGTH = 3;
+const END_DAY = 4;
 
 describe('DateTimeRangeGroup', () => {
   let h: Harness;
@@ -255,6 +254,47 @@ describe('DateTimeRangeGroup', () => {
     expect(h.host.durations).toEqual([]);
   });
 
+  it('end-day commits move the end onto the day, wall-clock preserved, duration follows', async () => {
+    await commitInto(h, END_DAY, '24.7.2026');
+
+    expect(h.host.end()).toBe(at('2026-07-24', '06:00'));
+    expect(h.host.length()).toBe(57 * 3600); // 21 Jul 21:00 → 24 Jul 06:00
+    expect(h.group().endDayOffset()).toBe(3);
+  });
+
+  it('an end-day BEFORE the start is an ERROR, not an auto-fix', async () => {
+    await commitInto(h, END_DAY, '20.7.2026');
+
+    // The violation STANDS (no roll-forward), the duration is underivable.
+    expect(h.host.end()).toBe(at('2026-07-20', '06:00'));
+    expect(h.host.length()).toBeNull();
+    expect(h.group().orderingErrors().length).toBe(1);
+
+    // Recovery clears the error and re-derives the duration.
+    await commitInto(h, END_DAY, '22.7.2026');
+    expect(h.group().orderingErrors()).toEqual([]);
+    expect(h.host.length()).toBe(32_400);
+  });
+
+  it('ISO-paste into the START decomposes: the instant lands, the day leaves sync', async () => {
+    await commitInto(h, START, '2026-07-25T08:00');
+
+    expect(h.host.start()).toBe(at('2026-07-25', '08:00'));
+    expect(h.host.day()).toBe(dayToDbEntry('2026-07-25')); // day leaf synced
+    // The end rolled forward past the new start, wall-clock preserved.
+    expect(h.host.end()).toBe(at('2026-07-26', '06:00'));
+    expect(h.host.endDay()).toBe(dayToDbEntry('2026-07-26')); // end-day leaf synced
+    expect(h.host.length()).toBe(22 * 3600);
+  });
+
+  it('ISO-paste into the END is explicit: no re-anchor, a violation stands as the error', async () => {
+    await commitInto(h, END, '2026-07-19T06:00');
+
+    expect(h.host.end()).toBe(at('2026-07-19', '06:00'));
+    expect(h.host.length()).toBeNull();
+    expect(h.group().orderingErrors().length).toBe(1);
+  });
+
   it('group writes flow through value, never emitting saved on the written control', async () => {
     let endSessions = 0;
     const endControl = h.fixture.debugElement.children[0].children[2]
@@ -364,41 +404,32 @@ function boundSetup<T>(type: Type<T>) {
   return {
     fixture,
     host: fixture.componentInstance,
-    displays: () =>
-      [...fixture.nativeElement.querySelectorAll('.editable-text__display')] as HTMLElement[],
+    inputs: () =>
+      [...fixture.nativeElement.querySelectorAll(LEAF_INPUTS)] as HTMLInputElement[],
   };
 }
 
 async function commitIntoBound(
   fixture: ComponentFixture<unknown>,
-  displays: () => HTMLElement[],
+  inputs: () => HTMLInputElement[],
   index: number,
   text: string,
 ) {
-  const before = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
-  Object.defineProperty(before, 'inputType', { value: 'insertText' });
-  Object.defineProperty(before, 'data', { value: 'x' });
-  displays()[index].dispatchEvent(before);
-  fixture.detectChanges();
-  await fixture.whenStable();
+  const input = inputs()[index];
+  input.focus();
   fixture.detectChanges();
 
-  const editor = document.querySelector('.editable-text__editor') as HTMLElement;
-  editor.textContent = text;
-  const selection = document.getSelection();
-  const range = document.createRange();
-  range.selectNodeContents(editor);
-  range.collapse(false);
-  selection?.removeAllRanges();
-  selection?.addRange(range);
-  editor.dispatchEvent(new Event('input', { bubbles: true }));
+  input.value = text;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
   fixture.detectChanges();
 
-  editor.dispatchEvent(
+  input.dispatchEvent(
     new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
   );
   fixture.detectChanges();
-  await fixture.whenStable();
+
+  input.blur();
+  await new Promise((resolve) => setTimeout(resolve));
   fixture.detectChanges();
 }
 
@@ -408,8 +439,12 @@ describe('DateTimeRangeGroup as FormValueControl (T5b)', () => {
     await h.fixture.whenStable();
     h.fixture.detectChanges();
 
-    const texts = h.displays().map((display) => display.textContent?.trim());
-    expect(texts).toEqual(['Jul 21, 2026', '21:00', '06:00', '9:00']);
+    expect(h.inputs().map((input) => input.value)).toEqual([
+      'Jul 21, 2026',
+      '21:00',
+      '06:00',
+      '9:00',
+    ]);
   });
 
   it('a leaf commit flows UP: one composed model write, one savedModelChange', async () => {
@@ -417,7 +452,7 @@ describe('DateTimeRangeGroup as FormValueControl (T5b)', () => {
     await h.fixture.whenStable();
     h.fixture.detectChanges();
 
-    await commitIntoBound(h.fixture, h.displays, 2, '23:30'); // end field
+    await commitIntoBound(h.fixture, h.inputs, END, '23:30');
 
     expect(h.host.model()).toEqual({
       start: at('2026-07-21', '21:00'),
@@ -434,7 +469,7 @@ describe('DateTimeRangeGroup as FormValueControl (T5b)', () => {
     await h.fixture.whenStable();
     h.fixture.detectChanges();
 
-    await commitIntoBound(h.fixture, h.displays, 3, '2:00'); // length field
+    await commitIntoBound(h.fixture, h.inputs, LENGTH, '2:00');
 
     expect(h.host.model()).toEqual({
       start: at('2026-07-21', '21:00'),
@@ -457,8 +492,12 @@ describe('DateTimeRangeGroup as FormValueControl (T5b)', () => {
     await h.fixture.whenStable();
     h.fixture.detectChanges();
 
-    const texts = h.displays().map((display) => display.textContent?.trim());
-    expect(texts).toEqual(['Aug 1, 2026', '08:00', '12:00', '4:00']);
+    expect(h.inputs().map((input) => input.value)).toEqual([
+      'Aug 1, 2026',
+      '08:00',
+      '12:00',
+      '4:00',
+    ]);
   });
 
   it('shape-echo: a {start, end} binding never grows a duration key', async () => {
@@ -467,9 +506,9 @@ describe('DateTimeRangeGroup as FormValueControl (T5b)', () => {
     h.fixture.detectChanges();
 
     // The duration leaf still DISPLAYS the derived length…
-    expect(h.displays()[3].textContent?.trim()).toBe('9:00');
+    expect(h.inputs()[LENGTH].value).toBe('9:00');
 
-    await commitIntoBound(h.fixture, h.displays, 2, '23:30');
+    await commitIntoBound(h.fixture, h.inputs, END, '23:30');
 
     // …but the model echoes the bound shape: no duration key.
     expect(h.host.model()).toEqual({

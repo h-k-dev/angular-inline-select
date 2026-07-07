@@ -10,6 +10,7 @@ import { FormField, form, required } from '@angular/forms/signals';
 
 // Material
 import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
 
 // Components
 import {
@@ -18,6 +19,7 @@ import {
   AngularInlineTime,
   DateTimeRangeGroup,
   RangeDay,
+  RangeEndDay,
   RangeStart,
   RangeEnd,
   RangeLength,
@@ -28,6 +30,7 @@ import {
   type TemporalRangeValue,
   type IsoDateRange,
 } from 'angular-inline-select/temporal';
+import { InlineMatFormField } from 'angular-inline-select/temporal-mat';
 
 @Component({
   selector: 'app-temporal-playground',
@@ -37,6 +40,8 @@ import {
   imports: [
     // Material
     MatButtonModule,
+    MatFormFieldModule,
+    InlineMatFormField,
 
     // Forms
     FormField,
@@ -47,6 +52,7 @@ import {
     AngularInlineTime,
     DateTimeRangeGroup,
     RangeDay,
+    RangeEndDay,
     RangeStart,
     RangeEnd,
     RangeLength,
@@ -117,6 +123,27 @@ export class TemporalPlayground {
   });
 
   protected stayForm = form(this.stayModel);
+
+  // ---------------------------------------------------------------------------
+  // The quartet in MAT-FORM-FIELDS (T4): same group, same unbound leaves —
+  // each hosted by <mat-form-field> via the temporal-mat adapter. The
+  // controls stay mat-ignorant; the adapter derives MatFormFieldControl
+  // from their public signals.
+  // ---------------------------------------------------------------------------
+  protected matStayModel = signal<TemporalRangeValue | null>({
+    start: composeDbEntry('2026-07-21', '21:00'),
+    end: composeDbEntry('2026-07-22', '06:00'),
+    duration: 32_400,
+  });
+
+  protected matStayForm = form(this.matStayModel);
+
+  // ---------------------------------------------------------------------------
+  // T6 — the display zone is CONFIGURATION, the value is not: one UTC
+  // instant, three walls. `zone` per field here; app-wide via
+  // `provideInlineTemporalZone` (iusta's ServerSideDatetimeConfiguration).
+  // ---------------------------------------------------------------------------
+  protected zonedInstant = signal<string | null>(composeDbEntry('2026-07-21', '21:00'));
 
   /** The page's locale toggle, pinned to 24 h — military time survives `en`. */
   protected militaryLocale = computed(() => `${this.dateLocale()}-u-hc-h23`);

@@ -18,6 +18,7 @@ import { AngularInlineTime } from '../angular-inline-time/angular-inline-time';
 import { INLINE_TIME_DAY_OFFSET } from '../angular-inline-time/day-offset';
 import { AngularInlineDuration } from '../angular-inline-duration/angular-inline-duration';
 import { INLINE_TEMPORAL_LEAF_STATE, type TemporalLeafState } from '../leaf-state';
+import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
 import {
   addLocalDays,
   composeDbEntry,
@@ -108,12 +109,25 @@ const NO_ERRORS = signal<readonly ValidationError.WithOptionalFieldTree[]>([]).a
 })
 export class DateTimeRangeGroup {
   #day = signal<AngularInlineDate | null>(null);
+  #endDay = signal<AngularInlineDate | null>(null);
   #start = signal<AngularInlineTime | null>(null);
   #end = signal<AngularInlineTime | null>(null);
   #length = signal<AngularInlineDuration | null>(null);
 
   /** Present when the GROUP carries the `[formField]` — form-bound mode. */
   #ownField = inject(FormField, { optional: true, self: true });
+
+  /**
+   * T6 — the DISPLAY ZONE the group's day arithmetic runs in. MUST agree
+   * with the leaves' zones: set it once via `provideInlineTemporalZone`
+   * (both group and leaves fall back to the token), or set the input on
+   * the group AND every leaf.
+   */
+  zone = input<string | undefined>(undefined);
+
+  #zoneDefault = inject(INLINE_TEMPORAL_ZONE, { optional: true });
+
+  readonly effectiveZone = computed(() => this.zone() ?? this.#zoneDefault?.());
 
   /**
    * The group's OWN value channel. Outbound it always mirrors the composed
@@ -165,7 +179,34 @@ export class DateTimeRangeGroup {
     if (!control) return null;
 
     const start = toInternalRange(control.value()).start;
-    return start === null ? null : localDayOf(start);
+    return start === null ? null : localDayOf(start, this.effectiveZone());
+  });
+
+  /** The END's LOCAL calendar day, read off the end-day control (T5 maximal form). */
+  readonly endDay = computed<string | null>(() => {
+    const control = this.#endDay();
+    if (!control) return null;
+
+    const start = toInternalRange(control.value()).start;
+    return start === null ? null : localDayOf(start, this.effectiveZone());
+  });
+
+  /**
+   * `end >= start` over the COMPOSED instants — REAL now that the end-day
+   * field (and explicit ISO pastes) can produce violations; typed TIMES
+   * still roll forward and can't. Routed to the END leaves, revealed by
+   * their own touched machinery.
+   */
+  readonly orderingErrors = computed<readonly ValidationError.WithOptionalFieldTree[]>(() => {
+    const start = this.start();
+    const end = this.end();
+    // DB entries are fixed-width UTC ISO strings — lexicographic order IS
+    // instant order.
+    if (start !== null && end !== null && end < start) {
+      return [{ kind: 'temporal-order', message: 'The end lies before the start.' }];
+    }
+
+    return [];
   });
 
   /** The endpoint instants and duration, read live off the controls. */
@@ -182,22 +223,23 @@ export class DateTimeRangeGroup {
     if (start === null) return 0;
 
     const end = this.end();
-    if (end !== null) return Math.max(0, localDayDiff(start, end) ?? 0);
+    if (end !== null) return Math.max(0, localDayDiff(start, end, this.effectiveZone()) ?? 0);
 
     const length = this.length();
-    if (length !== null) return Math.max(0, localDayDiff(start, shiftDbEntry(start, length)) ?? 0);
+    if (length !== null) return Math.max(0, localDayDiff(start, shiftDbEntry(start, length), this.effectiveZone()) ?? 0);
 
     return 0;
   });
 
   /** The composed DATE value: day boundaries as DB entries, over-count applied. */
   readonly dateRange = computed<ComposedDateRange | null>(() => {
-    const startDay = this.day() ?? (this.start() !== null ? localDayOf(this.start()) : null);
+    const zone = this.effectiveZone();
+    const startDay = this.day() ?? (this.start() !== null ? localDayOf(this.start(), zone) : null);
     if (startDay === null) return null;
 
     return {
-      start: dayToDbEntry(startDay),
-      end: dayEndToDbEntry(addLocalDays(startDay, this.endDayOffset())),
+      start: dayToDbEntry(startDay, zone),
+      end: dayEndToDbEntry(addLocalDays(startDay, this.endDayOffset()), zone),
     };
   });
 
@@ -272,10 +314,35 @@ export class DateTimeRangeGroup {
     this.#start()?.value.set(start);
     this.#end()?.value.set(end);
     this.#length()?.value.set(duration);
-    this.#day()?.value.set(start === null ? null : dayToDbEntry(localDayOf(start)!));
+    this.#day()?.value.set(start === null ? null : dayToDbEntry(localDayOf(start, this.effectiveZone())!, this.effectiveZone()));
+    this.#endDay()?.value.set(end === null ? null : dayToDbEntry(localDayOf(end, this.effectiveZone())!, this.effectiveZone()));
+  }
+
+  /**
+   * The day leaves are RENDERINGS of the instants' date parts — after any
+   * propagation that may have moved an instant's day (an ISO paste, a
+   * multi-day duration, an end-day commit), they re-mirror. Writes go
+   * through `value` (no `saved`), equality-guarded: no cascades.
+   */
+  #syncDayLeaves() {
+    const start = this.start();
+    const dayControl = this.#day();
+    if (dayControl && start !== null) {
+      const day = dayToDbEntry(localDayOf(start, this.effectiveZone())!, this.effectiveZone());
+      if (!Object.is(dayControl.value(), day)) dayControl.value.set(day);
+    }
+
+    const end = this.end();
+    const endDayControl = this.#endDay();
+    if (endDayControl && end !== null) {
+      const day = dayToDbEntry(localDayOf(end, this.effectiveZone())!, this.effectiveZone());
+      if (!Object.is(endDayControl.value(), day)) endDayControl.value.set(day);
+    }
   }
 
   #emitChanges() {
+    this.#syncDayLeaves();
+
     let changed = false;
 
     const date = this.dateRange();
@@ -324,6 +391,10 @@ export class DateTimeRangeGroup {
   attachDay(control: AngularInlineDate, leafBound = false) {
     this.#registerBinding(leafBound, 'rangeDay');
     this.#day.set(control);
+  }
+  attachEndDay(control: AngularInlineDate, leafBound = false) {
+    this.#registerBinding(leafBound, 'rangeEndDay');
+    this.#endDay.set(control);
   }
   attachStart(control: AngularInlineTime, leafBound = false) {
     this.#registerBinding(leafBound, 'rangeStart');
@@ -382,13 +453,45 @@ export class DateTimeRangeGroup {
    * `'240:30'` → +10) is an explicit over-count: it anchors on the start's
    * day directly.
    */
-  endCommitted(dayOverflow = 0) {
+  endCommitted(dayOverflow = 0, explicitDay = false) {
     const start = this.start();
     const end = this.end();
 
     if (start !== null && end !== null) {
-      const day = addLocalDays(localDayOf(start)!, dayOverflow);
-      this.#induceFrom(start, composeDbEntry(day, localTimeOf(end)!));
+      if (explicitDay) {
+        // A pasted full instant IS the end — no re-anchor, no roll. An end
+        // before the start stands as the ORDERING ERROR; the duration is
+        // then underivable.
+        const diff = diffDbEntrySeconds(start, end)!;
+        this.#writeLength(diff > 0 ? diff : null);
+      } else {
+        const day = addLocalDays(localDayOf(start, this.effectiveZone())!, dayOverflow);
+        this.#induceFrom(start, composeDbEntry(day, localTimeOf(end, this.effectiveZone())!, this.effectiveZone()));
+      }
+    }
+
+    this.#emitChanges();
+  }
+
+  /**
+   * The END-DAY settled (the maximal five-field form): the end instant
+   * moves onto the typed day preserving its wall-clock time — deliberately
+   * WITHOUT rolling forward. An end before the start is a legitimate ERROR
+   * state now (the ordering error on the end leaves), and the duration is
+   * underivable (`null` — never a stale one).
+   */
+  endDayCommitted() {
+    const day = this.endDay();
+    const end = this.end();
+
+    if (day !== null && end !== null) {
+      this.#writeEnd(composeDbEntry(day, localTimeOf(end, this.effectiveZone())!, this.effectiveZone()));
+
+      const start = this.start();
+      if (start !== null) {
+        const diff = diffDbEntrySeconds(start, this.end()!)!;
+        this.#writeLength(diff > 0 ? diff : null);
+      }
     }
 
     this.#emitChanges();
@@ -413,10 +516,16 @@ export class DateTimeRangeGroup {
     if (day !== null) {
       const start = this.start();
       const end = this.end();
-      const offset = start !== null && end !== null ? Math.max(0, localDayDiff(start, end) ?? 0) : 0;
+      const offset = start !== null && end !== null ? Math.max(0, localDayDiff(start, end, this.effectiveZone()) ?? 0) : 0;
 
-      if (start !== null) this.#writeStart(composeDbEntry(day, localTimeOf(start)!));
-      if (end !== null) this.#writeEnd(composeDbEntry(addLocalDays(day, offset), localTimeOf(end)!));
+      if (start !== null) {
+        this.#writeStart(composeDbEntry(day, localTimeOf(start, this.effectiveZone())!, this.effectiveZone()));
+      }
+      if (end !== null) {
+        this.#writeEnd(
+          composeDbEntry(addLocalDays(day, offset), localTimeOf(end, this.effectiveZone())!, this.effectiveZone()),
+        );
+      }
     }
 
     this.#emitChanges();
@@ -432,7 +541,7 @@ export class DateTimeRangeGroup {
     if (control && control.value() !== value) control.value.set(value);
   }
 
-  #writeLength(value: number) {
+  #writeLength(value: number | null) {
     const control = this.#length();
     if (control && control.value() !== value) control.value.set(value);
   }
@@ -453,7 +562,10 @@ function provideLeafState(withErrors: boolean) {
         readonly: group.readonly,
         touched: group.touched,
         invalid: group.invalid,
-        errors: withErrors ? group.errors : NO_ERRORS,
+        // Consumer errors + the group's OWN ordering verdict, end leaves only.
+        errors: withErrors
+          ? computed(() => [...group.errors(), ...group.orderingErrors()])
+          : NO_ERRORS,
       };
     },
   };
@@ -515,7 +627,26 @@ export class RangeEnd {
     group.attachEnd(control, leafHasOwnField());
     control.touch.subscribe(() => group.touch.emit());
     control.saved.subscribe((session) => {
-      if (session.changed) group.endCommitted(session.dayOverflow);
+      if (session.changed) group.endCommitted(session.dayOverflow, session.explicitDay);
+    });
+  }
+}
+
+/**
+ * Marks the group's END-DAY control (the maximal five-field form):
+ * `<angular-inline-date rangeEndDay />`. Receives the ordering errors —
+ * this leaf is where violations are made.
+ */
+@Directive({ selector: 'angular-inline-date[rangeEndDay]', providers: [provideLeafState(true)] })
+export class RangeEndDay {
+  constructor() {
+    const group = inject(DateTimeRangeGroup);
+    const control = inject(AngularInlineDate);
+
+    group.attachEndDay(control, leafHasOwnField());
+    control.touch.subscribe(() => group.touch.emit());
+    control.saved.subscribe((session) => {
+      if (session.changed) group.endDayCommitted();
     });
   }
 }

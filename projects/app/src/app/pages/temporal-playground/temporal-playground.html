@@ -3,10 +3,12 @@
     <header class="example__header">
       <h2>Inline temporal editables</h2>
       <p>
-        The temporal family — codec compositions over the text core, same styling, same session semantics. There is a
-        difference between what the user SEES and what is BEHIND it: displays are local readings, models are UTC ISO
-        DB entries (<code>datetime.toUTC().toISO()</code>, SQL-friendly) — durations plain seconds. All fields are
-        driven by <code>[formField]</code> and interpret the draft live instead of reformatting it.
+        The temporal family — NATIVE INPUTS driven by codecs (the input rehost): the family feel is the underline
+        styling and zero layout shift, not shared DOM. Sessions are gesture-tiered — Enter commits (the parse gate
+        blocks unreadable drafts), Escape reverts, Tab/blur commits what parses and SNAPS BACK what doesn't. Displays
+        are local readings; models are UTC ISO DB entries (<code>datetime.toUTC().toISO()</code>, SQL-friendly) —
+        durations plain seconds. All fields are driven by <code>[formField]</code> and interpret the draft live
+        instead of reformatting it.
       </p>
     </header>
 
@@ -14,9 +16,10 @@
       <div class="example-card" id="date-example">
         <h3 class="example-card__title">Date — what the user sees vs the model</h3>
         <p class="prose">
-          One <code>[formField]</code>. Type “24.12.” (year auto-completes), an ISO date, or “/” for
-          <code>/today</code>, <code>/tomorrow</code> and the next weekdays (labels via <code>Intl</code>). The model
-          behind the local calendar day is the UTC ISO DB entry of its local <code>startOf('day')</code>.
+          One <code>[formField]</code>. Type “24.12.” (year auto-completes), an ISO date, or a month name — focus
+          opens the calendar panel without stealing the caret (ArrowDown enters the grid; yesterday/today/tomorrow
+          chips are the quick-picks, labels via <code>Intl</code>). The model behind the local calendar day is the
+          UTC ISO DB entry of its local <code>startOf('day')</code>.
         </p>
 
         <table class="model-table">
@@ -140,10 +143,12 @@
       <div class="example-card" id="date-range-example">
         <h3 class="example-card__title">Date range — the binding shape IS the mode</h3>
         <p class="prose">
-          The SAME date control, bound with <code>{{ '{' }} start, end {{ '}' }}</code> — the shape-echo turns it
-          ranged and echoes commits in that shape: <code>start</code> = local <code>startOf('day')</code>,
-          <code>end</code> = <code>endOf('day')</code>. Typing a day moves the start and keeps the distinct end
-          (the two-field ranged UI + calendar drag arrive with T2/T5).
+          The SAME date control, bound with <code>{{ '{' }} start, end {{ '}' }}</code> — the shape-echo renders the
+          TWO-FIELD pair and echoes commits in that shape: <code>start</code> = local <code>startOf('day')</code>,
+          <code>end</code> = <code>endOf('day')</code>. Tab commits the start and lands in the end; each side owns
+          its clear (half-open ranges are real states); an unreadable draft snaps back on blur — Enter is the only
+          gesture the parse gate blocks. On the calendar: PRESS-HOLD-DRAG paints the range, Ctrl/Cmd+click restarts
+          it half-open, and a pasted full ISO datetime reads as its local day.
         </p>
 
         <table class="model-table">
@@ -282,6 +287,13 @@
               <td><code>{{ stayModel()?.end ?? '∅' }}</code></td>
             </tr>
             <tr>
+              <th scope="row">End day</th>
+              <td>
+                <angular-inline-date rangeEndDay [locale]="dateLocale()" ariaLabel="Stay end day" />
+              </td>
+              <td><code>— derived from end —</code></td>
+            </tr>
+            <tr>
               <th scope="row">Length</th>
               <td>
                 <angular-inline-duration
@@ -299,9 +311,139 @@
         <p class="form-toggles__hint">
           The group owns the invariants: a typed end is wall-clock intent (at-or-before the start rolls to the next
           day — the <code>+{{ stayGroup.endDayOffset() }}</code> badge; overflow hours like “240:30” type the
-          over-count by hand); a length commit moves the end; a day commit shifts both instants. Each settled commit
-          writes ONE composed model and emits ONE <code>savedModelChange</code> — see the log.
+          over-count by hand); a length commit moves the end; a day commit shifts both instants. The END DAY (T5's
+          maximal form) moves the end WITHOUT rolling — an end before the start finally IS an error (ordering error
+          on the end leaves, duration underivable). Paste a full ISO datetime into Starts or Ends and it decomposes
+          across the group. Each settled commit writes ONE composed model and emits ONE
+          <code>savedModelChange</code> — see the log.
         </p>
+      </div>
+
+      <div
+        class="example-card"
+        id="mat-quartet-example"
+        dateTimeRangeGroup
+        #matStayGroup="dateTimeRangeGroup"
+        [formField]="matStayForm"
+        (savedModelChange)="logEmit('matStay.savedModelChange', $event)"
+      >
+        <h3 class="example-card__title">The quartet in mat-form-fields (T4) — same controls, mat chrome</h3>
+        <p class="prose">
+          The SAME group and the SAME mat-ignorant leaves — each hosted by <code>&lt;mat-form-field&gt;</code> via
+          the <code>inlineMatFormField</code> adapter (<code>angular-inline-select/temporal-mat</code>). The adapter
+          derives <code>MatFormFieldControl</code> entirely from the controls' public signals — label float from
+          emptiness/focus, <code>errorState</code> from the field's own verdict — and the controls' underline rests
+          via the generic bare-chrome classes. Sessions, snap-back, the calendar panel, overflow hours and the
+          <code>+{{ matStayGroup.endDayOffset() }}</code> badge all work unchanged inside the mat box.
+        </p>
+
+        <div class="mat-quartet">
+          <mat-form-field appearance="outline">
+            <mat-label>Stay</mat-label>
+            <angular-inline-date
+              rangeDay
+              inlineMatFormField
+              [locale]="dateLocale()"
+              placeholder=""
+              ariaLabel="Mat stay day"
+            />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Starts</mat-label>
+            <angular-inline-time
+              rangeStart
+              inlineMatFormField
+              [locale]="militaryLocale()"
+              placeholder=""
+              ariaLabel="Mat stay start in 24-hour time"
+            />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Ends</mat-label>
+            <angular-inline-time
+              rangeEnd
+              inlineMatFormField
+              [locale]="militaryLocale()"
+              placeholder=""
+              ariaLabel="Mat stay end in 24-hour time"
+            />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Length</mat-label>
+            <angular-inline-duration
+              rangeLength
+              inlineMatFormField
+              durationFormat="h:mm"
+              [step]="60"
+              placeholder=""
+              ariaLabel="Mat stay length"
+            />
+            <mat-hint>whole minutes</mat-hint>
+          </mat-form-field>
+        </div>
+
+        <p class="form-toggles__hint">
+          Model:
+          <code>{{ matStayModel()?.start ?? '∅' }}</code> →
+          <code>{{ matStayModel()?.end ?? '∅' }}</code> ·
+          <code>{{ matStayModel()?.duration ?? '∅' }}s</code>
+        </p>
+      </div>
+
+      <div class="example-card" id="zone-example">
+        <h3 class="example-card__title">Timezones (T6) — one instant, three walls</h3>
+        <p class="prose">
+          Values NEVER carry the zone — they stay UTC ISO DB entries. The DISPLAY ZONE is configuration: a
+          <code>zone</code> input per field, or app-wide via <code>provideInlineTemporalZone</code> (the
+          <code>ServerSideDatetimeConfiguration</code> analogue). All three fields below bind THE SAME instant;
+          editing any wall re-composes the instant in THAT zone.
+        </p>
+
+        <table class="model-table">
+          <thead>
+            <tr>
+              <th scope="col">Wall</th>
+              <th scope="col">Display</th>
+              <th scope="col">Model (UTC, SQL-friendly)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Machine zone</th>
+              <td>
+                <angular-inline-time [(value)]="zonedInstant" locale="en-u-hc-h23" ariaLabel="Local wall clock" />
+              </td>
+              <td rowspan="3"><code>{{ zonedInstant() ?? '∅' }}</code></td>
+            </tr>
+            <tr>
+              <th scope="row">New York</th>
+              <td>
+                <angular-inline-time
+                  [(value)]="zonedInstant"
+                  zone="America/New_York"
+                  locale="en-u-hc-h23"
+                  ariaLabel="New York wall clock"
+                />
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">Tokyo day</th>
+              <td>
+                <angular-inline-date
+                  [value]="zonedInstant()"
+                  zone="Asia/Tokyo"
+                  [locale]="dateLocale()"
+                  [readonly]="true"
+                  [showCalendar]="false"
+                  ariaLabel="Tokyo calendar day"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       @if (emittedEvents().length > 0) {

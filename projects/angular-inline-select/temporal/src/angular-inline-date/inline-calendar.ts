@@ -1,5 +1,6 @@
 import {
   Component,
+  DestroyRef,
   ElementRef,
   Injector,
   afterNextRender,
@@ -10,10 +11,12 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
 
 import { DateTime } from 'luxon';
 
 import { toIsoDate, formatIsoDate, type IsoDate } from './date-codec';
+import { todayIn } from '../datetime/db-entry';
 
 interface CalendarDay {
   iso: IsoDate;
@@ -102,6 +105,8 @@ function firstDayOfWeek(locale: string | string[] | undefined): number {
       (keydown)="handleKeydown($event)"
       (focusin)="gridFocused = true"
       (focusout)="gridFocused = false"
+      (mousedown)="handleGridMousedown($event)"
+      (mouseover)="handleGridMouseover($event)"
     >
       <div class="cal__weekdays" role="row">
         @for (name of weekdayNames(); track $index) {
@@ -120,11 +125,14 @@ function firstDayOfWeek(locale: string | string[] | undefined): number {
               [attr.data-today]="cell.today || null"
               [attr.data-active]="cell.iso === active() || null"
               [attr.data-selected]="cell.iso === selectedDay() || null"
+              [attr.data-range-start]="cell.iso === paintedRange()?.start || null"
+              [attr.data-range-end]="cell.iso === paintedRange()?.end || null"
+              [attr.data-in-range]="inPaintedRange(cell.iso) || null"
               [attr.aria-selected]="cell.iso === selectedDay()"
               [attr.aria-label]="dayAria(cell.iso)"
               [tabindex]="cell.iso === active() ? 0 : -1"
               (mousedown)="$event.preventDefault()"
-              (click)="picked.emit(cell.iso)"
+              (click)="handleCellClick(cell.iso, $event)"
             >
               {{ cell.day }}
             </button>
@@ -188,11 +196,23 @@ function firstDayOfWeek(locale: string | string[] | undefined): number {
       background: var(--mat-sys-primary, #4285f4);
       color: var(--mat-sys-on-primary, #fff);
     }
+    /* Range painting: endpoints filled, days between tinted (drag preview + committed range). */
+    .cal__day[data-in-range] {
+      background: var(--mat-sys-secondary-container, #e8f0fe);
+      color: var(--mat-sys-on-secondary-container, #174ea6);
+      border-radius: 0;
+    }
+    .cal__day[data-range-start],
+    .cal__day[data-range-end] {
+      background: var(--mat-sys-primary, #4285f4);
+      color: var(--mat-sys-on-primary, #fff);
+    }
     .cal__day:focus-visible { outline: 2px solid var(--mat-sys-primary, #4285f4); outline-offset: 1px; }
   `,
 })
 export class AngularInlineCalendar {
   #injector = inject(Injector);
+  #document = inject(DOCUMENT);
 
   /** The pending day — the field's parsed draft, mirrored per keystroke. */
   activeDay = input<IsoDate | null>(null);
@@ -200,16 +220,121 @@ export class AngularInlineCalendar {
   /** The committed day (rendered filled). */
   selectedDay = input<IsoDate | null>(null);
 
+  /**
+   * Range gestures (T5): press-hold-drag paints a range, Ctrl/Cmd+click
+   * restarts one. Off by default — single-date fields keep plain picks.
+   */
+  rangeGestures = input(false);
+
+  /** The committed range endpoints, painted when no drag is in flight. */
+  rangeStart = input<IsoDate | null>(null);
+  rangeEnd = input<IsoDate | null>(null);
+
   locale = input<string | string[] | undefined>(undefined);
+
+  /** The display zone (T6) — the today marker is that zone's today. */
+  zone = input<string | undefined>(undefined);
 
   /** Reference clock — the today marker and the empty-field fallback month. */
   now = input<() => Date>(() => new Date());
 
+  /** Today, in the display zone. */
+  protected today = computed(() => todayIn(this.now()(), this.zone()));
+
   picked = output<IsoDate>();
+  /** Ctrl/Cmd+click (or Ctrl/Cmd+Enter in the grid): "restart the range here". */
+  ctrlPicked = output<IsoDate>();
+  /** A drag settled across at least two days — the sorted range. */
+  dragEnded = output<{ start: IsoDate; end: IsoDate }>();
   escaped = output<void>();
+
+  // -- The drag (iusta's DateRangeDragAndRelease pointer logic, on our cells) ----
+
+  #dragAnchor = signal<IsoDate | null>(null);
+  #dragHover = signal<IsoDate | null>(null);
+  /** A finished drag must swallow the click the same mouseup produces. */
+  #suppressClick = false;
+  #detachMouseup: (() => void) | null = null;
+
+  /** What the grid paints: the live drag preview, else the committed range. */
+  protected paintedRange = computed<{ start: IsoDate; end: IsoDate } | null>(() => {
+    const anchor = this.#dragAnchor();
+    if (anchor !== null) {
+      const hover = this.#dragHover() ?? anchor;
+      return anchor <= hover ? { start: anchor, end: hover } : { start: hover, end: anchor };
+    }
+
+    const start = this.rangeStart();
+    const end = this.rangeEnd();
+    if (start === null || end === null || start === end) return null;
+
+    return start <= end ? { start, end } : { start: end, end: start };
+  });
+
+  protected inPaintedRange(iso: IsoDate): boolean {
+    const range = this.paintedRange();
+    return range !== null && iso > range.start && iso < range.end;
+  }
 
   protected gridRef = inject<ElementRef<HTMLElement>>(ElementRef);
   protected gridFocused = false;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.#detachMouseup?.());
+  }
+
+  #dayOf(event: Event): IsoDate | null {
+    const cell = (event.target as HTMLElement).closest<HTMLElement>('[data-day]');
+    return cell?.getAttribute('data-day') ?? null;
+  }
+
+  /** Anchor a drag on primary-button press over a cell (range mode only). */
+  protected handleGridMousedown(event: MouseEvent) {
+    if (!this.rangeGestures() || event.button !== 0) return;
+    const day = this.#dayOf(event);
+    if (day === null) return;
+
+    this.#dragAnchor.set(day);
+    this.#dragHover.set(day);
+
+    // Mouseup may land anywhere (outside the grid mid-drag) — listen on the document.
+    const onMouseup = () => this.#finishDrag();
+    this.#document.addEventListener('mouseup', onMouseup, { once: true });
+    this.#detachMouseup = () => this.#document.removeEventListener('mouseup', onMouseup);
+  }
+
+  protected handleGridMouseover(event: MouseEvent) {
+    if (this.#dragAnchor() === null) return;
+    const day = this.#dayOf(event);
+    if (day !== null) this.#dragHover.set(day);
+  }
+
+  #finishDrag() {
+    this.#detachMouseup = null;
+    const anchor = this.#dragAnchor();
+    const hover = this.#dragHover();
+    this.#dragAnchor.set(null);
+    this.#dragHover.set(null);
+    if (anchor === null || hover === null || anchor === hover) return; // a plain click — let it pick
+
+    this.#suppressClick = true;
+    queueMicrotask(() => (this.#suppressClick = false));
+    this.dragEnded.emit(anchor <= hover ? { start: anchor, end: hover } : { start: hover, end: anchor });
+  }
+
+  #cancelDrag() {
+    this.#detachMouseup?.();
+    this.#detachMouseup = null;
+    this.#dragAnchor.set(null);
+    this.#dragHover.set(null);
+  }
+
+  protected handleCellClick(day: IsoDate, event: MouseEvent) {
+    if (this.#suppressClick) return;
+
+    if (this.rangeGestures() && (event.ctrlKey || event.metaKey)) this.ctrlPicked.emit(day);
+    else this.picked.emit(day);
+  }
 
   /**
    * The active cell: FOLLOWS the draft mirror (`activeDay`), overridden by
@@ -218,13 +343,13 @@ export class AngularInlineCalendar {
    */
   protected active = linkedSignal<IsoDate | null, IsoDate>({
     source: this.activeDay,
-    computation: (day, previous) => day ?? previous?.value ?? toIsoDate(this.now()()),
+    computation: (day, previous) => day ?? previous?.value ?? this.today(),
   });
 
   protected weeks = computed<CalendarDay[][]>(() => {
     const [, month] = parts(this.active());
     const first = firstDayOfWeek(this.locale());
-    const today = toIsoDate(this.now()());
+    const today = this.today();
 
     const firstOfMonth = DateTime.fromISO(this.active()).startOf('month');
     // Luxon weekday: 1=Mon…7=Sun → JS convention (0=Sun) for the lead math.
@@ -338,11 +463,20 @@ export class AngularInlineCalendar {
       case 'Enter':
       case ' ':
         event.preventDefault();
-        this.picked.emit(this.active());
+        if (this.rangeGestures() && (event.ctrlKey || event.metaKey)) {
+          this.ctrlPicked.emit(this.active());
+        } else {
+          this.picked.emit(this.active());
+        }
         break;
       case 'Escape':
         event.preventDefault();
         event.stopPropagation();
+        // Stage zero: a drag in flight cancels; the field keeps the session.
+        if (this.#dragAnchor() !== null) {
+          this.#cancelDrag();
+          break;
+        }
         this.escaped.emit();
         break;
     }

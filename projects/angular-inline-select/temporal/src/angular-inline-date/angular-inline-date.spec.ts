@@ -13,10 +13,10 @@ import {
   toInternalRange,
   echoDateShape,
   dateValuesEqual,
+  localeDatePlaceholder,
   type InlineDateValue,
 } from './date-codec';
-import { dayToDbEntry, dayEndToDbEntry } from '../datetime/db-entry';
-import { AngularInlineText } from 'angular-inline-select';
+import { dayToDbEntry, dayEndToDbEntry, localDayOf } from '../datetime/db-entry';
 
 // The value contract: UTC ISO DB entries (local startOf/endOf day) behind,
 // localized calendar days in front. Expectations compose through the same
@@ -42,6 +42,15 @@ describe('date codec', () => {
   it('year-less shapes take the year from now', () => {
     expect(parseDateInput('12.5.', NOW)).toBe('2026-05-12');
     expect(parseDateInput('12.5', NOW)).toBe('2026-05-12');
+  });
+
+  it('a FULL ISO datetime decomposes to its LOCAL day (the paste gesture)', () => {
+    expect(parseDateInput('2026-05-12T08:00', NOW)).toBe('2026-05-12');
+    expect(parseDateInput('2026-05-12 08:00', NOW)).toBe('2026-05-12');
+    // Zoned instants read in the LOCAL zone — expectation composed, TZ-independent.
+    expect(parseDateInput('2026-05-12T21:00:00.000Z', NOW)).toBe(
+      localDayOf('2026-05-12T21:00:00.000Z'),
+    );
   });
 
   it('empty is null; impossible calendar dates and garbage are undefined', () => {
@@ -73,6 +82,14 @@ describe('date codec', () => {
   it('formats ISO dates through Intl', () => {
     expect(formatIsoDate('2026-05-12', 'en')).toBe('May 12, 2026');
     expect(formatIsoDate(null)).toBe('');
+  });
+
+  it('derives the placeholder pattern from the locale — fixed size, no tables', () => {
+    expect(localeDatePlaceholder('de')).toBe('dd.mm.yyyy');
+    expect(localeDatePlaceholder('en')).toBe('mm/dd/yyyy');
+    expect(localeDatePlaceholder('en-GB')).toBe('dd/mm/yyyy');
+    // An unknown tag throws inside Intl — the ISO fallback stands.
+    expect(localeDatePlaceholder('no-such-tag-!!')).toBe('yyyy-mm-dd');
   });
 
   it('builds relative + weekday commands with localized and English matching', () => {
@@ -156,7 +173,7 @@ describe('date shape-echo codec', () => {
 });
 
 // =============================================================================
-// Component
+// Component — the input rehost: real inputs, gesture-tiered sessions
 // =============================================================================
 
 @Component({
@@ -180,128 +197,16 @@ class DateFormHost {
   sessions: InlineDateSaved[] = [];
 }
 
-interface Harness<T = DateFormHost> {
-  fixture: ComponentFixture<T>;
-  host: T;
-  display: () => HTMLElement;
-  editor: () => HTMLElement | null;
-  inner: () => AngularInlineText;
-}
-
-function setupHost<T>(type: Type<T>): Harness<T> {
-  const fixture = TestBed.createComponent(type);
-  fixture.detectChanges();
-
-  return {
-    fixture,
-    host: fixture.componentInstance,
-    display: () => fixture.nativeElement.querySelector('.editable-text__display') as HTMLElement,
-    editor: () => document.querySelector('.editable-text__editor') as HTMLElement | null,
-    inner: () =>
-      fixture.debugElement.children[0].children[0].componentInstance as AngularInlineText,
-  };
-}
-
-const setup = () => setupHost(DateFormHost);
-
-async function typeText(h: Harness<unknown>, text: string) {
-  const display = h.display();
-
-  const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
-  Object.defineProperty(event, 'inputType', { value: 'insertText' });
-  Object.defineProperty(event, 'data', { value: 'x' });
-
-  display.dispatchEvent(event);
-  h.fixture.detectChanges();
-  await h.fixture.whenStable();
-  h.fixture.detectChanges();
-
-  const editor = h.editor();
-  if (!editor) throw new Error('elevated editor not found');
-
-  editor.textContent = text;
-
-  // Caret at the end, as real typing would leave it (the slash menu reads it)
-  const selection = document.getSelection();
-  const range = document.createRange();
-  range.selectNodeContents(editor);
-  range.collapse(false);
-  selection?.removeAllRanges();
-  selection?.addRange(range);
-
-  editor.dispatchEvent(new Event('input', { bubbles: true }));
-  h.fixture.detectChanges();
-}
-
-function accept(h: Harness<unknown>) {
-  (h.inner() as unknown as { accept(): void }).accept();
-  h.fixture.detectChanges();
-}
-
-describe('AngularInlineDate', () => {
-  let h: Harness;
-
-  beforeEach(() => {
-    h = setup();
-  });
-
-  it('renders the committed ISO date localized', () => {
-    expect(h.display().textContent).toBe('May 12, 2026');
-  });
-
-  it('commits typed drafts as ISO with a full-reading preview', async () => {
-    await typeText(h, '24.12.2026');
-
-    const hint = document.querySelector('.editable-panel__message--hint');
-    expect(hint?.textContent?.trim()).toBe('✓ Thursday, December 24, 2026');
-
-    accept(h);
-
-    expect(h.host.saved).toEqual([db('2026-12-24')]);
-    expect(h.host.sessions).toEqual([{ value: db('2026-12-24'), changed: true }]);
-    expect(h.display().textContent).toBe('Dec 24, 2026');
-  });
-
-  it('the parse gate blocks impossible dates', async () => {
-    await typeText(h, '31.2.2026');
-    accept(h);
-
-    expect(h.host.saved).toEqual([]);
-    expect(h.host.field().value()).toBe(db('2026-05-12'));
-  });
-
-  it('the /tomorrow slash command inserts the resolved ISO date', async () => {
-    await typeText(h, '/tomo');
-    await h.fixture.whenStable();
-    h.fixture.detectChanges();
-
-    const options = [...document.querySelectorAll('.editable-menu [role="option"]')];
-    expect(options.length).toBe(1);
-    expect(options[0].textContent).toContain('2026-05-13');
-
-    (options[0] as HTMLElement).click();
-    h.fixture.detectChanges();
-
-    expect(h.editor()?.textContent).toBe('2026-05-13');
-    // The preview now interprets the inserted date
-    expect(document.querySelector('.editable-panel__message--hint')?.textContent?.trim()).toBe(
-      '✓ Wednesday, May 13, 2026',
-    );
-  });
-});
-
-// =============================================================================
-// Polymorphic value — the shape-echo (ROADMAP-DATETIME.md)
-// =============================================================================
-
 @Component({
   imports: [AngularInlineDate],
   template: `
     <angular-inline-date
       [(value)]="value"
       [ranged]="ranged()"
+      [placeholder]="placeholder()"
       locale="en"
       [now]="now"
+      (savedModelChange)="saved.push($event)"
       (saved)="sessions.push($event)"
     />
   `,
@@ -309,215 +214,416 @@ describe('AngularInlineDate', () => {
 class DateShapeHost {
   value = signal<InlineDateValue>(null);
   ranged = signal(false);
+  placeholder = signal<string | undefined>(undefined);
   now = () => NOW;
 
+  saved: InlineDateValue[] = [];
   sessions: InlineDateSaved[] = [];
 }
 
-describe('AngularInlineDate shape-echo', () => {
-  async function commitDraft(h: Harness<DateShapeHost>, text: string) {
-    await typeText(h, text);
-    accept(h);
-  }
+interface Harness<T> {
+  fixture: ComponentFixture<T>;
+  host: T;
+  inputs: () => HTMLInputElement[];
+  start: () => HTMLInputElement;
+  end: () => HTMLInputElement | undefined;
+  panel: () => HTMLElement | null;
+}
 
-  it('a string binding stays a string: single in, single out', async () => {
-    const h = setupHost(DateShapeHost);
-    h.host.value.set(db('2026-05-12'));
-    h.fixture.detectChanges();
+function setupHost<T>(type: Type<T>): Harness<T> {
+  const fixture = TestBed.createComponent(type);
+  fixture.detectChanges();
 
-    await commitDraft(h, '24.12.2026');
+  const inputs = () =>
+    [...fixture.nativeElement.querySelectorAll('.inline-date__input')] as HTMLInputElement[];
 
-    expect(h.host.value()).toBe(db('2026-12-24'));
+  return {
+    fixture,
+    host: fixture.componentInstance,
+    inputs,
+    start: () => inputs()[0],
+    end: () => inputs()[1],
+    panel: () => document.querySelector('.inline-date__panel') as HTMLElement | null,
+  };
+}
+
+/** Focus settlement runs a macrotask behind (`setTimeout(0)`) — flush it. */
+async function settle(h: Harness<unknown>) {
+  h.fixture.detectChanges();
+  await new Promise((resolve) => setTimeout(resolve));
+  h.fixture.detectChanges();
+}
+
+function focusInput(h: Harness<unknown>, input: HTMLInputElement) {
+  input.focus();
+  h.fixture.detectChanges();
+}
+
+function type(h: Harness<unknown>, input: HTMLInputElement, text: string) {
+  focusInput(h, input);
+  input.value = text;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  h.fixture.detectChanges();
+}
+
+function press(h: Harness<unknown>, input: HTMLInputElement, key: string) {
+  input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  h.fixture.detectChanges();
+}
+
+async function blurAway(h: Harness<unknown>) {
+  (document.activeElement as HTMLElement | null)?.blur();
+  await settle(h);
+}
+
+function gridCell(day: string): HTMLElement | null {
+  return document.querySelector(`.inline-date__panel [data-day="${day}"]`);
+}
+
+describe('AngularInlineDate (input rehost)', () => {
+  let h: Harness<DateFormHost>;
+
+  beforeEach(() => {
+    h = setupHost(DateFormHost);
   });
 
-  it('{ start } echoes one-key: the single-day range moves whole', async () => {
-    const h = setupHost(DateShapeHost);
-    h.host.value.set({ start: db('2026-05-12') });
-    h.fixture.detectChanges();
-
-    expect(h.display().textContent).toBe('May 12, 2026');
-
-    await commitDraft(h, '24.12.2026');
-
-    expect(h.host.value()).toEqual({ start: db('2026-12-24') });
+  afterEach(async () => {
+    await blurAway(h);
   });
 
-  it('{ start, end } equal moves both sides with the typed day', async () => {
-    const h = setupHost(DateShapeHost);
-    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-12') });
-    h.fixture.detectChanges();
-
-    await commitDraft(h, '24.12.2026');
-
-    expect(h.host.value()).toEqual({ start: db('2026-12-24'), end: dbEnd('2026-12-24') });
+  it('renders the committed date in ONE real input (string shape)', () => {
+    expect(h.inputs().length).toBe(1);
+    expect(h.start().value).toBe('May 12, 2026');
   });
 
-  it('a distinct end survives a start edit; idle display shows the range', async () => {
-    const h = setupHost(DateShapeHost);
-    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
-    h.fixture.detectChanges();
+  it('focus opens the panel WITHOUT stealing focus; the grid mirrors the draft', async () => {
+    focusInput(h, h.start());
 
-    const idle = h.display().textContent ?? '';
-    expect(idle).toContain('12');
-    expect(idle).toContain('15');
+    expect(h.panel()).not.toBeNull();
+    expect(document.activeElement).toBe(h.start());
 
-    await commitDraft(h, '13.5.2026');
+    type(h, h.start(), '24.12.2026');
+    expect(gridCell('2026-12-24')?.getAttribute('data-active')).toBe('true');
 
-    expect(h.host.value()).toEqual({ start: db('2026-05-13'), end: dbEnd('2026-05-15') });
+    // An unparseable draft leaves the last valid day standing.
+    type(h, h.start(), '24.12.2026x');
+    expect(gridCell('2026-12-24')?.getAttribute('data-active')).toBe('true');
   });
 
-  it('null + ranged=false cold-starts as a single date', async () => {
-    const h = setupHost(DateShapeHost);
+  it('Enter commits the typed draft with a full-reading preview, and closes the panel', async () => {
+    type(h, h.start(), '24.12.2026');
 
-    await commitDraft(h, '24.12.2026');
+    expect(document.querySelector('.inline-date__preview')?.textContent?.trim()).toBe(
+      '✓ Thursday, December 24, 2026',
+    );
 
-    expect(h.host.value()).toBe(db('2026-12-24'));
+    press(h, h.start(), 'Enter');
+
+    expect(h.host.saved).toEqual([db('2026-12-24')]);
+    expect(h.host.sessions).toEqual([{ value: db('2026-12-24'), changed: true }]);
+    expect(h.start().value).toBe('Dec 24, 2026');
+    expect(h.panel()).toBeNull();
+    // Focus stays — Enter never traps NOR moves it.
+    expect(document.activeElement).toBe(h.start());
   });
 
-  it('null + ranged=true cold-starts in the range shape', async () => {
-    const h = setupHost(DateShapeHost);
-    h.host.ranged.set(true);
-    h.fixture.detectChanges();
+  it('the parse gate blocks Enter on an unreadable draft', () => {
+    type(h, h.start(), '31.2.2026');
+    press(h, h.start(), 'Enter');
 
-    await commitDraft(h, '24.12.2026');
-
-    expect(h.host.value()).toEqual({ start: db('2026-12-24'), end: dbEnd('2026-12-24') });
+    expect(h.host.saved).toEqual([]);
+    expect(h.host.sessions).toEqual([]);
+    expect(h.host.field().value()).toBe(db('2026-05-12'));
+    expect(h.start().getAttribute('aria-invalid')).toBe('true');
   });
 
-  it('null remembers the last seen shape: cleared one-key stays one-key', async () => {
-    const h = setupHost(DateShapeHost);
-    h.host.value.set({ start: db('2026-05-12') });
-    h.fixture.detectChanges();
+  it('blur with an unreadable draft SNAPS BACK to the baseline — never traps, never commits', async () => {
+    // A readable intermediate wrote live; the garbage suffix must still
+    // revert to the SESSION baseline, not the intermediate.
+    type(h, h.start(), '24.12.2026');
+    expect(h.host.field().value()).toBe(db('2026-12-24')); // live channel
+    type(h, h.start(), '24.12.2026x');
+    await blurAway(h);
 
-    await commitDraft(h, '');
-    expect(h.host.value()).toEqual({ start: null });
-
-    await commitDraft(h, '24.12.2026');
-    expect(h.host.value()).toEqual({ start: db('2026-12-24') });
+    expect(h.host.field().value()).toBe(db('2026-05-12'));
+    expect(h.start().value).toBe('May 12, 2026');
+    expect(h.host.saved).toEqual([]);
+    expect(h.host.sessions).toEqual([{ value: db('2026-05-12'), changed: false }]);
+    expect(h.panel()).toBeNull();
   });
 
-  it('the saved session carries the echoed shape', async () => {
-    const h = setupHost(DateShapeHost);
-    h.host.value.set({ start: db('2026-05-12') });
+  it('blur with a readable draft COMMITS (navigation is never a validity checkpoint)', async () => {
+    type(h, h.start(), '24.12.2026');
+    await blurAway(h);
+
+    expect(h.host.saved).toEqual([db('2026-12-24')]);
+    expect(h.host.sessions).toEqual([{ value: db('2026-12-24'), changed: true }]);
+  });
+
+  it('Escape reverts to the session baseline and closes the panel', () => {
+    type(h, h.start(), '24.12.2026');
+    press(h, h.start(), 'Escape');
+
+    expect(h.host.field().value()).toBe(db('2026-05-12'));
+    expect(h.start().value).toBe('May 12, 2026');
+    expect(h.host.saved).toEqual([]);
+    expect(h.panel()).toBeNull();
+  });
+
+  it('clearing the field commits null', async () => {
+    type(h, h.start(), '');
+    press(h, h.start(), 'Enter');
+
+    expect(h.host.field().value()).toBeNull();
+    expect(h.host.saved).toEqual([null]);
+  });
+
+  it('ArrowDown hands focus to the grid; a pick COMMITS; grid Escape hands it back', async () => {
+    focusInput(h, h.start());
+    press(h, h.start(), 'ArrowDown');
+
+    const active = document.activeElement as HTMLElement;
+    expect(active.getAttribute('data-day')).toBe('2026-05-12');
+
+    active.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
     h.fixture.detectChanges();
+    expect(document.activeElement).toBe(h.start());
 
-    await commitDraft(h, '24.12.2026');
+    const cell = gridCell('2026-05-20')!;
+    cell.click();
+    await settle(h);
 
-    expect(h.host.sessions).toEqual([{ value: { start: db('2026-12-24') }, changed: true }]);
+    expect(h.host.saved).toEqual([db('2026-05-20')]);
+    expect(h.start().value).toBe('May 20, 2026');
+    expect(h.panel()).toBeNull();
+    expect(document.activeElement).toBe(h.start());
+  });
+
+  it('a quick-pick chip commits its resolved date', async () => {
+    focusInput(h, h.start());
+
+    const chips = [...document.querySelectorAll('.inline-date__quick-pick')];
+    expect(chips.length).toBe(3);
+
+    (chips[2] as HTMLElement).click(); // tomorrow
+    await settle(h);
+
+    expect(h.host.saved).toEqual([db('2026-05-13')]);
   });
 });
 
 // =============================================================================
-// T2 — the calendar overlay (open-on-edit, draft mirror, pick paths)
+// The two-field range — shape-echo, Tab-advance, per-side clear
 // =============================================================================
 
-describe('AngularInlineDate calendar (T2)', () => {
-  const calendar = () => document.querySelector('angular-inline-calendar');
-  const grid = () => calendar()?.querySelector('.cal__grid') as HTMLElement | null;
-  const activeCell = () => calendar()?.querySelector('[data-active]');
+@Component({
+  imports: [AngularInlineDate],
+  template: `
+    <angular-inline-date [(value)]="value" locale="en" zone="Asia/Tokyo" [now]="now" />
+  `,
+})
+class ZonedDateHost {
+  value = signal<InlineDateValue>(dayToDbEntry('2026-07-21', 'Asia/Tokyo'));
+  now = () => NOW;
+}
 
-  it('opens on edit-session start WITHOUT stealing focus and mirrors the draft', async () => {
-    const h = setup();
-    await typeText(h, '24.12.2026');
-    await h.fixture.whenStable();
-    h.fixture.detectChanges();
+describe('AngularInlineDate with a display zone (T6)', () => {
+  it('speaks the ZONE calendar day at the value boundary', () => {
+    const h = setupHost(ZonedDateHost);
 
-    expect(calendar()).not.toBeNull();
-    // The caret stays in the field — the grid never takes focus on open.
-    expect(calendar()!.contains(document.activeElement)).toBe(false);
-    // The grid mirrors the parseable draft per keystroke.
-    expect(activeCell()?.getAttribute('data-day')).toBe('2026-12-24');
-    expect(calendar()!.querySelector('.cal__label')?.textContent).toContain('December');
+    // Tokyo's Jul 21 — whatever day the machine zone thinks this instant is.
+    expect(h.start().value).toBe('Jul 21, 2026');
+
+    type(h, h.start(), '24.12.2026');
+    press(h, h.start(), 'Enter');
+
+    expect(h.host.value()).toBe(dayToDbEntry('2026-12-24', 'Asia/Tokyo'));
+    h.start().blur();
+  });
+});
+
+describe('AngularInlineDate two-field range', () => {
+  let h: Harness<DateShapeHost>;
+
+  beforeEach(() => {
+    h = setupHost(DateShapeHost);
   });
 
-  it('an unparseable draft leaves the last valid day standing', async () => {
-    const h = setup();
-    await typeText(h, '24.12.2026');
-    await typeText(h, 'garbage');
-    h.fixture.detectChanges();
-
-    expect(activeCell()?.getAttribute('data-day')).toBe('2026-12-24');
+  afterEach(async () => {
+    await blurAway(h);
   });
 
-  it('a pick IS the choice: it rewrites the draft and COMMITS the session', async () => {
-    const h = setup();
-    await typeText(h, '12.5.2026');
-    await h.fixture.whenStable();
+  it('a string binding renders one field; object shapes render the pair', () => {
+    h.host.value.set(db('2026-05-12'));
     h.fixture.detectChanges();
+    expect(h.inputs().length).toBe(1);
 
-    const cell = calendar()!.querySelector('[data-day="2026-05-15"]') as HTMLElement;
-    cell.click();
+    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
     h.fixture.detectChanges();
-    await h.fixture.whenStable();
-    h.fixture.detectChanges();
-
-    expect(h.host.saved).toEqual([db('2026-05-15')]); // committed, no Save button needed
-    expect(h.host.field().value()).toBe(db('2026-05-15'));
-    expect(h.editor()).toBeNull(); // session settled
-    expect(calendar()).toBeNull(); // panel (and grid) gone with it
+    expect(h.inputs().length).toBe(2);
+    expect(h.start().value).toBe('May 12, 2026');
+    expect(h.end()!.value).toBe('May 15, 2026');
   });
 
-  it('the slim chrome: no Save/Discard buttons while the calendar is active', async () => {
-    const h = setup();
-    await typeText(h, '12.5.2026');
-    await h.fixture.whenStable();
+  it('null + ranged=true cold-starts as the pair, both hinting the locale pattern', () => {
+    h.host.ranged.set(true);
     h.fixture.detectChanges();
 
-    expect(document.querySelector('.editable-panel__actions')).toBeNull();
+    expect(h.inputs().length).toBe(2);
+    expect(h.start().placeholder).toBe('mm/dd/yyyy');
+    expect(h.end()!.placeholder).toBe('mm/dd/yyyy');
   });
 
-  it('keyboard navigation crosses month edges (the transition dance)', async () => {
-    const h = setup();
-    await typeText(h, '31.5.2026');
-    await h.fixture.whenStable();
+  it('a half-open range switches the empty end side to the … placeholder', () => {
+    h.host.ranged.set(true);
+    h.host.value.set({ start: db('2026-05-12'), end: null });
     h.fixture.detectChanges();
 
-    grid()!.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }),
+    expect(h.end()!.placeholder).toBe('…');
+  });
+
+  it('an explicit placeholder input overrides the locale pattern on both sides', () => {
+    h.host.ranged.set(true);
+    h.host.placeholder.set('when?');
+    h.fixture.detectChanges();
+
+    expect(h.start().placeholder).toBe('when?');
+    expect(h.end()!.placeholder).toBe('when?');
+  });
+
+  it('Tab-advance: focus moving start → end settles the start (commit-valid)', async () => {
+    h.host.ranged.set(true);
+    h.fixture.detectChanges();
+
+    type(h, h.start(), '12.5.2026');
+    focusInput(h, h.end()!); // what Tab does
+    await settle(h);
+
+    expect(h.host.value()).toEqual({ start: db('2026-05-12'), end: null });
+    expect(h.host.sessions).toEqual([
+      { value: { start: db('2026-05-12'), end: null }, changed: true },
+    ]);
+
+    type(h, h.end()!, '15.5.2026');
+    await blurAway(h);
+
+    expect(h.host.value()).toEqual({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    expect(h.host.sessions.length).toBe(2);
+  });
+
+  it('each side owns its clear — the other side is NEVER nuked', async () => {
+    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.fixture.detectChanges();
+
+    type(h, h.end()!, '');
+    press(h, h.end()!, 'Enter');
+    expect(h.host.value()).toEqual({ start: db('2026-05-12'), end: null });
+
+    type(h, h.start(), '');
+    press(h, h.start(), 'Enter');
+    expect(h.host.value()).toEqual({ start: null, end: null });
+  });
+
+  it('a start edit in the one-key { start } shape moves the single-day range whole', async () => {
+    h.host.value.set({ start: db('2026-05-12') });
+    h.fixture.detectChanges();
+
+    type(h, h.start(), '20.5.2026');
+    press(h, h.start(), 'Enter');
+
+    expect(h.host.value()).toEqual({ start: db('2026-05-20') });
+
+    // Only an END edit creates a distinct end (and grows the key).
+    type(h, h.end()!, '25.5.2026');
+    press(h, h.end()!, 'Enter');
+
+    expect(h.host.value()).toEqual({ start: db('2026-05-20'), end: dbEnd('2026-05-25') });
+  });
+
+  it('null remembers the last seen shape: a cleared one-key field stays one-key', async () => {
+    h.host.value.set({ start: db('2026-05-12') });
+    h.fixture.detectChanges();
+
+    type(h, h.start(), '');
+    press(h, h.start(), 'Enter');
+
+    expect(h.host.value()).toEqual({ start: null });
+    expect(h.inputs().length).toBe(2);
+  });
+
+  it('press-hold-drag paints the range live and commits it whole — ONE saved', async () => {
+    h.host.ranged.set(true);
+    h.fixture.detectChanges();
+
+    focusInput(h, h.start());
+    const cellA = gridCell('2026-05-06')!;
+    cellA.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+    h.fixture.detectChanges();
+    gridCell('2026-05-09')!.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    h.fixture.detectChanges();
+
+    // The live preview paints between the endpoints while dragging.
+    expect(cellA.hasAttribute('data-range-start')).toBe(true);
+    expect(gridCell('2026-05-07')?.hasAttribute('data-in-range')).toBe(true);
+
+    document.dispatchEvent(new MouseEvent('mouseup'));
+    await settle(h);
+
+    expect(h.host.value()).toEqual({ start: db('2026-05-06'), end: dbEnd('2026-05-09') });
+    expect(h.host.sessions).toEqual([
+      { value: { start: db('2026-05-06'), end: dbEnd('2026-05-09') }, changed: true },
+    ]);
+    expect(h.panel()).toBeNull();
+  });
+
+  it('a reversed drag sorts; Ctrl+click restarts the range half-open', async () => {
+    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.fixture.detectChanges();
+
+    focusInput(h, h.start());
+    // Ctrl+click: start = the day, the end CLEARS (a committed half-open range).
+    gridCell('2026-05-20')!.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, ctrlKey: true }),
     );
-    h.fixture.detectChanges();
-    await h.fixture.whenStable();
-    h.fixture.detectChanges();
+    await settle(h);
 
-    expect(activeCell()?.getAttribute('data-day')).toBe('2026-06-01');
-    expect(calendar()!.querySelector('.cal__label')?.textContent).toContain('June');
-  });
+    expect(h.host.value()).toEqual({ start: db('2026-05-20'), end: null });
+    expect(document.activeElement).toBe(h.end()!);
+    expect(h.panel()).not.toBeNull(); // stays open for the completing pick
 
-  it('Escape in the grid hands control back to the field (stage one of two)', async () => {
-    const h = setup();
-    await typeText(h, '12.5.2026');
-    await h.fixture.whenStable();
-    h.fixture.detectChanges();
-
-    grid()!.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    // A reversed drag (25 → 22) commits sorted.
+    gridCell('2026-05-25')!.dispatchEvent(
+      new MouseEvent('mousedown', { bubbles: true, button: 0 }),
     );
-    h.fixture.detectChanges();
+    gridCell('2026-05-22')!.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    document.dispatchEvent(new MouseEvent('mouseup'));
+    await settle(h);
 
-    expect(h.editor()).not.toBeNull(); // session still open
-    expect(calendar()).not.toBeNull(); // the grid stays — it is part of the panel
+    expect(h.host.value()).toEqual({ start: db('2026-05-22'), end: dbEnd('2026-05-25') });
   });
 
-  it('idle: the 📅 affix opens the SESSION (one surface) and a pick commits', async () => {
-    const h = setup();
-
-    const trigger = h.fixture.nativeElement.querySelector('.date-trigger') as HTMLElement;
-    trigger.click();
-    h.fixture.detectChanges();
-    await h.fixture.whenStable();
+  it('range picking: first pick fills the focused side and hands the session to the empty side', async () => {
+    h.host.ranged.set(true);
     h.fixture.detectChanges();
 
-    expect(h.editor()).not.toBeNull(); // the affix opens the session
-    expect(calendar()).not.toBeNull(); // panel + grid are one surface
-    expect(activeCell()?.getAttribute('data-day')).toBe('2026-05-12'); // the committed day
+    focusInput(h, h.start());
+    gridCell('2026-05-20')!.click();
+    await settle(h);
 
-    (calendar()!.querySelector('[data-day="2026-05-20"]') as HTMLElement).click();
-    h.fixture.detectChanges();
-    await h.fixture.whenStable();
-    h.fixture.detectChanges();
+    expect(h.host.value()).toEqual({ start: db('2026-05-20'), end: null });
+    expect(document.activeElement).toBe(h.end()!);
+    expect(h.panel()).not.toBeNull(); // the popup stays for the second pick
 
-    expect(h.host.saved).toEqual([db('2026-05-20')]);
-    expect(h.host.sessions).toEqual([{ value: db('2026-05-20'), changed: true }]);
-    expect(calendar()).toBeNull();
+    gridCell('2026-05-12')!.click(); // BEFORE the start: the pair sorts
+    await settle(h);
+
+    expect(h.host.value()).toEqual({ start: db('2026-05-12'), end: dbEnd('2026-05-20') });
+    // BOTH inputs display the SORTED pair (the picked side re-baselines on
+    // its swapped day — a later blur must not un-sort it).
+    expect(h.start().value).toBe('May 12, 2026');
+    expect(h.end()!.value).toBe('May 20, 2026');
+    expect(h.panel()).toBeNull();
   });
 });

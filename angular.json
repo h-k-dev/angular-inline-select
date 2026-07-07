@@ -94,7 +94,12 @@
           "builder": "@angular/build:unit-test",
           "options": {
             "tsConfig": "projects/angular-inline-select/tsconfig.spec.json",
-            "include": ["**/*.spec.ts", "../phone/src/**/*.spec.ts", "../temporal/src/**/*.spec.ts"]
+            "include": [
+              "**/*.spec.ts",
+              "../phone/src/**/*.spec.ts",
+              "../temporal/src/**/*.spec.ts",
+              "../temporal-mat/src/**/*.spec.ts"
+            ]
           }
         }
       }

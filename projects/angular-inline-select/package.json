@@ -16,6 +16,9 @@
     },
     "luxon": {
       "optional": true
+    },
+    "@angular/material": {
+      "optional": true
     }
   },
   "dependencies": {

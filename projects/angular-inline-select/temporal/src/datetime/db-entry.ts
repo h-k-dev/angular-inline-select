@@ -8,26 +8,33 @@ import { DateTime } from 'luxon';
  * temporal control speaks:
  *
  *   value / savedModelChange  =  UTC ISO datetime string ('…Z') | null
- *   display                   =  localized local-time strings
+ *   display                   =  localized wall-clock strings, in the
+ *                                DISPLAY ZONE
  *   duration                  =  seconds
  *
- * The difference between what the user sees and what is behind the back:
- * controls keep their local day/'HH:mm' machinery internally and convert
- * at the value boundary through these functions only. Luxon itself is
- * CONTAINED here (and consumed via the `toDateTime`/`fromDateTime`
- * bridge) — values stay plain strings, and the engine ships only with the
- * temporal entry point, exactly like libphonenumber ships only with
- * `/phone`.
+ * T6 — THE ZONE IS CONFIGURATION, THE VALUE IS NOT: every "local" helper
+ * takes an optional trailing IANA `zone`. Omitted, the machine zone reads
+ * (the pre-T6 behavior, byte-identical); given, days and wall-clocks are
+ * that zone's (iusta's `ServerSideDatetimeConfiguration` analogue — see
+ * `INLINE_TEMPORAL_ZONE`). Instant math (shift/diff) is zone-free.
+ *
+ * Luxon itself is CONTAINED here (and consumed via the
+ * `toDateTime`/`fromDateTime` bridge) — values stay plain strings, and the
+ * engine ships only with the temporal entry point, exactly like
+ * libphonenumber ships only with `/phone`.
  */
 
 /** `'2026-07-20T19:00:00.000Z'` — `datetime.toUTC().toISO()`, SQL-friendly. */
 export type DbDateTime = string;
 
-/** The Luxon bridge, inbound: a DB entry (or any ISO 8601) as a local-zone `DateTime`. */
-export function toDateTime(value: DbDateTime | null): DateTime | null {
+/** An IANA zone id (`'Europe/Berlin'`); `undefined` = the machine zone. */
+export type ZoneId = string | undefined;
+
+/** The Luxon bridge, inbound: a DB entry (or any ISO 8601) in the display zone. */
+export function toDateTime(value: DbDateTime | null, zone?: ZoneId): DateTime | null {
   if (value === null || value === '') return null;
 
-  const parsed = DateTime.fromISO(value);
+  const parsed = zone ? DateTime.fromISO(value, { zone }) : DateTime.fromISO(value);
   return parsed.isValid ? parsed : null;
 }
 
@@ -46,43 +53,63 @@ export function toDbEntry(date: Date): DbDateTime {
   return fromDateTime(DateTime.fromJSDate(date));
 }
 
-/** The LOCAL calendar day of a DB entry: `'yyyy-MM-dd'`. */
-export function localDayOf(value: DbDateTime | null): string | null {
-  return toDateTime(value)?.toFormat('yyyy-MM-dd') ?? null;
+/**
+ * A FULL ISO datetime typed/pasted as a draft (`'2026-07-21T21:00'`,
+ * `'2026-07-21 21:00'`, with or without seconds/zone) — the decomposition
+ * trigger. A string WITHOUT an offset reads in the display zone. Anything
+ * else (including bare dates and bare times) is `undefined`: those belong
+ * to the field codecs.
+ */
+export function parseDbEntryDraft(raw: string, zone?: ZoneId): DbDateTime | undefined {
+  const trimmed = raw.trim();
+  if (!/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(trimmed)) return undefined;
+
+  const iso = trimmed.replace(' ', 'T');
+  const parsed = zone ? DateTime.fromISO(iso, { zone }) : DateTime.fromISO(iso);
+  return parsed.isValid ? fromDateTime(parsed) : undefined;
 }
 
-/** The LOCAL wall-clock time of a DB entry: `'HH:mm'`. */
-export function localTimeOf(value: DbDateTime | null): string | null {
-  return toDateTime(value)?.toFormat('HH:mm') ?? null;
+/** The display-zone calendar day of a DB entry: `'yyyy-MM-dd'`. */
+export function localDayOf(value: DbDateTime | null, zone?: ZoneId): string | null {
+  return toDateTime(value, zone)?.toFormat('yyyy-MM-dd') ?? null;
 }
 
-/** Local midnight of a `'yyyy-MM-dd'` day, as a DB entry (`startOf('day')`). */
-export function dayToDbEntry(day: string): DbDateTime {
-  return fromDateTime(DateTime.fromISO(day).startOf('day'));
+/** The display-zone wall-clock time of a DB entry: `'HH:mm'`. */
+export function localTimeOf(value: DbDateTime | null, zone?: ZoneId): string | null {
+  return toDateTime(value, zone)?.toFormat('HH:mm') ?? null;
 }
 
-/** Local end-of-day of a `'yyyy-MM-dd'` day, as a DB entry (`endOf('day')`). */
-export function dayEndToDbEntry(day: string): DbDateTime {
-  return fromDateTime(DateTime.fromISO(day).endOf('day'));
+function dayIn(day: string, zone?: ZoneId): DateTime {
+  return zone ? DateTime.fromISO(day, { zone }) : DateTime.fromISO(day);
+}
+
+/** Display-zone midnight of a `'yyyy-MM-dd'` day, as a DB entry (`startOf('day')`). */
+export function dayToDbEntry(day: string, zone?: ZoneId): DbDateTime {
+  return fromDateTime(dayIn(day, zone).startOf('day'));
+}
+
+/** Display-zone end-of-day of a `'yyyy-MM-dd'` day, as a DB entry (`endOf('day')`). */
+export function dayEndToDbEntry(day: string, zone?: ZoneId): DbDateTime {
+  return fromDateTime(dayIn(day, zone).endOf('day'));
 }
 
 /**
- * Rebuilds a DB entry from a local day + local wall-clock time — the
+ * Rebuilds a DB entry from a display-zone day + wall-clock time — the
  * composition every commit runs (anchor day + typed time, or typed day +
  * preserved time).
  */
-export function composeDbEntry(day: string, time: string): DbDateTime {
+export function composeDbEntry(day: string, time: string, zone?: ZoneId): DbDateTime {
   const [hour, minute] = time.split(':').map(Number);
-  return fromDateTime(DateTime.fromISO(day).set({ hour, minute, second: 0, millisecond: 0 }));
+  return fromDateTime(dayIn(day, zone).set({ hour, minute, second: 0, millisecond: 0 }));
 }
 
-/** Shifts a DB entry by whole seconds (`shiftFromDuration`'s primitive). */
+/** Shifts a DB entry by whole seconds (`shiftFromDuration`'s primitive) — zone-free. */
 export function shiftDbEntry(value: DbDateTime, seconds: number): DbDateTime {
   const dateTime = toDateTime(value);
   return dateTime === null ? value : fromDateTime(dateTime.plus({ seconds }));
 }
 
-/** Whole seconds between two DB entries (`induceFromTimeRange`'s primitive). */
+/** Whole seconds between two DB entries (`induceFromTimeRange`'s primitive) — zone-free. */
 export function diffDbEntrySeconds(start: DbDateTime, end: DbDateTime): number | null {
   const from = toDateTime(start);
   const to = toDateTime(end);
@@ -92,24 +119,30 @@ export function diffDbEntrySeconds(start: DbDateTime, end: DbDateTime): number |
 }
 
 /**
- * LOCAL calendar days from `start`'s day to `end`'s day — the end field's
- * `+n` over-count, now intrinsic to the values.
+ * Display-zone calendar days from `start`'s day to `end`'s day — the end
+ * field's `+n` over-count, now intrinsic to the values.
  */
-export function localDayDiff(start: DbDateTime, end: DbDateTime): number | null {
-  const from = toDateTime(start);
-  const to = toDateTime(end);
+export function localDayDiff(start: DbDateTime, end: DbDateTime, zone?: ZoneId): number | null {
+  const from = toDateTime(start, zone);
+  const to = toDateTime(end, zone);
   if (from === null || to === null) return null;
 
   return Math.round(to.startOf('day').diff(from.startOf('day'), 'days').days);
 }
 
-/** Moves `value` onto the local day of `day`, preserving its wall-clock time. */
-export function moveDbEntryToDay(value: DbDateTime, day: string): DbDateTime {
-  const time = localTimeOf(value);
-  return time === null ? value : composeDbEntry(day, time);
+/** Moves `value` onto the display-zone day of `day`, preserving its wall-clock time. */
+export function moveDbEntryToDay(value: DbDateTime, day: string, zone?: ZoneId): DbDateTime {
+  const time = localTimeOf(value, zone);
+  return time === null ? value : composeDbEntry(day, time, zone);
 }
 
-/** Shifts a `'yyyy-MM-dd'` LOCAL day by whole calendar days. */
+/** Shifts a `'yyyy-MM-dd'` day by whole calendar days — plain day-string math, zone-free. */
 export function addLocalDays(day: string, days: number): string {
   return DateTime.fromISO(day).plus({ days }).toFormat('yyyy-MM-dd');
+}
+
+/** Today's calendar day in the display zone, from a reference clock. */
+export function todayIn(now: Date, zone?: ZoneId): string {
+  const dateTime = zone ? DateTime.fromJSDate(now, { zone }) : DateTime.fromJSDate(now);
+  return dateTime.toFormat('yyyy-MM-dd');
 }

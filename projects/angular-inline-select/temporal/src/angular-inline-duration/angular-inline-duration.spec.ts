@@ -4,7 +4,6 @@ import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineDuration, type InlineDurationSaved } from './angular-inline-duration';
 import { parseDuration, formatDuration, describeDuration } from './duration-codec';
-import { AngularInlineText } from 'angular-inline-select';
 
 // =============================================================================
 // Codec
@@ -46,7 +45,7 @@ describe('duration codec', () => {
 });
 
 // =============================================================================
-// Component
+// Component — the input rehost: one real input, gesture-tiered sessions
 // =============================================================================
 
 @Component({
@@ -71,9 +70,7 @@ class DurationFormHost {
 interface Harness {
   fixture: ComponentFixture<DurationFormHost>;
   host: DurationFormHost;
-  display: () => HTMLElement;
-  editor: () => HTMLElement | null;
-  inner: () => AngularInlineText;
+  input: () => HTMLInputElement;
 }
 
 function setup(): Harness {
@@ -83,73 +80,97 @@ function setup(): Harness {
   return {
     fixture,
     host: fixture.componentInstance,
-    display: () => fixture.nativeElement.querySelector('.editable-text__display') as HTMLElement,
-    editor: () => document.querySelector('.editable-text__editor') as HTMLElement | null,
-    inner: () =>
-      fixture.debugElement.children[0].children[0].componentInstance as AngularInlineText,
+    input: () =>
+      fixture.nativeElement.querySelector('.inline-duration__input') as HTMLInputElement,
   };
 }
 
-async function typeText(h: Harness, text: string) {
-  const display = h.display();
-
-  const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
-  Object.defineProperty(event, 'inputType', { value: 'insertText' });
-  Object.defineProperty(event, 'data', { value: 'x' });
-
-  display.dispatchEvent(event);
+/** Focus settlement runs a macrotask behind (`setTimeout(0)`) — flush it. */
+async function settle(h: Harness) {
   h.fixture.detectChanges();
-  await h.fixture.whenStable();
-  h.fixture.detectChanges();
-
-  const editor = h.editor();
-  if (!editor) throw new Error('elevated editor not found');
-
-  editor.textContent = text;
-  editor.dispatchEvent(new Event('input', { bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve));
   h.fixture.detectChanges();
 }
 
-function accept(h: Harness) {
-  (h.inner() as unknown as { accept(): void }).accept();
+function type(h: Harness, text: string) {
+  const input = h.input();
+  input.focus();
+  h.fixture.detectChanges();
+  input.value = text;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
   h.fixture.detectChanges();
 }
 
-describe('AngularInlineDuration', () => {
+function press(h: Harness, key: string) {
+  h.input().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  h.fixture.detectChanges();
+}
+
+async function blurAway(h: Harness) {
+  (document.activeElement as HTMLElement | null)?.blur();
+  await settle(h);
+}
+
+describe('AngularInlineDuration (input rehost)', () => {
   let h: Harness;
 
   beforeEach(() => {
     h = setup();
   });
 
-  it('renders the committed seconds in clock format', () => {
-    expect(h.display().textContent).toBe('1:30');
+  afterEach(async () => {
+    await blurAway(h);
   });
 
-  it('commits unit tokens as seconds, snapped to step, with a live preview', async () => {
-    await typeText(h, '2h 15m');
+  it('renders the committed seconds in clock format in a real input', () => {
+    expect(h.input().value).toBe('1:30');
+  });
 
-    const hint = document.querySelector('.editable-panel__message--hint');
-    expect(hint?.textContent?.trim()).toBe('✓ 2 h 15 min');
+  it('Enter commits unit tokens as seconds, snapped to step, with a live preview', () => {
+    type(h, '2h 15m');
 
-    accept(h);
+    expect(document.querySelector('.inline-duration__preview')?.textContent?.trim()).toBe(
+      '✓ 2 h 15 min',
+    );
+
+    press(h, 'Enter');
 
     expect(h.host.saved).toEqual([8100]);
     expect(h.host.sessions).toEqual([{ value: 8100, changed: true }]);
-    expect(h.display().textContent).toBe('2:15');
+    expect(h.input().value).toBe('2:15'); // commits round-trip the codec
   });
 
-  it('the parse gate blocks unreadable drafts', async () => {
-    await typeText(h, '1:75');
-    accept(h);
+  it('the parse gate blocks Enter on unreadable drafts', () => {
+    type(h, '1:75');
+    press(h, 'Enter');
 
     expect(h.host.saved).toEqual([]);
     expect(h.host.field().value()).toBe(5400);
+    expect(h.input().getAttribute('aria-invalid')).toBe('true');
   });
 
-  it('an empty draft commits null', async () => {
-    await typeText(h, '');
-    accept(h);
+  it('blur with an unreadable draft SNAPS BACK to the baseline', async () => {
+    type(h, '1:75');
+    await blurAway(h);
+
+    expect(h.host.field().value()).toBe(5400);
+    expect(h.input().value).toBe('1:30');
+    expect(h.host.saved).toEqual([]);
+    expect(h.host.sessions).toEqual([{ value: 5400, changed: false }]);
+  });
+
+  it('Escape reverts to the session baseline', () => {
+    type(h, '2h');
+    press(h, 'Escape');
+
+    expect(h.host.field().value()).toBe(5400);
+    expect(h.input().value).toBe('1:30');
+    expect(h.host.saved).toEqual([]);
+  });
+
+  it('an empty draft commits null', () => {
+    type(h, '');
+    press(h, 'Enter');
 
     expect(h.host.field().value()).toBeNull();
     expect(h.host.sessions).toEqual([{ value: null, changed: true }]);

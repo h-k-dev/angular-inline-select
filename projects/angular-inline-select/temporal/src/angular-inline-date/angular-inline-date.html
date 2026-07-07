@@ -1,95 +1,149 @@
-<!-- Live interpretation preview: the full reading of the draft. -->
-<ng-template #previewTpl>{{ preview() }}</ng-template>
-
 <!--
-  Date slash-menu: /today, /tomorrow, /yesterday + the next seven weekdays.
-  Labels come from Intl (localized, zero bundled translations); picking
-  inserts the ISO date, which the codec reads and the preview interprets.
+  The input rehost: two real <input> elements (one in single-string mode) —
+  native Tab order IS the range flow. The wrapper is the overlay origin so
+  the calendar panel anchors under the whole pair.
 -->
-<ng-template #dateMenu let-query let-apply="apply" let-activeId="activeId">
-  <div role="listbox" aria-label="Dates">
-    @for (command of commandOptions(query); track command.id) {
-      <div
-        role="option"
-        [id]="command.id"
-        [attr.data-active]="command.id === activeId()"
-        [attr.aria-selected]="command.id === activeId()"
-        (click)="apply(command.iso)"
-      >
-        <span class="date-command__label">{{ command.label }}</span>
-        <span class="date-command__value">{{ command.iso }}</span>
-      </div>
-    } @empty {
-      <div class="date-command__empty">—</div>
-    }
-  </div>
-</ng-template>
+<span
+  class="inline-date"
+  cdkOverlayOrigin
+  #origin="cdkOverlayOrigin"
+  [class.inline-date--invalid]="errorsVisible()"
+>
+  @if (prefixTpl(); as tpl) {
+    <span class="inline-date__affix" aria-hidden="true">
+      <ng-container [ngTemplateOutlet]="tpl" />
+    </span>
+  }
 
-<!--
-  The suffix slot: the consumer's affix or the 📅 calendar trigger (the
-  phone flag-picker analogue — a pointer affordance, never part of the
-  draft).
--->
-<ng-template #suffixTpl>
-  @if (consumerSuffixTpl(); as consumer) {
-    <ng-container [ngTemplateOutlet]="consumer" />
+  <input
+    #startInput
+    class="inline-date__input"
+    [class.inline-date__input--reverted]="revertFlash() === 'start'"
+    type="text"
+    autocomplete="off"
+    autocapitalize="off"
+    spellcheck="false"
+    role="combobox"
+    aria-haspopup="grid"
+    [attr.aria-expanded]="overlayOpen()"
+    [attr.aria-label]="ariaLabelOf('start')"
+    [attr.aria-invalid]="ariaInvalidOf('start') || null"
+    [attr.aria-required]="required() || null"
+    [attr.size]="sizeOf('start')"
+    [value]="startDraft()"
+    [placeholder]="effectivePlaceholder()"
+    [disabled]="effectiveDisabled()"
+    [readonly]="effectiveReadonly()"
+    (input)="handleInput('start', startInput.value)"
+    (focusin)="handleFocusIn('start')"
+    (focusout)="handleFocusOut()"
+    (keydown)="handleInputKeydown('start', $event)"
+  />
+
+  @if (twoFields()) {
+    <span class="inline-date__separator" aria-hidden="true">–</span>
+    <input
+      #endInput
+      class="inline-date__input"
+      [class.inline-date__input--reverted]="revertFlash() === 'end'"
+      type="text"
+      autocomplete="off"
+      autocapitalize="off"
+      spellcheck="false"
+      role="combobox"
+      aria-haspopup="grid"
+      [attr.aria-expanded]="overlayOpen()"
+      [attr.aria-label]="ariaLabelOf('end')"
+      [attr.aria-invalid]="ariaInvalidOf('end') || null"
+      [attr.size]="sizeOf('end')"
+      [value]="endDraft()"
+      [placeholder]="effectiveEndPlaceholder()"
+      [disabled]="effectiveDisabled()"
+      [readonly]="effectiveReadonly()"
+      (input)="handleInput('end', endInput.value)"
+      (focusin)="handleFocusIn('end')"
+      (focusout)="handleFocusOut()"
+      (keydown)="handleInputKeydown('end', $event)"
+    />
+  }
+
+  @if (consumerSuffixTpl(); as tpl) {
+    <span class="inline-date__affix" aria-hidden="true">
+      <ng-container [ngTemplateOutlet]="tpl" />
+    </span>
   } @else if (showCalendar()) {
     <button
       type="button"
-      class="date-trigger"
+      class="inline-date__trigger"
       aria-label="Open calendar"
-      [attr.aria-expanded]="editing() && calendarActive()"
+      [attr.aria-expanded]="overlayOpen()"
       (mousedown)="$event.preventDefault()"
       (click)="toggleCalendar($event)"
     >
       📅
     </button>
   }
-</ng-template>
+
+  <!-- Snap-back is silent data-restoration — the announcement is not. -->
+  <span class="inline-date__sr" aria-live="polite">{{ revertNotice() }}</span>
+</span>
 
 <!--
-  Composition, not inheritance: the inner text control owns the session
-  machinery; this component translates ISO dates ↔ typed drafts at the
-  contract boundary.
+  The panel: preview line + calendar grid + quick-picks + the error slot.
+  Opens on focus WITHOUT stealing it (the grid mirrors the draft); focus
+  inside the panel belongs to the focused side's session.
 -->
-<angular-inline-text
-  [value]="innerValue()"
-  (valueChange)="handleInnerValue($event)"
-  [(editing)]="editing"
-  [isSingleLine]="true"
-  [normalizeValue]="true"
-  [errors]="innerErrors()"
-  [invalid]="effectiveInvalid()"
-  [disabled]="effectiveDisabled()"
-  [readonly]="effectiveReadonly()"
-  [required]="required()"
-  [touched]="effectiveTouched()"
-  [placeholder]="placeholder()"
-  [ariaLabel]="ariaLabel()"
-  [prefixTemplate]="prefixTpl()"
-  [suffixTemplate]="suffixActive() ? suffixTpl : undefined"
-  [hintTemplate]="preview() ? previewTpl : undefined"
-  [menuTemplate]="showDateMenu() ? dateMenu : undefined"
-  [panelTemplate]="calendarActive() ? calendarPanel : undefined"
-  [showActions]="!showCalendar()"
-  (touch)="touch.emit()"
-  (saved)="handleInnerSaved($event)"
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="origin"
+  [cdkConnectedOverlayOpen]="overlayOpen()"
+  [cdkConnectedOverlayPositions]="overlayPositions"
+  (overlayOutsideClick)="handleOutsideClick()"
 >
-  <ng-content select="[editable-error]" ngProjectAs="[editable-error]" />
-</angular-inline-text>
+  <div
+    #panel
+    class="inline-date__panel"
+    (mousedown)="handlePanelMousedown($event)"
+    (focusout)="handleFocusOut()"
+  >
+    @if (preview(); as reading) {
+      <div class="inline-date__preview">{{ reading }}</div>
+    }
 
-<!--
-  T2b — the calendar lives IN the panel (the menu's sibling slot). It
-  never steals focus on open (a live mirror of the draft); ArrowDown
-  hands focus over; Escape hands it back; a pick COMMITS the session.
--->
-<ng-template #calendarPanel>
-  <angular-inline-calendar
-    [activeDay]="pendingDay()"
-    [selectedDay]="internalRange().start"
-    [locale]="locale()"
-    [now]="now()"
-    (picked)="pickDate($event)"
-    (escaped)="escapeCalendar()"
-  />
+    @if (showCalendar()) {
+      <angular-inline-calendar
+        [activeDay]="pendingDay()"
+        [selectedDay]="selectedForGrid()"
+        [rangeGestures]="twoFields()"
+        [rangeStart]="internalRange().start"
+        [rangeEnd]="internalRange().end"
+        [locale]="locale()"
+        [zone]="effectiveZone()"
+        [now]="now()"
+        (picked)="pickDate($event)"
+        (ctrlPicked)="ctrlPickDate($event)"
+        (dragEnded)="commitDraggedRange($event)"
+        (escaped)="escapeCalendar()"
+      />
+    }
+
+    @if (quickPickList().length > 0) {
+      <div class="inline-date__quick-picks" role="group" aria-label="Quick picks">
+        @for (command of quickPickList(); track command.id) {
+          <button
+            type="button"
+            class="inline-date__quick-pick"
+            (mousedown)="$event.preventDefault()"
+            (click)="pickDate(command.iso)"
+          >
+            {{ command.label }}
+          </button>
+        }
+      </div>
+    }
+
+    <div class="inline-date__errors" [hidden]="!errorSlotVisible()">
+      <ng-content select="[editable-error]" />
+    </div>
+  </div>
 </ng-template>

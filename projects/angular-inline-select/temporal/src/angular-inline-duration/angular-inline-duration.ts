@@ -1,23 +1,25 @@
 import {
   Component,
+  DestroyRef,
+  ElementRef,
+  computed,
+  contentChild,
+  effect,
   inject,
-  TemplateRef,
   input,
+  linkedSignal,
   model,
   output,
-  computed,
-  linkedSignal,
+  signal,
+  untracked,
   viewChild,
-  contentChild,
+  type TemplateRef,
 } from '@angular/core';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
+import { CdkConnectedOverlay, CdkOverlayOrigin, type ConnectedPosition } from '@angular/cdk/overlay';
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
-import {
-  AngularInlineText,
-  EditablePrefix,
-  EditableSuffix,
-  type InlineTextSaved,
-} from 'angular-inline-select';
+import { EditablePrefix, EditableSuffix } from 'angular-inline-select';
 import {
   parseDuration,
   formatDuration,
@@ -35,9 +37,14 @@ export interface InlineDurationSaved {
 }
 
 /**
- * Inline duration: a `FormValueControl` for durations that COMPOSES the
- * inline text control — the number control's sibling with a clock-shaped
- * codec. Canonical value: SECONDS (`number | null`, empty commits `null`).
+ * Inline duration on a NATIVE INPUT — the input rehost (see
+ * ROADMAP-DATETIME). A `FormValueControl` for durations. Canonical value:
+ * SECONDS (`number | null`, empty commits `null`).
+ *
+ * Session semantics are GESTURE-TIERED (the family rule): Enter commits
+ * (an unreadable draft BLOCKS with the error), Escape reverts to the
+ * baseline, Tab/blur commits a readable draft and SNAPS an unreadable one
+ * back — never traps, never persists a draft error.
  *
  * - Drafts accept colon notation (positional by `durationFormat`), unit
  *   tokens (`'1h 30m'`, `'45m'`, `'1.5h'`), or a bare number (minutes under
@@ -49,21 +56,134 @@ export interface InlineDurationSaved {
  */
 @Component({
   selector: 'angular-inline-duration',
-  imports: [AngularInlineText],
+  imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgTemplateOutlet],
   templateUrl: './angular-inline-duration.html',
-  styles: ':host { display: inline; }',
+  styles: `
+    :host {
+      display: inline;
+    }
+
+    .inline-duration {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.25ch;
+      max-width: 100%;
+    }
+
+    /* The family look, on an input (see the date control for the rationale). */
+    .inline-duration__input {
+      font: inherit;
+      color: inherit;
+      background: transparent;
+      border: 0;
+      padding: 0 0 0.1em;
+      margin: 0;
+      outline: none;
+      min-width: 1ch;
+      max-width: 100%;
+      field-sizing: content;
+      caret-color: var(--editable-text-caret-color, var(--mat-sys-primary, #428bca));
+      border-bottom: 0.0625rem dashed
+        var(--editable-text-underline-color, var(--mat-sys-primary, #428bca));
+    }
+    .inline-duration__input:focus {
+      border-bottom-style: solid;
+      border-bottom-width: 0.125rem;
+      padding-bottom: calc(0.1em - 0.0625rem);
+    }
+    .inline-duration__input::placeholder {
+      font-style: italic;
+      color: inherit;
+      opacity: var(--editable-text-placeholder-opacity, 0.3875);
+    }
+    .inline-duration__input:disabled {
+      cursor: default;
+      border-bottom-color: var(--mat-sys-outline, #999);
+    }
+
+    .inline-duration--invalid .inline-duration__input {
+      border-bottom-color: var(--editable-text-error-color, var(--mat-sys-error, #dc3545));
+    }
+
+    /* BARE CHROME — the hosting container draws the chrome (see the date control). */
+    :host(.inline-field-bare) .inline-duration__input {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    :host(.inline-field-bare--hide-placeholder) .inline-duration__input::placeholder {
+      opacity: 0;
+    }
+
+    .inline-duration__input--reverted {
+      animation: inline-duration-revert 0.6s ease-out;
+    }
+    @keyframes inline-duration-revert {
+      0% {
+        background: color-mix(in srgb, var(--mat-sys-error, #dc3545) 18%, transparent);
+      }
+      100% {
+        background: transparent;
+      }
+    }
+
+    .inline-duration__affix {
+      white-space: nowrap;
+      user-select: none;
+      color: var(--editable-text-affix-color, var(--mat-sys-on-surface-variant, inherit));
+    }
+
+    .inline-duration__sr {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .inline-duration__panel {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px;
+      background: var(--editable-panel-container-color, var(--mat-sys-surface-container, #fff));
+      color: var(--mat-sys-on-surface, inherit);
+      border-radius: var(--mat-sys-corner-medium, 0.75rem);
+      box-shadow: var(
+        --mat-sys-level2,
+        0 1px 2px rgba(0, 0, 0, 0.3),
+        0 2px 6px 2px rgba(0, 0, 0, 0.15)
+      );
+    }
+    .inline-duration__preview {
+      padding: 2px 8px;
+      font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
+      color: var(--mat-sys-on-surface-variant, #5f6368);
+      font-variant-numeric: tabular-nums;
+    }
+    .inline-duration__errors:not([hidden]) {
+      padding: 0 8px 4px;
+      font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
+      color: var(--mat-sys-error, #dc3545);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .inline-duration__input--reverted {
+        animation: none;
+      }
+    }
+  `,
   host: {
     '[style.display]': 'hidden() ? "none" : null',
   },
 })
 export class AngularInlineDuration implements FormValueControl<number | null> {
-  /** The composed text control — all session machinery lives there. */
-  protected inner = viewChild.required(AngularInlineText);
+  #document = inject(DOCUMENT);
 
   /** The committed value channel: duration in SECONDS, or `null`. */
   value = model<number | null>(null);
 
-  /** Form Value Contract — forwarded into the inner control. */
+  /** Form Value Contract. */
   errors = input<readonly ValidationError.WithOptionalFieldTree[]>([]);
   disabled = input(false);
   readonly = input(false);
@@ -74,7 +194,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
 
   placeholder = input<string>('0:00');
 
-  /** Accessible name for the field (contenteditable has no native label association). */
+  /** Accessible name for the field. */
   ariaLabel = input<string | undefined>(undefined);
 
   /** How colon notation reads and how committed values render. */
@@ -93,14 +213,14 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   protected prefixTpl = computed(() => this.prefixTemplate() ?? this.contentPrefix()?.templateRef);
   protected suffixTpl = computed(() => this.suffixTemplate() ?? this.contentSuffix()?.templateRef);
 
-
   /**
    * Group-forwarded contract state (role-provided; absent standalone).
    * Merged by PULL — the leaf stays decoupled, no effects involved.
    */
   #leafState = inject(INLINE_TEMPORAL_LEAF_STATE, { optional: true, self: true });
 
-  protected effectiveDisabled = computed(
+  /** Public: the composed disabled verdict (own input + group-fed state). */
+  readonly effectiveDisabled = computed(
     () => this.disabled() || (this.#leafState?.disabled() ?? false),
   );
   protected effectiveReadonly = computed(
@@ -113,43 +233,84 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
     () => this.invalid() || (this.#leafState?.invalid() ?? false),
   );
 
-  /** Form Value Contract: touch — forwarded from the inner control. */
+  /** Form Value Contract: touch — emitted whenever a session settles. */
   touch = output<void>();
 
-  /** Hard commit event: fires once per accepted edit session — seconds or `null`. */
+  /** Hard commit event: fires once per changed settlement — seconds or `null`. */
   savedModelChange = output<number | null>();
 
-  /** Emitted exactly once per settled edit session (Save, Discard, clear). */
+  /** Emitted exactly once per settled session (commit, snap-back, Escape, clear). */
   saved = output<InlineDurationSaved>();
 
-  /** Whether an edit session is open. Two-way bindable. */
+  /** Whether an edit session is open (= focus is within). Two-way bindable. */
   editing = model(false);
 
+  protected display = computed(() => formatDuration(this.value(), this.durationFormat()));
+
+  // -- The session (one field, the date control's side pattern) ------------------
+
+  /** Whether a session is open on this field. */
+  #open = signal(false);
+
   /**
-   * The string channel feeding the inner control: the formatted committed
-   * value while idle, the raw draft while a session is open.
+   * The input's text: user-owned while the session is open (frozen
+   * linkedSignal), the committed display otherwise.
    */
-  protected innerValue = linkedSignal<string, string>({
-    source: () => formatDuration(this.value(), this.durationFormat()),
-    computation: (source, prev) => (this.editing() ? (prev?.value ?? source) : source),
+  protected draft = linkedSignal<string, string>({
+    source: this.display,
+    computation: (source, prev) => (this.#open() ? (prev?.value ?? source) : source),
   });
+
+  /** The committed VALUE at session start — what Escape and snap-back restore. */
+  #baselineValue: number | null = null;
+
+  /**
+   * Whether the USER touched the draft since the last settlement. An
+   * untouched session settles WHERE THE VALUE STANDS — re-deriving it from
+   * the draft would undo external writes (a group moving this length) with
+   * stale session state.
+   */
+  #dirty = false;
+
+  /** Enter was pressed on an unreadable draft — reveals the parse-gate error. */
+  #saveAttempted = signal(false);
+
+  /** Enter/Escape hide the panel until the next keystroke or session. */
+  #panelDismissed = signal(false);
 
   /** The parse gate: whether the current draft fails the codec. Public for consumers. */
   readonly parseFailed = computed(
-    () => parseDuration(this.innerValue(), this.durationFormat()) === undefined,
+    () => parseDuration(this.draft(), this.durationFormat()) === undefined,
   );
 
-  /** Errors forwarded inward: contract + group-routed errors + the parse gate. */
-  protected innerErrors = computed<readonly ValidationError.WithOptionalFieldTree[]>(() => {
-    const groupErrors = this.#leafState?.errors() ?? [];
-    const base = groupErrors.length ? [...this.errors(), ...groupErrors] : this.errors();
+  #selfTouched = signal(false);
 
-    return this.parseFailed() ? [...base, { kind: 'parse' }] : base;
-  });
+  protected isInvalid = computed(
+    () =>
+      this.effectiveInvalid() ||
+      this.errors().length > 0 ||
+      (this.#leafState?.errors().length ?? 0) > 0,
+  );
+
+  /**
+   * The mat split: the consumer decides what errors say, the field when they
+   * show. Public — the field's presentational verdict, the thing a hosting
+   * container (a mat-form-field adapter) needs to mirror.
+   */
+  readonly errorsVisible = computed(
+    () => this.isInvalid() && (this.effectiveTouched() || this.#selfTouched()),
+  );
+
+  /** Public: whether the field holds no value. */
+  readonly isEmpty = computed(() => this.value() === null);
+
+  protected parseGateVisible = computed(() => this.#saveAttempted() && this.parseFailed());
+
+  protected errorSlotVisible = computed(() => this.errorsVisible() || this.parseGateVisible());
 
   /** Live interpretation preview: `✓ 1 h 30 min` / `… raw`. */
   protected preview = computed(() => {
-    const raw = this.innerValue().trim();
+    const raw = this.draft().trim();
     if (!raw) return '';
 
     const parsed = parseDuration(raw, this.durationFormat());
@@ -158,39 +319,222 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
     return `✓ ${describeDuration(this.#snap(parsed))}`;
   });
 
+  /** The panel appears when there is something to say — a reading or an error. */
+  protected panelOpen = computed(
+    () =>
+      this.#open() &&
+      !this.#panelDismissed() &&
+      (this.preview() !== '' || this.errorSlotVisible()),
+  );
+
+  /** Public: whether the panel is showing (hosting containers coordinate on it). */
+  readonly panelVisible = computed(() => this.panelOpen());
+
+  /** An outside click dismisses the panel — the session survives (focusout settles). */
+  protected dismissPanel() {
+    this.#panelDismissed.set(true);
+  }
+
+  protected overlayPositions: ConnectedPosition[] = [
+    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
+    { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
+  ];
+
+  protected revertFlash = signal(false);
+  protected revertNotice = signal('');
+
+  protected durationInput = viewChild<ElementRef<HTMLInputElement>>('durationInput');
+  protected panelRef = viewChild<ElementRef<HTMLElement>>('panel');
+
+  #focusCheckTimer: ReturnType<typeof setTimeout> | null = null;
+  #flashTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => {
+      if (this.#focusCheckTimer !== null) clearTimeout(this.#focusCheckTimer);
+      if (this.#flashTimer !== null) clearTimeout(this.#flashTimer);
+    });
+
+    // The editing bridge — see the date control.
+    effect(() => {
+      const editing = this.editing();
+      untracked(() => {
+        const open = this.#open();
+        if (editing && !open) {
+          this.durationInput()?.nativeElement.focus();
+        } else if (!editing && open) {
+          this.#settle();
+          this.durationInput()?.nativeElement.blur();
+        }
+      });
+    });
+  }
+
   #snap(seconds: number): number {
     const step = this.step();
     return step > 1 ? Math.round(seconds / step) * step : seconds;
   }
 
-  /** Live channel: every keystroke parses; readable drafts flow as seconds. */
-  protected handleInnerValue(raw: string) {
-    this.innerValue.set(raw);
+  protected sizeOf(): number {
+    return Math.max(1, (this.draft() || this.placeholder()).length);
+  }
+
+  protected ariaInvalid(): boolean {
+    return this.errorsVisible() || (this.#open() && this.#saveAttempted() && this.parseFailed());
+  }
+
+  // -- The live channel -----------------------------------------------------------
+
+  #openSession() {
+    if (this.#open()) return;
+    this.#baselineValue = this.value();
+    this.#dirty = false;
+    this.#saveAttempted.set(false);
+    this.#panelDismissed.set(false);
+    this.#open.set(true);
+  }
+
+  /** Every keystroke: readable drafts flow into the model live (unsnapped). */
+  protected handleInput(raw: string) {
+    this.#openSession();
+    this.draft.set(raw);
+    this.#dirty = true;
+    this.#saveAttempted.set(false);
+    this.#panelDismissed.set(false);
 
     const parsed = parseDuration(raw, this.durationFormat());
     if (parsed !== undefined && parsed !== this.value()) this.value.set(parsed);
   }
 
-  /** Retype the settled session: strings inside, seconds outside. */
-  protected handleInnerSaved(session: InlineTextSaved) {
-    const parsed = parseDuration(session.value, this.durationFormat());
-    const value = parsed === undefined ? this.value() : parsed === null ? null : this.#snap(parsed);
+  // -- Focus flow -------------------------------------------------------------------
 
-    if (session.changed) {
-      this.value.set(value);
-      this.savedModelChange.emit(value);
+  protected handleFocusIn() {
+    this.#openSession();
+    this.editing.set(true);
+  }
+
+  protected handleFocusOut() {
+    if (this.#focusCheckTimer !== null) clearTimeout(this.#focusCheckTimer);
+    this.#focusCheckTimer = setTimeout(() => this.#onFocusSettled(), 0);
+  }
+
+  #onFocusSettled() {
+    this.#focusCheckTimer = null;
+    const active = this.#document.activeElement;
+    const inField = active !== null && active === this.durationInput()?.nativeElement;
+    const inPanel = (active !== null && this.panelRef()?.nativeElement.contains(active)) ?? false;
+
+    if (!inField && !inPanel) {
+      this.#settle();
+      this.editing.set(false);
+    }
+  }
+
+  // -- Settlement (ONE per session — commit, snap-back, Escape, clear) --------------
+
+  #settle(options: { revert?: boolean; keepOpen?: boolean } = {}) {
+    if (!this.#open()) return;
+
+    // An untouched session settles where the value stands (see #dirty).
+    const untouched = !options.revert && !this.#dirty;
+
+    let value: number | null;
+    let snappedBack = false;
+
+    if (untouched) {
+      value = this.value();
+    } else if (options.revert) {
+      value = this.#baselineValue;
+    } else {
+      const parsed = parseDuration(this.draft(), this.durationFormat());
+      if (parsed === undefined) {
+        // Snap-back: an unreadable draft reverts to the session baseline.
+        snappedBack = true;
+        value = this.#baselineValue;
+      } else {
+        value = parsed === null ? null : this.#snap(parsed);
+      }
     }
 
-    this.saved.emit({ value, changed: session.changed });
+    if (!untouched && value !== this.value()) this.value.set(value);
+    const changed = !untouched && value !== this.#baselineValue;
+    this.#dirty = false;
+
+    if (options.keepOpen) {
+      this.#baselineValue = value;
+      this.draft.set(this.display());
+      this.#saveAttempted.set(false);
+    } else {
+      this.#open.set(false);
+      this.#saveAttempted.set(false);
+    }
+
+    if (snappedBack) this.#announceRevert(value);
+
+    this.#selfTouched.set(true);
+    this.touch.emit();
+
+    if (changed) this.savedModelChange.emit(value);
+    this.saved.emit({ value, changed });
   }
 
-  /** Form Value Contract: focus — delegates to the inner control. */
+  #announceRevert(value: number | null) {
+    const restored = value === null ? 'empty' : formatDuration(value, this.durationFormat());
+    this.revertNotice.set(`Reverted to ${restored}`);
+    this.revertFlash.set(true);
+
+    if (this.#flashTimer !== null) clearTimeout(this.#flashTimer);
+    this.#flashTimer = setTimeout(() => this.revertFlash.set(false), 600);
+  }
+
+  // -- Keyboard -----------------------------------------------------------------------
+
+  protected handleKeydown(event: KeyboardEvent) {
+    switch (event.key) {
+      case 'Enter': {
+        event.preventDefault();
+        if (parseDuration(this.draft(), this.durationFormat()) === undefined) {
+          // The parse gate: the user ASKED for a commit — block and say why.
+          this.#saveAttempted.set(true);
+          return;
+        }
+
+        this.#settle({ keepOpen: true });
+        this.#panelDismissed.set(true);
+        return;
+      }
+      case 'Escape': {
+        event.preventDefault();
+        event.stopPropagation();
+        this.#settle({ revert: true, keepOpen: true });
+        this.#panelDismissed.set(true);
+        return;
+      }
+    }
+  }
+
+  /**
+   * Toggles the preview panel. PUBLIC — the container-click affordance a
+   * hosting container (the mat-form-field adapter) delegates to.
+   */
+  togglePanel() {
+    if (this.effectiveDisabled() || this.effectiveReadonly()) return;
+    this.#panelDismissed.update((dismissed) => !dismissed);
+  }
+
+  // -- Form Value Contract ------------------------------------------------------------------
+
   focus(options?: FocusOptions) {
-    this.inner().focus(options);
+    this.durationInput()?.nativeElement.focus(options);
   }
 
-  /** Form Value Contract: reset — delegates to the inner control. */
+  /** Presentation-only rollback — see the date control. */
   reset() {
-    this.inner().reset();
+    if (!this.#open()) return;
+
+    if (this.#baselineValue !== this.value()) this.value.set(this.#baselineValue);
+    this.draft.set(this.display());
+    this.#saveAttempted.set(false);
+    this.#panelDismissed.set(true);
   }
 }

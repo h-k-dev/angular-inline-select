@@ -1,33 +1,40 @@
 import {
   Component,
+  DestroyRef,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  effect,
   inject,
-  TemplateRef,
   input,
+  linkedSignal,
   model,
   output,
-  computed,
-  linkedSignal,
+  signal,
+  untracked,
   viewChild,
   contentChild,
+  type Signal,
+  type TemplateRef,
+  type WritableSignal,
 } from '@angular/core';
-import { NgTemplateOutlet } from '@angular/common';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
+import { CdkConnectedOverlay, CdkOverlayOrigin, type ConnectedPosition } from '@angular/cdk/overlay';
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
-import {
-  AngularInlineText,
-  EditablePrefix,
-  EditableSuffix,
-  type InlineTextSaved,
-} from 'angular-inline-select';
+import { EditablePrefix, EditableSuffix } from 'angular-inline-select';
 import {
   parseDateInput,
-  formatInternalRange,
+  formatIsoDate,
   describeIsoDate,
   buildDateCommands,
   inferDateShape,
   toInternalRange,
   echoDateShape,
   dateValuesEqual,
+  localeDatePlaceholder,
+  type DateCommand,
   type IsoDate,
   type InlineDateValue,
   type DateValueShape,
@@ -35,6 +42,7 @@ import {
 } from './date-codec';
 import { INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 import { dayToDbEntry, dayEndToDbEntry, localDayOf } from '../datetime/db-entry';
+import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
 import { AngularInlineCalendar } from './inline-calendar';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
@@ -45,31 +53,160 @@ export interface InlineDateSaved {
   changed: boolean;
 }
 
+type SideKey = 'start' | 'end';
+
 /**
- * Inline date: a `FormValueControl` for calendar dates that COMPOSES the
- * inline text control. Canonical value: a **UTC ISO DB entry**
- * (`'2026-07-20T22:00:00.000Z'` — iusta's `toDBEntry` of the local
- * `startOf('day')`); the DISPLAY is the localized local calendar day.
+ * Everything one field of the pair owns. A SESSION is a continuous stretch
+ * of focus on one side: it opens on focusin (capturing the baseline) and
+ * settles on Enter, Escape, or focus leaving the side.
+ */
+interface DateSide {
+  readonly key: SideKey;
+  /** This side's committed LOCAL day (the value boundary stays DB entries). */
+  readonly committedDay: Signal<IsoDate | null>;
+  /** Localized display of the committed day — what the input shows idle. */
+  readonly display: Signal<string>;
+  /** Whether a session is open on this side. */
+  readonly open: WritableSignal<boolean>;
+  /**
+   * The input's text: user-owned while a session is open (frozen linkedSignal
+   * — a value write mid-session never rewrites text under the caret), the
+   * committed display otherwise.
+   */
+  readonly draft: WritableSignal<string>;
+  /** The committed day at session start — what Escape and snap-back restore. */
+  baselineDay: IsoDate | null;
+  /**
+   * Whether the USER touched the draft since the last settlement. An
+   * untouched session settles WHERE THE VALUE STANDS — re-deriving it from
+   * the draft would undo external writes (a group re-anchoring this leaf)
+   * with stale session state.
+   */
+  dirty: boolean;
+  /** Enter was pressed on an unreadable draft — reveals the parse-gate error. */
+  readonly saveAttempted: WritableSignal<boolean>;
+}
+
+/**
+ * Inline date on NATIVE INPUTS — the input rehost (see ROADMAP-DATETIME).
+ * A `FormValueControl` for calendar dates and date RANGES. Canonical value:
+ * UTC ISO DB entries (iusta's `toDBEntry` of the local `startOf('day')`;
+ * range ends `endOf('day')`), SHAPE-ECHOED — a string binds ONE field, an
+ * object binds the start–end pair. Display is the localized local day.
  *
- * - Drafts are TYPED (`'12.5.'`, `'12.5.2026'`, `'2026-05-12'`) and never
- *   reformatted under the caret; the live interpretation preview shows the
- *   full reading on every keystroke (`✓ Tuesday, 12 May 2026`).
- * - The slash menu is the quick-pick: `/today`, `/tomorrow`, `/yesterday`
- *   and the next seven weekdays — labels localized via `Intl` (zero bundled
- *   translations), matching the localized AND English names.
- * - A calendar overlay picker is the natural next affordance (same pattern
- *   as the phone's flag picker) — deliberately left open for sandboxing.
+ * The family feel is styling, not shared DOM: dashed underline idle, solid
+ * error color when invalid, `field-sizing: content` + a fixed-size
+ * placeholder so layout shift is impossible.
+ *
+ * Session semantics are GESTURE-TIERED (the Notion/GCal convention):
+ * - Enter  = explicit commit — an unreadable draft BLOCKS with the error.
+ * - Escape = explicit revert to the session baseline.
+ * - Tab / blur = navigation, never a validity checkpoint: a readable draft
+ *   COMMITS and focus moves on; an unreadable draft SNAPS BACK to the
+ *   baseline and focus moves anyway. Never trap, never persist a draft
+ *   error — the idle solid underline is reserved for SCHEMA errors.
+ *
+ * The calendar opens on focus WITHOUT stealing it (the grid mirrors the
+ * typed draft per keystroke); ArrowDown hands focus to the grid; a pick
+ * COMMITS the focused side — and hands the session to the empty other side
+ * when picking a range.
  */
 @Component({
   selector: 'angular-inline-date',
-  imports: [AngularInlineText, AngularInlineCalendar, NgTemplateOutlet],
+  imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgTemplateOutlet, AngularInlineCalendar],
   templateUrl: './angular-inline-date.html',
   styles: `
-    :host { display: inline; }
-    .date-command__label { flex: 1 1 auto; text-transform: capitalize; }
-    .date-command__value { color: var(--mat-sys-on-surface-variant, #5f6368); font-variant-numeric: tabular-nums; }
-    .date-command__empty { padding: 4px 8px; color: var(--mat-sys-on-surface-variant, #5f6368); }
-    .date-trigger {
+    :host {
+      display: inline;
+    }
+
+    .inline-date {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.25ch;
+      max-width: 100%;
+    }
+
+    /*
+      The family look, on an input: dashed underline idle, solid while
+      focused, error color when the field says errors show. border-bottom
+      (not text-decoration — unreliable on inputs) + a small padding to
+      mimic the text control's underline offset.
+    */
+    .inline-date__input {
+      font: inherit;
+      color: inherit;
+      background: transparent;
+      border: 0;
+      padding: 0 0 0.1em;
+      margin: 0;
+      outline: none;
+      min-width: 1ch;
+      max-width: 100%;
+      field-sizing: content;
+      caret-color: var(--editable-text-caret-color, var(--mat-sys-primary, #428bca));
+      border-bottom: 0.0625rem dashed
+        var(--editable-text-underline-color, var(--mat-sys-primary, #428bca));
+    }
+    .inline-date__input:focus {
+      border-bottom-style: solid;
+      border-bottom-width: 0.125rem;
+      padding-bottom: calc(0.1em - 0.0625rem);
+    }
+    .inline-date__input::placeholder {
+      font-style: italic;
+      color: inherit;
+      opacity: var(--editable-text-placeholder-opacity, 0.3875);
+    }
+    .inline-date__input:disabled {
+      cursor: default;
+      border-bottom-color: var(--mat-sys-outline, #999);
+    }
+
+    /* Idle error state — color only, the dashed style stays (family rule). */
+    .inline-date--invalid .inline-date__input {
+      border-bottom-color: var(--editable-text-error-color, var(--mat-sys-error, #dc3545));
+    }
+
+    /*
+      BARE CHROME — a generic seam, not a mat one: the HOSTING CONTAINER
+      declares it draws the chrome (underline, error color, label), so the
+      control's own underline rests. Applied as host classes by whoever
+      hosts us (the temporal-mat adapter, a dense table cell, …).
+    */
+    :host(.inline-field-bare) .inline-date__input {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    :host(.inline-field-bare--hide-placeholder) .inline-date__input::placeholder {
+      opacity: 0;
+    }
+
+    /* Transient snap-back cue: a brief flash on the restored display. */
+    .inline-date__input--reverted {
+      animation: inline-date-revert 0.6s ease-out;
+    }
+    @keyframes inline-date-revert {
+      0% {
+        background: color-mix(in srgb, var(--mat-sys-error, #dc3545) 18%, transparent);
+      }
+      100% {
+        background: transparent;
+      }
+    }
+
+    .inline-date__separator {
+      user-select: none;
+      color: var(--mat-sys-on-surface-variant, #5f6368);
+    }
+
+    .inline-date__affix {
+      white-space: nowrap;
+      user-select: none;
+      color: var(--editable-text-affix-color, var(--mat-sys-on-surface-variant, inherit));
+    }
+
+    .inline-date__trigger {
       font: inherit;
       line-height: 1;
       padding: 0;
@@ -78,19 +215,82 @@ export interface InlineDateSaved {
       cursor: pointer;
       border-radius: var(--mat-sys-corner-extra-small, 0.25rem);
     }
-    .date-trigger:focus-visible {
+    .inline-date__trigger:focus-visible {
       outline: 2px solid var(--mat-sys-primary, #4285f4);
       outline-offset: 2px;
+    }
+
+    .inline-date__sr {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    /* The panel: an elevated surface under the input pair (no field chrome). */
+    .inline-date__panel {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px;
+      background: var(--editable-panel-container-color, var(--mat-sys-surface-container, #fff));
+      color: var(--mat-sys-on-surface, inherit);
+      border-radius: var(--mat-sys-corner-medium, 0.75rem);
+      box-shadow: var(
+        --mat-sys-level2,
+        0 1px 2px rgba(0, 0, 0, 0.3),
+        0 2px 6px 2px rgba(0, 0, 0, 0.15)
+      );
+    }
+
+    .inline-date__preview {
+      padding: 2px 8px 0;
+      font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
+      color: var(--mat-sys-on-surface-variant, #5f6368);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .inline-date__quick-picks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 0 8px 4px;
+    }
+    .inline-date__quick-pick {
+      font: var(--mat-sys-label-medium, 500 0.75rem/1.4 system-ui);
+      text-transform: capitalize;
+      padding: 2px 10px;
+      border: 1px solid var(--mat-sys-outline-variant, #ddd);
+      border-radius: var(--mat-sys-corner-full, 999px);
+      background: transparent;
+      color: var(--mat-sys-on-surface-variant, #5f6368);
+      cursor: pointer;
+    }
+    .inline-date__quick-pick:hover {
+      background: var(--mat-sys-surface-container-highest, #eee);
+    }
+
+    .inline-date__errors:not([hidden]) {
+      padding: 0 8px 4px;
+      font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
+      color: var(--mat-sys-error, #dc3545);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .inline-date__input--reverted {
+        animation: none;
+      }
     }
   `,
   host: {
     '[style.display]': 'hidden() ? "none" : null',
-    '(keydown)': 'handleHostKeydown($event)',
   },
 })
 export class AngularInlineDate implements FormValueControl<InlineDateValue> {
-  /** The composed text control — all session machinery lives there. */
-  protected inner = viewChild.required(AngularInlineText);
+  #document = inject(DOCUMENT);
+  #injector = inject(Injector);
 
   /**
    * The committed value channel — polymorphic UTC ISO DB entries (iusta's
@@ -107,7 +307,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    */
   ranged = input(false);
 
-  /** Form Value Contract — forwarded into the inner control. */
+  /** Form Value Contract. */
   errors = input<readonly ValidationError.WithOptionalFieldTree[]>([]);
   disabled = input(false);
   readonly = input(false);
@@ -116,19 +316,55 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   invalid = input(false);
   hidden = input(false);
 
-  placeholder = input<string>('date');
+  /**
+   * Placeholder override. Unset, the field shows the LOCALE'S numeric date
+   * pattern (`'dd.mm.yyyy'` German, `'mm/dd/yyyy'` en-US) — fixed size per
+   * locale, so the placeholder-floored width never shifts.
+   */
+  placeholder = input<string | undefined>(undefined);
+  /**
+   * End-field placeholder override. Unset, a FULLY EMPTY range shows the
+   * locale pattern on both sides; once a start exists the end side switches
+   * to the half-open display (`'Jul 21 – …'`).
+   */
+  endPlaceholder = input<string | undefined>(undefined);
 
-  /** Accessible name for the field (contenteditable has no native label association). */
+  /** Public: the resolved placeholder verdict (adapters render from this, not the input). */
+  readonly effectivePlaceholder = computed(
+    () => this.placeholder() ?? localeDatePlaceholder(this.locale()),
+  );
+  protected effectiveEndPlaceholder = computed(() => {
+    const explicit = this.endPlaceholder();
+    if (explicit !== undefined) return explicit;
+    return this.internalRange().start === null ? this.effectivePlaceholder() : '…';
+  });
+
+  /** Accessible base name; ranged fields append " start" / " end". */
   ariaLabel = input<string | undefined>(undefined);
 
-  /** Locale for display + command labels (`Intl`); browser default when omitted. */
+  /** Locale for display + parsing (`Intl`); browser default when omitted. */
   locale = input<string | string[] | undefined>(undefined);
 
-  /** Enables the `/today`-style slash menu. */
-  showDateMenu = input(true);
+  /**
+   * T6 — the DISPLAY ZONE (IANA id): which zone's calendar day the value
+   * boundary speaks. Falls back to the app-wide `INLINE_TEMPORAL_ZONE`
+   * provider, then the machine zone. Values stay UTC DB entries.
+   */
+  zone = input<string | undefined>(undefined);
 
-  /** The 📅 calendar affordance: suffix trigger + the open-on-edit popup. */
+  #zoneDefault = inject(INLINE_TEMPORAL_ZONE, { optional: true });
+
+  readonly effectiveZone = computed(() => this.zone() ?? this.#zoneDefault?.());
+
+  /** The calendar grid affordance (📅 trigger + open-on-focus popup). */
   showCalendar = input(true);
+
+  /**
+   * Quick-pick commands rendered as chips in the panel. Defaults to
+   * yesterday/today/tomorrow — INJECTABLE so a consumer's copy can grow
+   * its own presets ("last 30 days") without touching the control.
+   */
+  quickPicks = input<readonly DateCommand[] | undefined>(undefined);
 
   /** Reference clock — injectable for tests; a fresh `Date` per read otherwise. */
   now = input<() => Date>(() => new Date());
@@ -145,19 +381,14 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     () => this.suffixTemplate() ?? this.contentSuffix()?.templateRef,
   );
 
-  /** Whether the suffix slot has anything to render (consumer affix or 📅). */
-  protected suffixActive = computed(
-    () => this.consumerSuffixTpl() !== undefined || this.showCalendar(),
-  );
-
-
   /**
    * Group-forwarded contract state (role-provided; absent standalone).
    * Merged by PULL — the leaf stays decoupled, no effects involved.
    */
   #leafState = inject(INLINE_TEMPORAL_LEAF_STATE, { optional: true, self: true });
 
-  protected effectiveDisabled = computed(
+  /** Public: the composed disabled verdict (own input + group-fed state). */
+  readonly effectiveDisabled = computed(
     () => this.disabled() || (this.#leafState?.disabled() ?? false),
   );
   protected effectiveReadonly = computed(
@@ -170,16 +401,16 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     () => this.invalid() || (this.#leafState?.invalid() ?? false),
   );
 
-  /** Form Value Contract: touch — forwarded from the inner control. */
+  /** Form Value Contract: touch — emitted whenever a session settles. */
   touch = output<void>();
 
-  /** Hard commit event: fires once per accepted edit session, in the bound shape. */
+  /** Hard commit event: fires once per changed settlement, in the bound shape. */
   savedModelChange = output<InlineDateValue>();
 
-  /** Emitted exactly once per settled edit session (Save, Discard, clear). */
+  /** Emitted exactly once per settled session (commit, snap-back, Escape, clear). */
   saved = output<InlineDateSaved>();
 
-  /** Whether an edit session is open. Two-way bindable. */
+  /** Whether an edit session is open (= focus is within). Two-way bindable. */
   editing = model(false);
 
   /**
@@ -197,191 +428,569 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     () => this.#lastShape() ?? (this.ranged() ? 'range' : 'single'),
   );
 
+  /** Object shapes render the start–end input pair; a string renders one field. */
+  protected twoFields = computed(() => this.shape() !== 'single');
+
   /**
    * One canonical internal model, always: `{ start, end }` as LOCAL
    * calendar DAYS — the user-facing side; DB entries live only at the
    * value boundary.
    */
   readonly internalRange = computed<InternalDateRange>(() => {
+    const zone = this.effectiveZone();
     const { start, end } = toInternalRange(this.value());
-    return { start: start === null ? null : localDayOf(start), end: end === null ? null : localDayOf(end) };
+    return {
+      start: start === null ? null : localDayOf(start, zone),
+      end: end === null ? null : localDayOf(end, zone),
+    };
   });
 
   /** The value boundary, outbound: local days → DB entries in the echoed shape. */
   #daysToDbShape(days: InternalDateRange, shape: DateValueShape): InlineDateValue {
+    const zone = this.effectiveZone();
     const echoed = echoDateShape(days, shape);
     if (echoed === null) return null;
-    if (typeof echoed === 'string') return dayToDbEntry(echoed);
+    if (typeof echoed === 'string') return dayToDbEntry(echoed, zone);
 
-    const start = echoed.start === null ? null : dayToDbEntry(echoed.start);
+    const start = echoed.start === null ? null : dayToDbEntry(echoed.start, zone);
     if (!('end' in echoed)) return { start };
 
-    return { start, end: echoed.end == null ? null : dayEndToDbEntry(echoed.end) };
+    return { start, end: echoed.end == null ? null : dayEndToDbEntry(echoed.end, zone) };
   }
 
-  /**
-   * The string channel feeding the inner control: the localized committed
-   * date (or range) while idle, the raw draft while a session is open.
-   */
-  protected innerValue = linkedSignal<string, string>({
-    source: () => formatInternalRange(this.internalRange(), this.locale()),
-    computation: (source, prev) => (this.editing() ? (prev?.value ?? source) : source),
-  });
+  // -- The two sides -----------------------------------------------------------
+
+  readonly #startSide = this.#makeSide('start');
+  readonly #endSide = this.#makeSide('end');
+
+  #side(key: SideKey): DateSide {
+    return key === 'start' ? this.#startSide : this.#endSide;
+  }
+
+  #makeSide(key: SideKey): DateSide {
+    const committedDay = computed(() => this.internalRange()[key]);
+    const display = computed(() => formatIsoDate(committedDay(), this.locale()));
+    const open = signal(false);
+    const draft = linkedSignal<string, string>({
+      source: display,
+      computation: (source, prev) => (open() ? (prev?.value ?? source) : source),
+    });
+
+    return {
+      key,
+      committedDay,
+      display,
+      open,
+      draft,
+      baselineDay: null,
+      dirty: false,
+      saveAttempted: signal(false),
+    };
+  }
+
+  protected startDraft = computed(() => this.#startSide.draft());
+  protected endDraft = computed(() => this.#endSide.draft());
+
+  /** Which side holds focus — the side the grid, preview and picks serve. */
+  protected focusTarget = signal<SideKey | null>(null);
+
+  protected overlayOpen = signal(false);
+
+  /** Public: whether the panel is showing (hosting containers coordinate on it). */
+  readonly panelVisible = computed(() => this.overlayOpen());
+
+  protected startInput = viewChild<ElementRef<HTMLInputElement>>('startInput');
+  protected endInput = viewChild<ElementRef<HTMLInputElement>>('endInput');
+  protected calendar = viewChild(AngularInlineCalendar);
+  protected panelRef = viewChild<ElementRef<HTMLElement>>('panel');
 
   /** The current draft's ISO reading (`null` empty, `undefined` unreadable). */
-  readonly parsedDraft = computed(() => parseDateInput(this.innerValue(), this.now()(), this.locale()));
+  readonly parsedDraft = computed(() => {
+    const key = this.focusTarget() ?? 'start';
+    return parseDateInput(this.#side(key).draft(), this.now()(), this.locale(), this.effectiveZone());
+  });
 
-  /** The parse gate: whether the current draft fails the codec. Public for consumers. */
+  /** The parse gate: whether the focused draft fails the codec. Public for consumers. */
   readonly parseFailed = computed(() => this.parsedDraft() === undefined);
 
-  /** Errors forwarded inward: contract + group-routed errors + the parse gate. */
-  protected innerErrors = computed<readonly ValidationError.WithOptionalFieldTree[]>(() => {
-    const groupErrors = this.#leafState?.errors() ?? [];
-    const base = groupErrors.length ? [...this.errors(), ...groupErrors] : this.errors();
+  #selfTouched = signal(false);
 
-    return this.parseFailed() ? [...base, { kind: 'parse' }] : base;
+  protected isInvalid = computed(
+    () =>
+      this.effectiveInvalid() ||
+      this.errors().length > 0 ||
+      (this.#leafState?.errors().length ?? 0) > 0,
+  );
+
+  /**
+   * The mat split: the consumer decides what errors say, the field when they
+   * show. Public — it is the field's presentational verdict, the thing a
+   * hosting container (a mat-form-field adapter) needs to mirror.
+   */
+  readonly errorsVisible = computed(
+    () => this.isInvalid() && (this.effectiveTouched() || this.#selfTouched()),
+  );
+
+  /** Public: whether the field holds no value at all (both sides empty). */
+  readonly isEmpty = computed(() => {
+    const { start, end } = this.internalRange();
+    return start === null && end === null;
   });
+
+  /** The parse-gate reveal: Enter was attempted on an unreadable draft. */
+  protected parseGateVisible = computed(() => {
+    const key = this.focusTarget();
+    return key !== null && this.#side(key).saveAttempted() && this.parseFailed();
+  });
+
+  protected errorSlotVisible = computed(() => this.errorsVisible() || this.parseGateVisible());
 
   /** Live interpretation preview: `✓ Tuesday, 12 May 2026` / `… raw`. */
   protected preview = computed(() => {
-    const raw = this.innerValue().trim();
+    const key = this.focusTarget() ?? 'start';
+    const raw = this.#side(key).draft().trim();
     if (!raw) return '';
 
-    const iso = this.parsedDraft();
+    const iso = parseDateInput(raw, this.now()(), this.locale(), this.effectiveZone());
     if (iso === null || iso === undefined) return `… ${raw}`;
 
     return `✓ ${describeIsoDate(iso, this.locale())}`;
   });
 
-  /** The slash-menu commands, rebuilt per read so "today" is always today. */
-  protected dateCommands = computed(() => buildDateCommands(this.now()(), this.locale()));
-
-  protected commandOptions(query: string) {
-    const q = query.trim().toLowerCase();
-    const all = this.dateCommands();
-    if (!q) return all;
-
-    return all.filter((command) => command.match.includes(q));
-  }
-
-  /**
-   * Interim single-field merge (until T5's two-field ranged UI): the typed
-   * day moves the whole range when it is single-day, and only `start` when
-   * a distinct `end` exists; clearing empties both sides. Never invents or
-   * drops a shape — that's the echo's job.
-   */
-  #mergeDay(day: IsoDate | null): InternalDateRange {
-    if (day === null) return { start: null, end: null };
-
-    const { start, end } = this.internalRange();
-    return end === null || end === start ? { start: day, end: day } : { start: day, end };
-  }
-
-  // ---------------------------------------------------------------------------
-  // T2b — the calendar lives IN the panel (where the slash menu lives): no
-  // second overlay, no positioning math. The typed draft stays primary and
-  // the grid is a live MIRROR of it — a parseable draft moves the month
-  // and marks the day per keystroke, draft → grid only, until a pick flows
-  // back. Slim chrome: no Save/Discard buttons — a pick COMMITS, typing
-  // commits via Enter as usual.
-  // ---------------------------------------------------------------------------
-  protected calendar = viewChild(AngularInlineCalendar);
-
-  /** In-session grid visibility — the 📅 affix toggles it; resets per session. */
-  protected calendarVisible = linkedSignal<boolean, boolean>({
-    source: this.editing,
-    computation: () => true,
-  });
-
-  protected calendarActive = computed(() => this.showCalendar() && this.calendarVisible());
-
-  /** The grid's pending day: the parsed draft, else the committed start. */
+  /** The grid's pending day: the focused side's parsed draft, else its committed day. */
   protected pendingDay = computed<IsoDate | null>(() => {
-    const draft = this.parsedDraft();
-    return typeof draft === 'string' ? draft : this.internalRange().start;
+    const key = this.focusTarget() ?? 'start';
+    const draft = parseDateInput(this.#side(key).draft(), this.now()(), this.locale(), this.effectiveZone());
+    if (typeof draft === 'string') return draft;
+
+    return this.#side(key).committedDay() ?? this.internalRange().start;
   });
 
-  /**
-   * The 📅 affix: idle it OPENS the session (panel + grid are one
-   * surface); in-session it toggles the grid.
-   */
-  protected toggleCalendar(event: Event) {
-    event.preventDefault();
-    event.stopPropagation();
+  protected selectedForGrid = computed(() =>
+    this.focusTarget() === 'end' ? this.internalRange().end : this.internalRange().start,
+  );
 
-    if (!this.editing()) {
-      this.editing.set(true);
-      return;
+  /** Quick-pick chips: consumer-injected, else yesterday/today/tomorrow. */
+  protected quickPickList = computed(
+    () => this.quickPicks() ?? buildDateCommands(this.now()(), this.locale(), this.effectiveZone()).slice(0, 3),
+  );
+
+  protected overlayPositions: ConnectedPosition[] = [
+    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
+    { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
+  ];
+
+  /** Snap-back flash target + the aria-live announcement text. */
+  protected revertFlash = signal<SideKey | null>(null);
+  protected revertNotice = signal('');
+
+  #focusCheckTimer: ReturnType<typeof setTimeout> | null = null;
+  #flashTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => {
+      if (this.#focusCheckTimer !== null) clearTimeout(this.#focusCheckTimer);
+      if (this.#flashTimer !== null) clearTimeout(this.#flashTimer);
+    });
+
+    // The editing bridge: external `editing.set(true)` focuses the start
+    // input (focusin opens the session); `set(false)` settles and blurs.
+    // Internal focus flow writes the model, so states already agree there.
+    effect(() => {
+      const editing = this.editing();
+      untracked(() => {
+        const focused = this.focusTarget();
+        if (editing && focused === null) {
+          this.#focusSide('start');
+        } else if (!editing && focused !== null) {
+          this.#settle(focused);
+          this.overlayOpen.set(false);
+          this.focusTarget.set(null);
+          this.#inputOf(focused)?.blur();
+        }
+      });
+    });
+  }
+
+  // -- Sizing (no layout shift: content-sized, placeholder-floored) -------------
+
+  protected sizeOf(key: SideKey): number {
+    const side = this.#side(key);
+    const placeholder =
+      key === 'end' ? this.effectiveEndPlaceholder() : this.effectivePlaceholder();
+    return Math.max(1, (side.draft() || placeholder).length);
+  }
+
+  protected ariaLabelOf(key: SideKey): string {
+    const base = this.ariaLabel() ?? 'Date';
+    return this.twoFields() ? `${base} ${key}` : base;
+  }
+
+  protected ariaInvalidOf(key: SideKey): boolean {
+    const side = this.#side(key);
+    return this.errorsVisible() || (side.open() && side.saveAttempted() && this.parseFailed());
+  }
+
+  // -- The live channel ---------------------------------------------------------
+
+  /** Every keystroke: readable drafts flow into the model live, in the bound shape. */
+  protected handleInput(key: SideKey, raw: string) {
+    const side = this.#side(key);
+    // A settled-but-still-focused field (Enter, outside click) restarts its
+    // session on the next keystroke.
+    if (!side.open()) {
+      side.baselineDay = side.committedDay();
+      side.open.set(true);
     }
 
-    this.calendarVisible.update((visible) => !visible);
+    side.draft.set(raw);
+    side.dirty = true;
+    side.saveAttempted.set(false);
+    this.overlayOpen.set(true);
+
+    const day = parseDateInput(raw, this.now()(), this.locale(), this.effectiveZone());
+    if (day !== undefined) this.#writeSideDay(key, day);
   }
 
   /**
-   * ArrowDown in the field hands focus to the grid (the combobox-datepicker
-   * shape) — unless the slash menu already consumed the key.
+   * Writes one side's local day into the value, echoed in the bound shape.
+   * In the one-key `{ start }` shape the end is a MIRROR, not data — a
+   * start edit moves the single-day range whole; only an END edit creates
+   * a distinct end (and grows the key, per the echo).
    */
-  protected handleHostKeydown(event: KeyboardEvent) {
-    if (event.key !== 'ArrowDown' || event.defaultPrevented) return;
-    if (!this.editing() || !this.calendarActive()) return;
+  #writeSideDay(key: SideKey, day: IsoDate | null) {
+    const current = this.internalRange();
+    const moveWhole = !this.twoFields() || (key === 'start' && this.shape() === 'start-only');
+    const next: InternalDateRange = moveWhole
+      ? { start: day, end: day }
+      : key === 'start'
+        ? { start: day, end: current.end }
+        : { start: current.start, end: day };
 
-    event.preventDefault();
-    this.calendar()?.focusGrid();
-  }
-
-  /**
-   * A pick IS the choice: refocus the field synchronously, rewrite the
-   * draft, and COMMIT the session (the panel has no Save button — mouse
-   * users click a day, keyboard users type and press Enter).
-   */
-  protected pickDate(day: IsoDate) {
-    this.inner().focus();
-    this.handleInnerValue(day);
-    // Write the INNER draft synchronously — accept() must not read the
-    // pre-pick draft while change detection still owes it the new value.
-    this.inner().value.set(day);
-    this.inner().accept();
-  }
-
-  /** Escape in the grid hands control back to the field (stage one of two). */
-  protected escapeCalendar() {
-    this.inner().focus();
-  }
-
-  /** Live channel: readable drafts flow into the model as DB entries, in the bound shape. */
-  protected handleInnerValue(raw: string) {
-    this.innerValue.set(raw);
-
-    const day = parseDateInput(raw, this.now()(), this.locale());
-    if (day === undefined) return;
-
-    const echoed = this.#daysToDbShape(this.#mergeDay(day), this.shape());
+    const echoed = this.#daysToDbShape(next, this.shape());
     if (!dateValuesEqual(echoed, this.value())) this.value.set(echoed);
   }
 
-  /** Retype the settled session: local days inside, DB entries in the echoed shape outside. */
-  protected handleInnerSaved(session: InlineTextSaved) {
-    const day = parseDateInput(session.value, this.now()(), this.locale());
-    const value =
-      day === undefined
-        ? this.value()
-        : this.#daysToDbShape(this.#mergeDay(day), this.shape());
+  // -- Focus flow ----------------------------------------------------------------
 
-    if (session.changed) {
-      this.value.set(value);
-      this.savedModelChange.emit(value);
+  protected handleFocusIn(key: SideKey) {
+    const side = this.#side(key);
+    if (!side.open()) {
+      side.baselineDay = side.committedDay();
+      side.dirty = false;
+      side.saveAttempted.set(false);
+      side.open.set(true);
     }
 
-    this.saved.emit({ value, changed: session.changed });
+    this.focusTarget.set(key);
+    if (!this.effectiveReadonly() && !this.effectiveDisabled()) this.overlayOpen.set(true);
+    this.editing.set(true);
   }
 
-  /** Form Value Contract: focus — delegates to the inner control. */
+  /**
+   * Focusout settles ASYNCHRONOUSLY: where focus LANDS decides what happens
+   * (the other input = Tab-advance, the panel = same session, outside =
+   * settle + close), and that is only knowable a tick later.
+   */
+  protected handleFocusOut() {
+    if (this.#focusCheckTimer !== null) clearTimeout(this.#focusCheckTimer);
+    this.#focusCheckTimer = setTimeout(() => this.#onFocusSettled(), 0);
+  }
+
+  #onFocusSettled() {
+    this.#focusCheckTimer = null;
+    const active = this.#document.activeElement;
+    const inStart = active !== null && active === this.startInput()?.nativeElement;
+    const inEnd = active !== null && active === this.endInput()?.nativeElement;
+    const inPanel = (active !== null && this.panelRef()?.nativeElement.contains(active)) ?? false;
+
+    // The grid is part of the focused side's session — panel focus settles
+    // nothing. A side that lost focus to anywhere else settles NOW:
+    // commit-if-readable, snap-back if not. Never trap, never block.
+    if (!inPanel) {
+      if (this.#startSide.open() && !inStart) this.#settle('start');
+      if (this.#endSide.open() && !inEnd) this.#settle('end');
+    }
+
+    if (!inStart && !inEnd && !inPanel) {
+      this.overlayOpen.set(false);
+      this.focusTarget.set(null);
+      this.editing.set(false);
+    } else if (inStart) {
+      this.focusTarget.set('start');
+    } else if (inEnd) {
+      this.focusTarget.set('end');
+    }
+  }
+
+  // -- Settlement (ONE per session — commit, snap-back, Escape, clear) -----------
+
+  /**
+   * Settles a side's session. Resolution order: an explicit `resolve` day
+   * (calendar pick), `revert` (Escape), else the draft — where an
+   * unreadable draft resolves to the BASELINE (snap-back; a brief flash +
+   * aria-live announce the restoration, no persistent state).
+   */
+  #settle(key: SideKey, options: { resolve?: IsoDate | null; revert?: boolean; keepOpen?: boolean } = {}) {
+    const side = this.#side(key);
+    if (!side.open()) return;
+
+    // An untouched session settles where the value stands — no re-derive,
+    // no write (see DateSide.dirty).
+    const untouched = !options.revert && options.resolve === undefined && !side.dirty;
+
+    let day: IsoDate | null;
+    let snappedBack = false;
+    if (untouched) {
+      day = side.committedDay();
+    } else if (options.revert) {
+      day = side.baselineDay;
+    } else if (options.resolve !== undefined) {
+      day = options.resolve;
+    } else {
+      const parsed = parseDateInput(side.draft(), this.now()(), this.locale(), this.effectiveZone());
+      snappedBack = parsed === undefined;
+      day = parsed === undefined ? side.baselineDay : parsed;
+    }
+
+    if (!untouched) this.#writeSideDay(key, day);
+    const changed = !untouched && day !== side.baselineDay;
+    side.dirty = false;
+
+    if (options.keepOpen) {
+      // Enter / pick settle in place: the session continues on the new baseline.
+      side.baselineDay = day;
+      side.draft.set(formatIsoDate(day, this.locale()));
+      side.saveAttempted.set(false);
+    } else {
+      side.open.set(false);
+      side.saveAttempted.set(false);
+    }
+
+    if (snappedBack) this.#announceRevert(key, day);
+
+    this.#selfTouched.set(true);
+    this.touch.emit();
+
+    const value = this.value();
+    if (changed) this.savedModelChange.emit(value);
+    this.saved.emit({ value, changed });
+  }
+
+  #announceRevert(key: SideKey, day: IsoDate | null) {
+    const restored = day === null ? 'empty' : formatIsoDate(day, this.locale());
+    this.revertNotice.set(`Reverted to ${restored}`);
+    this.revertFlash.set(key);
+
+    if (this.#flashTimer !== null) clearTimeout(this.#flashTimer);
+    this.#flashTimer = setTimeout(() => this.revertFlash.set(null), 600);
+  }
+
+  // -- Keyboard -------------------------------------------------------------------
+
+  protected handleInputKeydown(key: SideKey, event: KeyboardEvent) {
+    switch (event.key) {
+      case 'Enter': {
+        event.preventDefault();
+        const side = this.#side(key);
+        if (parseDateInput(side.draft(), this.now()(), this.locale(), this.effectiveZone()) === undefined) {
+          // The parse gate: the user ASKED for a commit — block and say why.
+          side.saveAttempted.set(true);
+          return;
+        }
+
+        this.#settle(key, { keepOpen: true });
+        this.overlayOpen.set(false);
+        return;
+      }
+      case 'Escape': {
+        event.preventDefault();
+        event.stopPropagation();
+        this.#settle(key, { revert: true, keepOpen: true });
+        this.overlayOpen.set(false);
+        return;
+      }
+      case 'ArrowDown': {
+        // The combobox-datepicker handoff: focus moves INTO the grid.
+        if (event.altKey || event.defaultPrevented) return;
+        if (!this.showCalendar() || this.effectiveReadonly() || this.effectiveDisabled()) return;
+
+        event.preventDefault();
+        this.overlayOpen.set(true);
+
+        const grid = this.calendar();
+        if (grid) grid.focusGrid();
+        else afterNextRender(() => this.calendar()?.focusGrid(), { injector: this.#injector });
+        return;
+      }
+    }
+  }
+
+  // -- Calendar ---------------------------------------------------------------------
+
+  /**
+   * A pick IS a commit of the focused side. Picking a range with the other
+   * side still empty hands the session over (the seamless two-pick flow);
+   * otherwise the popup closes. An inverted pair is sorted, iusta-style.
+   */
+  protected pickDate(day: IsoDate) {
+    const key = this.focusTarget() ?? 'start';
+    const side = this.#side(key);
+    if (!side.open()) {
+      side.baselineDay = side.committedDay();
+      side.open.set(true);
+    }
+
+    // Sort BEFORE settling: the settlement must emit the sorted value and
+    // re-baseline the side on its own (possibly swapped) day — else the
+    // frozen draft still shows the pre-sort pick and the next blur would
+    // commit it back, un-sorting the pair.
+    this.#writeSideDay(key, day);
+    this.#sortIfInverted();
+    this.#settle(key, { resolve: side.committedDay(), keepOpen: true });
+
+    const other: SideKey = key === 'start' ? 'end' : 'start';
+    if (this.twoFields() && this.#side(other).committedDay() === null) {
+      this.#focusSide(other);
+    } else {
+      this.overlayOpen.set(false);
+      this.#focusSide(key);
+    }
+  }
+
+  #sortIfInverted() {
+    const { start, end } = this.internalRange();
+    if (start !== null && end !== null && start > end) {
+      // ISO days compare lexicographically.
+      this.value.set(this.#daysToDbShape({ start: end, end: start }, this.shape()));
+    }
+  }
+
+  /**
+   * Commits BOTH sides in one settlement (drag, Ctrl+click): one value
+   * write, both sides re-baselined, ONE `saved`.
+   */
+  #commitBothSides(startDay: IsoDate | null, endDay: IsoDate | null) {
+    const before = this.value();
+    const echoed = this.#daysToDbShape({ start: startDay, end: endDay }, this.shape());
+    if (!dateValuesEqual(echoed, before)) this.value.set(echoed);
+
+    for (const key of ['start', 'end'] as const) {
+      const side = this.#side(key);
+      side.baselineDay = side.committedDay();
+      side.draft.set(side.display());
+      side.dirty = false;
+      side.saveAttempted.set(false);
+    }
+
+    const value = this.value();
+    const changed = !dateValuesEqual(value, before);
+    this.#selfTouched.set(true);
+    this.touch.emit();
+    if (changed) this.savedModelChange.emit(value);
+    this.saved.emit({ value, changed });
+  }
+
+  /** A drag painted [start, end] — commit the pair whole and close. */
+  protected commitDraggedRange(range: { start: IsoDate; end: IsoDate }) {
+    this.#commitBothSides(range.start, range.end);
+    this.overlayOpen.set(false);
+    this.#focusSide(this.focusTarget() ?? 'start');
+  }
+
+  /**
+   * Ctrl/Cmd+click: "restart the range HERE" — start = the day, end clears
+   * (a committed half-open range), and the session hands to the end side so
+   * the very next pick completes the pair.
+   */
+  protected ctrlPickDate(day: IsoDate) {
+    if (!this.twoFields()) {
+      this.pickDate(day);
+      return;
+    }
+
+    this.#commitBothSides(day, null);
+    this.#focusSide('end');
+  }
+
+  /** Escape in the grid hands control back to the focused input (session continues). */
+  protected escapeCalendar() {
+    this.#focusSide(this.focusTarget() ?? 'start');
+  }
+
+  /**
+   * Toggles the panel like the 📅 icon: opens the session when idle,
+   * closes an open popup, reopens a closed one. PUBLIC — the
+   * container-click affordance a hosting container (the mat-form-field
+   * adapter) delegates to.
+   */
+  togglePanel() {
+    if (this.effectiveDisabled() || this.effectiveReadonly()) return;
+
+    if (this.overlayOpen()) {
+      this.overlayOpen.set(false);
+      return;
+    }
+
+    if (this.focusTarget() === null) this.#focusSide('start');
+    this.overlayOpen.set(true);
+  }
+
+  /** The 📅 trigger. */
+  protected toggleCalendar(event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.togglePanel();
+  }
+
+  /** Clicking free space in the panel must not blur the inputs. */
+  protected handlePanelMousedown(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    if (target.closest('input, button') === null) event.preventDefault();
+  }
+
+  /**
+   * An outside click DISMISSES the panel — and only that. Settling belongs
+   * to the focusout path: when the click also moves focus away, the blur
+   * settle runs anyway; when it does NOT (a hosting container's prevented
+   * chrome click), the session must survive the dismissal.
+   */
+  protected handleOutsideClick() {
+    this.overlayOpen.set(false);
+  }
+
+  #inputOf(key: SideKey): HTMLInputElement | undefined {
+    return (key === 'start' ? this.startInput() : this.endInput())?.nativeElement;
+  }
+
+  #focusSide(key: SideKey) {
+    const element = this.#inputOf(key);
+    if (element) element.focus();
+    else afterNextRender(() => this.#inputOf(key)?.focus(), { injector: this.#injector });
+  }
+
+  // -- Form Value Contract ------------------------------------------------------------
+
   focus(options?: FocusOptions) {
-    this.inner().focus(options);
+    this.#inputOf('start')?.focus(options);
   }
 
-  /** Form Value Contract: reset — delegates to the inner control. */
+  /**
+   * Presentation-only rollback (the MatInput precedent): an open draft is
+   * discarded back to the baseline with no `touch`, no `saved`, no focus
+   * stealing.
+   */
   reset() {
-    this.inner().reset();
+    for (const key of ['start', 'end'] as const) {
+      const side = this.#side(key);
+      if (!side.open()) continue;
+
+      this.#writeSideDay(key, side.baselineDay);
+      side.baselineDay = side.committedDay();
+      side.draft.set(side.display());
+      side.saveAttempted.set(false);
+    }
+
+    this.overlayOpen.set(false);
   }
 }

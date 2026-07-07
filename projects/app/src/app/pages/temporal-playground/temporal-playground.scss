@@ -31,3 +31,16 @@
     word-break: break-all;
   }
 }
+
+// The T4 card: four labeled mat boxes in one row, wrapping on narrow screens.
+.mat-quartet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: baseline;
+
+  mat-form-field {
+    flex: 1 1 10rem;
+    min-width: 9rem;
+  }
+}

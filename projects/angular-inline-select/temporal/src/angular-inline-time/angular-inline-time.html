@@ -1,22 +1,60 @@
-<!-- Live interpretation preview: the localized reading of the draft. -->
-<ng-template #previewTpl>{{ preview() }}</ng-template>
-
 <!--
-  The suffix slot: the +n day-overflow badge (group-fed, derived — never
-  part of the draft), then the consumer's affix or the OS-picker 🕐.
+  The input rehost: one real <input> — the family look is CSS (dashed
+  underline idle, solid focused). The +n badge and the 🕐 trigger are
+  ADORNMENTS outside the input, never part of the draft. The native input
+  below is the OS picker's anchor — focusable but invisible.
 -->
-<ng-template #suffixTpl>
-  @if (dayOffset() > 0) {
-    <span class="time-day-badge" role="img" [attr.aria-label]="dayBadgeAria()"
-      >+{{ dayOffset() }}</span
-    >
+<span
+  class="inline-time"
+  cdkOverlayOrigin
+  #origin="cdkOverlayOrigin"
+  [class.inline-time--invalid]="errorsVisible()"
+>
+  @if (prefixTpl(); as tpl) {
+    <span class="inline-time__affix" aria-hidden="true">
+      <ng-container [ngTemplateOutlet]="tpl" />
+    </span>
   }
-  @if (consumerSuffixTpl(); as consumer) {
-    <ng-container [ngTemplateOutlet]="consumer" />
+
+  <!-- The badge anchors to the input's TOP-RIGHT corner — zero line footprint. -->
+  <span class="inline-time__field">
+    <input
+      #timeInput
+      class="inline-time__input"
+      [class.inline-time__input--reverted]="revertFlash()"
+      type="text"
+      autocomplete="off"
+      autocapitalize="off"
+      spellcheck="false"
+      [attr.aria-label]="ariaLabel() ?? 'Time'"
+      [attr.aria-invalid]="ariaInvalid() || null"
+      [attr.aria-required]="required() || null"
+      [attr.size]="sizeOf()"
+      [value]="draft()"
+      [placeholder]="placeholder()"
+      [disabled]="effectiveDisabled()"
+      [readonly]="effectiveReadonly()"
+      (input)="handleInput(timeInput.value)"
+      (focusin)="handleFocusIn()"
+      (focusout)="handleFocusOut()"
+      (keydown)="handleKeydown($event)"
+    />
+
+    @if (dayOffset() > 0) {
+      <span class="time-day-badge" role="img" [attr.aria-label]="dayBadgeAria()"
+        >+{{ dayOffset() }}</span
+      >
+    }
+  </span>
+
+  @if (consumerSuffixTpl(); as tpl) {
+    <span class="inline-time__affix" aria-hidden="true">
+      <ng-container [ngTemplateOutlet]="tpl" />
+    </span>
   } @else if (showNativePicker()) {
     <button
       type="button"
-      class="time-trigger"
+      class="inline-time__trigger"
       aria-label="Open time picker"
       (mousedown)="$event.preventDefault()"
       (click)="openNativePicker($event)"
@@ -24,44 +62,40 @@
       🕐
     </button>
   }
-</ng-template>
 
-<!--
-  Composition, not inheritance: the inner text control owns the session
-  machinery; this component translates 'HH:mm' ↔ typed drafts at the
-  contract boundary. The native input below is the OS picker's anchor —
-  focusable but invisible, never part of the draft.
--->
-<angular-inline-text
-  [value]="innerValue()"
-  (valueChange)="handleInnerValue($event)"
-  [(editing)]="editing"
-  [isSingleLine]="true"
-  [normalizeValue]="true"
-  [errors]="innerErrors()"
-  [invalid]="effectiveInvalid()"
-  [disabled]="effectiveDisabled()"
-  [readonly]="effectiveReadonly()"
-  [required]="required()"
-  [touched]="effectiveTouched()"
-  [placeholder]="placeholder()"
-  [ariaLabel]="ariaLabel()"
-  [prefixTemplate]="prefixTpl()"
-  [suffixTemplate]="suffixActive() ? suffixTpl : undefined"
-  [hintTemplate]="preview() ? previewTpl : undefined"
-  (touch)="touch.emit()"
-  (saved)="handleInnerSaved($event)"
+  <input
+    #nativeInput
+    class="inline-time__native"
+    type="time"
+    tabindex="-1"
+    aria-hidden="true"
+    [attr.step]="step()"
+    [attr.min]="pickerMin()"
+    [attr.max]="pickerMax()"
+    [disabled]="effectiveDisabled() || effectiveReadonly()"
+    (change)="handleNativePick($any($event.target).value)"
+    (focusout)="handleFocusOut()"
+  />
+
+  <!-- Snap-back is silent data-restoration — the announcement is not. -->
+  <span class="inline-time__sr" aria-live="polite">{{ revertNotice() }}</span>
+</span>
+
+<!-- The panel: the live reading + the error slot — only when there is something to say. -->
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="origin"
+  [cdkConnectedOverlayOpen]="panelOpen()"
+  [cdkConnectedOverlayPositions]="overlayPositions"
+  (overlayOutsideClick)="dismissPanel()"
 >
-  <ng-content select="[editable-error]" ngProjectAs="[editable-error]" />
-</angular-inline-text>
+  <div #panel class="inline-time__panel" (focusout)="handleFocusOut()">
+    @if (preview(); as reading) {
+      <div class="inline-time__preview">{{ reading }}</div>
+    }
 
-<input
-  #nativeInput
-  class="time-native"
-  type="time"
-  tabindex="-1"
-  aria-hidden="true"
-  [attr.step]="step()"
-  [disabled]="effectiveDisabled() || effectiveReadonly()"
-  (change)="handleNativePick($any($event.target).value)"
-/>
+    <div class="inline-time__errors" [hidden]="!errorSlotVisible()">
+      <ng-content select="[editable-error]" />
+    </div>
+  </div>
+</ng-template>

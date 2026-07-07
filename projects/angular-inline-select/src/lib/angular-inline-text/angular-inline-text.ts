@@ -274,21 +274,6 @@ export class AngularInlineText implements FormValueControl<string> {
   inputMode = input<string | undefined>(undefined);
 
   /**
-   * Panel body template — a widget rendered INSIDE the panel between the
-   * editor line and the footer (where the slash menu lives): the date
-   * control's calendar grid, a future color swatch, … Dormant unless
-   * provided; the capability is core, activation is per-consumer.
-   */
-  panelTemplate = input<TemplateRef<unknown> | undefined>(undefined);
-
-  /**
-   * Whether the panel renders the Save/Discard footer actions. Consumers
-   * whose panel widget IS the commit surface (a calendar pick commits)
-   * switch them off for slimmer chrome — keyboard commits stay untouched.
-   */
-  showActions = input(true);
-
-  /**
    * Slash-command menu template — dormant unless provided. The consumer owns
    * the options and the search (an `@for` filtered by the live query); the
    * control owns the trigger, keyboard navigation, and the combobox ARIA.
@@ -690,12 +675,8 @@ export class AngularInlineText implements FormValueControl<string> {
   // ---------------------------------------------------------------------------
 
   accepted = false;
-  /**
-   * The per-field submit (our one honest deviation from a normal form) —
-   * PUBLIC so composed controls whose panel widget is the commit surface
-   * (a calendar pick) can settle the session programmatically.
-   */
-  accept() {
+  /** The per-field submit (our one honest deviation from a normal form). */
+  protected accept() {
     const { value, changed } = this.normalization();
 
     if (!changed) {
