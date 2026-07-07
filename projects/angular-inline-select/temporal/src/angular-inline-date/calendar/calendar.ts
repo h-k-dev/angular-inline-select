@@ -15,8 +15,8 @@ import { DOCUMENT } from '@angular/common';
 
 import { DateTime } from 'luxon';
 
-import { toIsoDate, formatIsoDate, type IsoDate } from './date-codec';
-import { todayIn } from '../datetime/db-entry';
+import { toIsoDate, formatIsoDate, type IsoDate } from '../date-codec';
+import { todayIn } from '../../datetime/db-entry';
 
 interface CalendarDay {
   iso: IsoDate;
@@ -73,144 +73,11 @@ function firstDayOfWeek(locale: string | string[] | undefined): number {
  * adapter stays at ITS boundary.
  */
 @Component({
-  selector: 'angular-inline-calendar',
-  template: `
-    <div class="cal__header">
-      <button
-        type="button"
-        class="cal__nav"
-        aria-label="Previous month"
-        (mousedown)="$event.preventDefault()"
-        (click)="moveMonths(-1)"
-      >
-        ‹
-      </button>
-      <div class="cal__label" aria-live="polite">{{ monthLabel() }}</div>
-      <button
-        type="button"
-        class="cal__nav"
-        aria-label="Next month"
-        (mousedown)="$event.preventDefault()"
-        (click)="moveMonths(1)"
-      >
-        ›
-      </button>
-    </div>
-
-    <div
-      #grid
-      class="cal__grid"
-      role="grid"
-      [attr.aria-label]="monthLabel()"
-      (keydown)="handleKeydown($event)"
-      (focusin)="gridFocused = true"
-      (focusout)="gridFocused = false"
-      (mousedown)="handleGridMousedown($event)"
-      (mouseover)="handleGridMouseover($event)"
-    >
-      <div class="cal__weekdays" role="row">
-        @for (name of weekdayNames(); track $index) {
-          <span class="cal__weekday" role="columnheader">{{ name }}</span>
-        }
-      </div>
-      @for (week of weeks(); track $index) {
-        <div class="cal__week" role="row">
-          @for (cell of week; track cell.iso) {
-            <button
-              type="button"
-              role="gridcell"
-              class="cal__day"
-              [attr.data-day]="cell.iso"
-              [attr.data-outside]="cell.outside || null"
-              [attr.data-today]="cell.today || null"
-              [attr.data-active]="cell.iso === active() || null"
-              [attr.data-selected]="cell.iso === selectedDay() || null"
-              [attr.data-range-start]="cell.iso === paintedRange()?.start || null"
-              [attr.data-range-end]="cell.iso === paintedRange()?.end || null"
-              [attr.data-in-range]="inPaintedRange(cell.iso) || null"
-              [attr.aria-selected]="cell.iso === selectedDay()"
-              [attr.aria-label]="dayAria(cell.iso)"
-              [tabindex]="cell.iso === active() ? 0 : -1"
-              (mousedown)="$event.preventDefault()"
-              (click)="handleCellClick(cell.iso, $event)"
-            >
-              {{ cell.day }}
-            </button>
-          }
-        </div>
-      }
-    </div>
-  `,
-  styles: `
-    :host {
-      display: block;
-      padding: 8px;
-      user-select: none;
-    }
-    .cal__header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 0 4px 6px;
-    }
-    .cal__label {
-      font: var(--mat-sys-title-small, 500 0.875rem/1.25 system-ui);
-      text-transform: capitalize;
-    }
-    .cal__nav {
-      border: 0;
-      background: transparent;
-      cursor: pointer;
-      font-size: 1.1rem;
-      line-height: 1;
-      padding: 4px 8px;
-      border-radius: var(--mat-sys-corner-small, 0.5rem);
-      color: var(--mat-sys-on-surface-variant, #5f6368);
-    }
-    .cal__nav:hover { background: var(--mat-sys-surface-container-highest, #eee); }
-    .cal__weekdays, .cal__week {
-      display: grid;
-      grid-template-columns: repeat(7, 2.1rem);
-    }
-    .cal__weekday {
-      text-align: center;
-      font: var(--mat-sys-label-small, 500 0.6875rem/1.6 system-ui);
-      color: var(--mat-sys-on-surface-variant, #5f6368);
-      padding-block: 2px;
-    }
-    .cal__day {
-      height: 2.1rem;
-      border: 0;
-      background: transparent;
-      border-radius: 50%;
-      cursor: pointer;
-      font: var(--mat-sys-body-small, 0.8125rem/1 system-ui);
-      color: var(--mat-sys-on-surface, #1f1f1f);
-    }
-    .cal__day:hover { background: var(--mat-sys-surface-container-highest, #eee); }
-    .cal__day[data-outside] { color: var(--mat-sys-outline, #999); }
-    .cal__day[data-today] { outline: 1px solid var(--mat-sys-outline, #999); outline-offset: -1px; }
-    .cal__day[data-active] { outline: 2px solid var(--mat-sys-primary, #4285f4); outline-offset: -2px; }
-    .cal__day[data-selected] {
-      background: var(--mat-sys-primary, #4285f4);
-      color: var(--mat-sys-on-primary, #fff);
-    }
-    /* Range painting: endpoints filled, days between tinted (drag preview + committed range). */
-    .cal__day[data-in-range] {
-      background: var(--mat-sys-secondary-container, #e8f0fe);
-      color: var(--mat-sys-on-secondary-container, #174ea6);
-      border-radius: 0;
-    }
-    .cal__day[data-range-start],
-    .cal__day[data-range-end] {
-      background: var(--mat-sys-primary, #4285f4);
-      color: var(--mat-sys-on-primary, #fff);
-    }
-    .cal__day:focus-visible { outline: 2px solid var(--mat-sys-primary, #4285f4); outline-offset: 1px; }
-  `,
+  selector: 'temporal-calendar',
+  templateUrl: './calendar.html',
+  styleUrl: './calendar.scss',
 })
-export class AngularInlineCalendar {
+export class Calendar {
   #injector = inject(Injector);
   #document = inject(DOCUMENT);
 
@@ -319,7 +186,9 @@ export class AngularInlineCalendar {
 
     this.#suppressClick = true;
     queueMicrotask(() => (this.#suppressClick = false));
-    this.dragEnded.emit(anchor <= hover ? { start: anchor, end: hover } : { start: hover, end: anchor });
+    this.dragEnded.emit(
+      anchor <= hover ? { start: anchor, end: hover } : { start: hover, end: anchor },
+    );
   }
 
   #cancelDrag() {

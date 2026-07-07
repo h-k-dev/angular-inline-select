@@ -16,7 +16,11 @@ import {
   type TemplateRef,
 } from '@angular/core';
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
-import { CdkConnectedOverlay, CdkOverlayOrigin, type ConnectedPosition } from '@angular/cdk/overlay';
+import {
+  CdkConnectedOverlay,
+  CdkOverlayOrigin,
+  type ConnectedPosition,
+} from '@angular/cdk/overlay';
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 import { EditablePrefix, EditableSuffix } from 'angular-inline-select';
@@ -81,158 +85,7 @@ export interface InlineTimeSaved {
   selector: 'angular-inline-time',
   imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgTemplateOutlet],
   templateUrl: './angular-inline-time.html',
-  styles: `
-    :host {
-      display: inline;
-      position: relative;
-    }
-
-    .inline-time {
-      display: inline-flex;
-      align-items: baseline;
-      gap: 0.25ch;
-      max-width: 100%;
-    }
-
-    /* The family look, on an input (see the date control for the rationale). */
-    .inline-time__input {
-      font: inherit;
-      color: inherit;
-      background: transparent;
-      border: 0;
-      padding: 0 0 0.1em;
-      margin: 0;
-      outline: none;
-      min-width: 1ch;
-      max-width: 100%;
-      field-sizing: content;
-      caret-color: var(--editable-text-caret-color, var(--mat-sys-primary, #428bca));
-      border-bottom: 0.0625rem dashed
-        var(--editable-text-underline-color, var(--mat-sys-primary, #428bca));
-    }
-    .inline-time__input:focus {
-      border-bottom-style: solid;
-      border-bottom-width: 0.125rem;
-      padding-bottom: calc(0.1em - 0.0625rem);
-    }
-    .inline-time__input::placeholder {
-      font-style: italic;
-      color: inherit;
-      opacity: var(--editable-text-placeholder-opacity, 0.3875);
-    }
-    .inline-time__input:disabled {
-      cursor: default;
-      border-bottom-color: var(--mat-sys-outline, #999);
-    }
-
-    .inline-time--invalid .inline-time__input {
-      border-bottom-color: var(--editable-text-error-color, var(--mat-sys-error, #dc3545));
-    }
-
-    /* BARE CHROME — the hosting container draws the chrome (see the date control). */
-    :host(.inline-field-bare) .inline-time__input {
-      border-bottom: none;
-      padding-bottom: 0;
-    }
-    :host(.inline-field-bare--hide-placeholder) .inline-time__input::placeholder {
-      opacity: 0;
-    }
-
-    .inline-time__input--reverted {
-      animation: inline-time-revert 0.6s ease-out;
-    }
-    @keyframes inline-time-revert {
-      0% {
-        background: color-mix(in srgb, var(--mat-sys-error, #dc3545) 18%, transparent);
-      }
-      100% {
-        background: transparent;
-      }
-    }
-
-    .inline-time__affix {
-      white-space: nowrap;
-      user-select: none;
-      color: var(--editable-text-affix-color, var(--mat-sys-on-surface-variant, inherit));
-    }
-
-    /* The badge's anchor: the input's own box. */
-    .inline-time__field {
-      position: relative;
-      display: inline-flex;
-      align-items: baseline;
-    }
-
-    /*
-      The +n over-count perches on the input's TOP-RIGHT corner (the
-      airline-ticket look) — absolutely positioned, so it costs no line
-      space and nothing in the row can crowd or obscure it. The inline-end
-      overhang has the room it wants: no adornment follows the field.
-    */
-    .time-day-badge {
-      position: absolute;
-      top: -0.8em;
-      inset-inline-end: -1.1em;
-      z-index: 1;
-      padding: 0 0.35em;
-      border-radius: var(--mat-sys-corner-small, 0.5rem);
-      background: var(--mat-sys-tertiary-container, #e8f0fe);
-      color: var(--mat-sys-on-tertiary-container, #174ea6);
-      font-size: 0.68em;
-      font-weight: 600;
-      line-height: 1.5;
-      white-space: nowrap;
-      pointer-events: none;
-      user-select: none;
-    }
-
-    /* Focusable but invisible — display:none would break focus + showPicker anchoring */
-    .inline-time__native {
-      position: absolute;
-      inset-inline-start: 0;
-      inset-block-end: 0;
-      width: 1px;
-      height: 1px;
-      opacity: 0;
-      border: 0;
-      padding: 0;
-    }
-
-    .inline-time__sr {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip-path: inset(50%);
-      white-space: nowrap;
-    }
-
-    .inline-time__panel {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      padding: 8px;
-      background: var(--editable-panel-container-color, var(--mat-sys-surface-container, #fff));
-      color: var(--mat-sys-on-surface, inherit);
-      border-radius: var(--mat-sys-corner-medium, 0.75rem);
-      box-shadow: var(
-        --mat-sys-level2,
-        0 1px 2px rgba(0, 0, 0, 0.3),
-        0 2px 6px 2px rgba(0, 0, 0, 0.15)
-      );
-    }
-    .inline-time__errors:not([hidden]) {
-      padding: 0 8px 4px;
-      font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
-      color: var(--mat-sys-error, #dc3545);
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .inline-time__input--reverted {
-        animation: none;
-      }
-    }
-  `,
+  styleUrl: './angular-inline-time.scss',
   host: {
     '[style.display]': 'hidden() ? "none" : null',
   },
@@ -396,8 +249,7 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
    */
   #anchorDay = linkedSignal<string, string>({
     source: () =>
-      localDayOf(this.value(), this.effectiveZone()) ??
-      todayIn(this.now()(), this.effectiveZone()),
+      localDayOf(this.value(), this.effectiveZone()) ?? todayIn(this.now()(), this.effectiveZone()),
     computation: (source, prev) => (this.#open() ? (prev?.value ?? source) : source),
   });
 

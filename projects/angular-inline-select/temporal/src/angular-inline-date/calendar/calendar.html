@@ -1,0 +1,65 @@
+<div class="cal__header">
+  <button
+    type="button"
+    class="cal__nav"
+    aria-label="Previous month"
+    (mousedown)="$event.preventDefault()"
+    (click)="moveMonths(-1)"
+  >
+    ‹
+  </button>
+  <div class="cal__label" aria-live="polite">{{ monthLabel() }}</div>
+  <button
+    type="button"
+    class="cal__nav"
+    aria-label="Next month"
+    (mousedown)="$event.preventDefault()"
+    (click)="moveMonths(1)"
+  >
+    ›
+  </button>
+</div>
+
+<div
+  #grid
+  class="cal__grid"
+  role="grid"
+  [attr.aria-label]="monthLabel()"
+  (keydown)="handleKeydown($event)"
+  (focusin)="gridFocused = true"
+  (focusout)="gridFocused = false"
+  (mousedown)="handleGridMousedown($event)"
+  (mouseover)="handleGridMouseover($event)"
+>
+  <div class="cal__weekdays" role="row">
+    @for (name of weekdayNames(); track $index) {
+      <span class="cal__weekday" role="columnheader">{{ name }}</span>
+    }
+  </div>
+  @for (week of weeks(); track $index) {
+    <div class="cal__week" role="row">
+      @for (cell of week; track cell.iso) {
+        <button
+          type="button"
+          role="gridcell"
+          class="cal__day"
+          [attr.data-day]="cell.iso"
+          [attr.data-outside]="cell.outside || null"
+          [attr.data-today]="cell.today || null"
+          [attr.data-active]="cell.iso === active() || null"
+          [attr.data-selected]="cell.iso === selectedDay() || null"
+          [attr.data-range-start]="cell.iso === paintedRange()?.start || null"
+          [attr.data-range-end]="cell.iso === paintedRange()?.end || null"
+          [attr.data-in-range]="inPaintedRange(cell.iso) || null"
+          [attr.aria-selected]="cell.iso === selectedDay()"
+          [attr.aria-label]="dayAria(cell.iso)"
+          [tabindex]="cell.iso === active() ? 0 : -1"
+          (mousedown)="$event.preventDefault()"
+          (click)="handleCellClick(cell.iso, $event)"
+        >
+          {{ cell.day }}
+        </button>
+      }
+    </div>
+  }
+</div>

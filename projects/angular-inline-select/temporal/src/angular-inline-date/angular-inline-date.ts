@@ -54,7 +54,7 @@ import {
 import { INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 import { dayToDbEntry, dayEndToDbEntry, localDayOf } from '../datetime/db-entry';
 import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
-import { AngularInlineCalendar } from './inline-calendar';
+import { Calendar } from './calendar/calendar';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineDateSaved {
@@ -124,177 +124,18 @@ interface DateSide {
  */
 @Component({
   selector: 'angular-inline-date',
-  imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgTemplateOutlet, AngularInlineCalendar],
+  imports: [
+    NgTemplateOutlet,
+
+    // CDK
+    CdkConnectedOverlay,
+    CdkOverlayOrigin,
+
+    // Components
+    Calendar,
+  ],
   templateUrl: './angular-inline-date.html',
-  styles: `
-    :host {
-      display: inline;
-    }
-
-    .inline-date {
-      display: inline-flex;
-      align-items: baseline;
-      gap: 0.25ch;
-      max-width: 100%;
-    }
-
-    /*
-      The family look, on an input: dashed underline idle, solid while
-      focused, error color when the field says errors show. border-bottom
-      (not text-decoration — unreliable on inputs) + a small padding to
-      mimic the text control's underline offset.
-    */
-    .inline-date__input {
-      font: inherit;
-      color: inherit;
-      background: transparent;
-      border: 0;
-      padding: 0 0 0.1em;
-      margin: 0;
-      outline: none;
-      min-width: 1ch;
-      max-width: 100%;
-      field-sizing: content;
-      caret-color: var(--editable-text-caret-color, var(--mat-sys-primary, #428bca));
-      border-bottom: 0.0625rem dashed
-        var(--editable-text-underline-color, var(--mat-sys-primary, #428bca));
-    }
-    .inline-date__input:focus {
-      border-bottom-style: solid;
-      border-bottom-width: 0.125rem;
-      padding-bottom: calc(0.1em - 0.0625rem);
-    }
-    .inline-date__input::placeholder {
-      font-style: italic;
-      color: inherit;
-      opacity: var(--editable-text-placeholder-opacity, 0.3875);
-    }
-    .inline-date__input:disabled {
-      cursor: default;
-      border-bottom-color: var(--mat-sys-outline, #999);
-    }
-
-    /* Idle error state — color only, the dashed style stays (family rule). */
-    .inline-date--invalid .inline-date__input {
-      border-bottom-color: var(--editable-text-error-color, var(--mat-sys-error, #dc3545));
-    }
-
-    /*
-      BARE CHROME — a generic seam, not a mat one: the HOSTING CONTAINER
-      declares it draws the chrome (underline, error color, label), so the
-      control's own underline rests. Applied as host classes by whoever
-      hosts us (the temporal-mat adapter, a dense table cell, …).
-    */
-    :host(.inline-field-bare) .inline-date__input {
-      border-bottom: none;
-      padding-bottom: 0;
-    }
-    :host(.inline-field-bare--hide-placeholder) .inline-date__input::placeholder {
-      opacity: 0;
-    }
-
-    /* Transient snap-back cue: a brief flash on the restored display. */
-    .inline-date__input--reverted {
-      animation: inline-date-revert 0.6s ease-out;
-    }
-    @keyframes inline-date-revert {
-      0% {
-        background: color-mix(in srgb, var(--mat-sys-error, #dc3545) 18%, transparent);
-      }
-      100% {
-        background: transparent;
-      }
-    }
-
-    .inline-date__separator {
-      user-select: none;
-      color: var(--mat-sys-on-surface-variant, #5f6368);
-    }
-
-    .inline-date__affix {
-      white-space: nowrap;
-      user-select: none;
-      color: var(--editable-text-affix-color, var(--mat-sys-on-surface-variant, inherit));
-    }
-
-    .inline-date__trigger {
-      font: inherit;
-      line-height: 1;
-      padding: 0;
-      border: 0;
-      background: transparent;
-      cursor: pointer;
-      border-radius: var(--mat-sys-corner-extra-small, 0.25rem);
-    }
-    .inline-date__trigger:focus-visible {
-      outline: 2px solid var(--mat-sys-primary, #4285f4);
-      outline-offset: 2px;
-    }
-
-    .inline-date__sr {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip-path: inset(50%);
-      white-space: nowrap;
-    }
-
-    /* The panel: an elevated surface under the input pair (no field chrome). */
-    .inline-date__panel {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      padding: 8px;
-      background: var(--editable-panel-container-color, var(--mat-sys-surface-container, #fff));
-      color: var(--mat-sys-on-surface, inherit);
-      border-radius: var(--mat-sys-corner-medium, 0.75rem);
-      box-shadow: var(
-        --mat-sys-level2,
-        0 1px 2px rgba(0, 0, 0, 0.3),
-        0 2px 6px 2px rgba(0, 0, 0, 0.15)
-      );
-    }
-
-    .inline-date__preview {
-      padding: 2px 8px 0;
-      font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
-      color: var(--mat-sys-on-surface-variant, #5f6368);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .inline-date__quick-picks {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      padding: 0 8px 4px;
-    }
-    .inline-date__quick-pick {
-      font: var(--mat-sys-label-medium, 500 0.75rem/1.4 system-ui);
-      text-transform: capitalize;
-      padding: 2px 10px;
-      border: 1px solid var(--mat-sys-outline-variant, #ddd);
-      border-radius: var(--mat-sys-corner-full, 999px);
-      background: transparent;
-      color: var(--mat-sys-on-surface-variant, #5f6368);
-      cursor: pointer;
-    }
-    .inline-date__quick-pick:hover {
-      background: var(--mat-sys-surface-container-highest, #eee);
-    }
-
-    .inline-date__errors:not([hidden]) {
-      padding: 0 8px 4px;
-      font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
-      color: var(--mat-sys-error, #dc3545);
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .inline-date__input--reverted {
-        animation: none;
-      }
-    }
-  `,
+  styleUrl: './angular-inline-date.scss',
   host: {
     '[style.display]': 'hidden() ? "none" : null',
   },
@@ -525,7 +366,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   protected startInput = viewChild<ElementRef<HTMLInputElement>>('startInput');
   protected endInput = viewChild<ElementRef<HTMLInputElement>>('endInput');
-  protected calendar = viewChild(AngularInlineCalendar);
+  protected calendar = viewChild(Calendar);
   protected panelRef = viewChild<ElementRef<HTMLElement>>('panel');
 
   /** The current draft's ISO reading (`null` empty, `undefined` unreadable). */
