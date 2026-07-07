@@ -1,7 +1,6 @@
 <!--
   The input rehost: one real <input> — the family look is CSS. The panel
-  carries the live reading and the error slot, appearing only when there
-  is something to say.
+  carries only the error slot, appearing when there is an error to show.
 -->
 <span
   class="inline-duration"
@@ -56,10 +55,6 @@
   (overlayOutsideClick)="dismissPanel()"
 >
   <div #panel class="inline-duration__panel" (focusout)="handleFocusOut()">
-    @if (preview(); as reading) {
-      <div class="inline-duration__preview">{{ reading }}</div>
-    }
-
     <div class="inline-duration__errors" [hidden]="!errorSlotVisible()">
       <ng-content select="[editable-error]" />
     </div>

@@ -103,6 +103,13 @@ describe('InlineMatFormField (the temporal-mat adapter)', () => {
   });
 
   it('a chrome click focuses when idle, then TOGGLES the panel — never close-and-reopen', async () => {
+    // The panel is error-only now (there is no live preview), so put the
+    // field in an error state — required, emptied, touched — to give the
+    // panel something to show once the session opens.
+    h.host.model.set(null);
+    h.host.field().markAsTouched();
+    h.fixture.detectChanges();
+
     const container = h.fixture.nativeElement.querySelector('mat-form-field') as HTMLElement;
     const chromeClick = () => {
       const event = new MouseEvent('click', { bubbles: true });
@@ -111,13 +118,9 @@ describe('InlineMatFormField (the temporal-mat adapter)', () => {
       h.fixture.detectChanges();
     };
 
-    // Idle: the click focuses (and the session opens on focusin).
+    // Idle: the click focuses (the session opens on focusin, the error panel follows).
     chromeClick();
     expect(document.activeElement).toBe(h.input());
-
-    // A visible panel needs something to say — type a draft.
-    h.input().value = '9';
-    h.input().dispatchEvent(new Event('input', { bubbles: true }));
     h.fixture.detectChanges();
     expect(document.querySelector('.inline-time__panel')).not.toBeNull();
 

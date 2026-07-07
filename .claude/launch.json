@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "app",
-      "runtimeExecutable": "/Users/hongknop/.nvm/versions/node/v24.15.0/bin/node",
-      "runtimeArgs": ["node_modules/.bin/ng", "serve", "app", "--port", "4300"],
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["ng", "serve", "app", "--port", "4300"],
       "port": 4300
     }
   ]

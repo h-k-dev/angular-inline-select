@@ -67,14 +67,14 @@ export function formatDuration(seconds: number | null, format: DurationFormat = 
   const pad = (value: number) => String(value).padStart(2, '0');
 
   if (format === 'mm:ss') {
-    return `${Math.floor(seconds / 60)}:${pad(seconds % 60)}`;
+    return `${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}`;
   }
 
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
 
-  if (format === 'h:mm:ss') return `${hours}:${pad(minutes)}:${pad(seconds % 60)}`;
-  return `${hours}:${pad(minutes)}`;
+  if (format === 'h:mm:ss') return `${pad(hours)}:${pad(minutes)}:${pad(seconds % 60)}`;
+  return `${pad(hours)}:${pad(minutes)}`;
 }
 
 /** Human reading for the live interpretation preview: `'1 h 30 min'`. */

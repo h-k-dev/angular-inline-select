@@ -263,9 +263,6 @@ describe('AngularInlineTime (input rehost)', () => {
 
   it('Enter commits typed drafts as DB entries anchored on the value own day', async () => {
     type(h, '2105');
-
-    expect(document.querySelector('.inline-time__preview')?.textContent?.trim()).toBe('✓ 21:05');
-
     press(h, 'Enter');
 
     expect(h.host.saved).toEqual([at('21:05')]);
@@ -273,7 +270,7 @@ describe('AngularInlineTime (input rehost)', () => {
     expect(h.host.model()).toBe(at('21:05'));
     expect(localDayOf(h.host.model())).toBe(DAY); // the day survives the edit
     expect(h.input().value).toBe('21:05');
-    expect(h.panel()).toBeNull(); // Enter dismisses the panel
+    expect(h.panel()).toBeNull(); // no panel for a clean commit — there is no preview
   });
 
   it('the parse gate blocks Enter on impossible times', () => {
@@ -371,13 +368,8 @@ describe('AngularInlineTime (input rehost)', () => {
     expect(h.host.saved).toEqual([at('10:15')]);
   });
 
-  it('an overflow draft commits onto the anchor day + n with a +n preview', () => {
+  it('an overflow draft commits onto the anchor day + n', () => {
     type(h, '24:30');
-
-    expect(document.querySelector('.inline-time__preview')?.textContent?.trim()).toBe(
-      '✓ 00:30 +1 day',
-    );
-
     press(h, 'Enter');
 
     expect(h.host.model()).toBe(composeDbEntry('2026-07-22', '00:30'));
@@ -389,7 +381,6 @@ describe('AngularInlineTime (input rehost)', () => {
   it('a pasted FULL ISO datetime is an explicit instant — its own day, no anchor', () => {
     type(h, '2026-07-25T08:00');
 
-    expect(document.querySelector('.inline-time__preview')?.textContent?.trim()).toContain('✓');
     // Live channel already carries the full instant.
     expect(h.host.field().value()).toBe(composeDbEntry('2026-07-25', '08:00'));
 

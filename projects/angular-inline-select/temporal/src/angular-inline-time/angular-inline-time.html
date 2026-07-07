@@ -73,7 +73,7 @@
   <span class="inline-time__sr" aria-live="polite">{{ revertNotice() }}</span>
 </span>
 
-<!-- The panel: the live reading + the error slot — only when there is something to say. -->
+<!-- The panel: the error slot only — it opens when there is an error to show. -->
 <ng-template
   cdkConnectedOverlay
   [cdkConnectedOverlayOrigin]="origin"
@@ -82,10 +82,6 @@
   (overlayOutsideClick)="dismissPanel()"
 >
   <div #panel class="inline-time__panel" (focusout)="handleFocusOut()">
-    @if (preview(); as reading) {
-      <div class="inline-time__preview">{{ reading }}</div>
-    }
-
     <div class="inline-time__errors" [hidden]="!errorSlotVisible()">
       <ng-content select="[editable-error]" />
     </div>

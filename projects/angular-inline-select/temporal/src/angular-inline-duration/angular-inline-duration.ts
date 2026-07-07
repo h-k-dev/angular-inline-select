@@ -20,12 +20,7 @@ import { CdkConnectedOverlay, CdkOverlayOrigin, type ConnectedPosition } from '@
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 import { EditablePrefix, EditableSuffix } from 'angular-inline-select';
-import {
-  parseDuration,
-  formatDuration,
-  describeDuration,
-  type DurationFormat,
-} from './duration-codec';
+import { parseDuration, formatDuration, type DurationFormat } from './duration-codec';
 import { INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
@@ -49,9 +44,7 @@ export interface InlineDurationSaved {
  * - Drafts accept colon notation (positional by `durationFormat`), unit
  *   tokens (`'1h 30m'`, `'45m'`, `'1.5h'`), or a bare number (minutes under
  *   hour formats, seconds under `mm:ss`).
- * - The live interpretation preview shows what the draft means on every
- *   keystroke (`✓ 1 h 30 min`) — the draft itself is never reformatted.
- * - Commits round-trip the codec (`'90'` under `h:mm` settles as `'1:30'`)
+ * - Commits round-trip the codec (`'90'` under `h:mm` settles as `'01:30'`)
  *   and snap to `step` seconds when set (e.g. 60 for whole minutes).
  */
 @Component({
@@ -154,12 +147,6 @@ export interface InlineDurationSaved {
         0 1px 2px rgba(0, 0, 0, 0.3),
         0 2px 6px 2px rgba(0, 0, 0, 0.15)
       );
-    }
-    .inline-duration__preview {
-      padding: 2px 8px;
-      font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
-      color: var(--mat-sys-on-surface-variant, #5f6368);
-      font-variant-numeric: tabular-nums;
     }
     .inline-duration__errors:not([hidden]) {
       padding: 0 8px 4px;
@@ -308,23 +295,9 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
 
   protected errorSlotVisible = computed(() => this.errorsVisible() || this.parseGateVisible());
 
-  /** Live interpretation preview: `✓ 1 h 30 min` / `… raw`. */
-  protected preview = computed(() => {
-    const raw = this.draft().trim();
-    if (!raw) return '';
-
-    const parsed = parseDuration(raw, this.durationFormat());
-    if (parsed === null || parsed === undefined) return `… ${raw}`;
-
-    return `✓ ${describeDuration(this.#snap(parsed))}`;
-  });
-
-  /** The panel appears when there is something to say — a reading or an error. */
+  /** The panel appears only to carry an error — there is no live preview. */
   protected panelOpen = computed(
-    () =>
-      this.#open() &&
-      !this.#panelDismissed() &&
-      (this.preview() !== '' || this.errorSlotVisible()),
+    () => this.#open() && !this.#panelDismissed() && this.errorSlotVisible(),
   );
 
   /** Public: whether the panel is showing (hosting containers coordinate on it). */
@@ -514,8 +487,9 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   }
 
   /**
-   * Toggles the preview panel. PUBLIC — the container-click affordance a
-   * hosting container (the mat-form-field adapter) delegates to.
+   * Toggles the error panel. PUBLIC — the container-click affordance a
+   * hosting container (the mat-form-field adapter) delegates to. (With no
+   * error to show the panel stays empty-quiet — there is no live preview.)
    */
   togglePanel() {
     if (this.effectiveDisabled() || this.effectiveReadonly()) return;

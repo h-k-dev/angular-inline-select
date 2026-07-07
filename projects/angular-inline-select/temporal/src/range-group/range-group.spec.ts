@@ -443,7 +443,7 @@ describe('DateTimeRangeGroup as FormValueControl (T5b)', () => {
       'Jul 21, 2026',
       '21:00',
       '06:00',
-      '9:00',
+      '09:00',
     ]);
   });
 
@@ -496,7 +496,7 @@ describe('DateTimeRangeGroup as FormValueControl (T5b)', () => {
       'Aug 1, 2026',
       '08:00',
       '12:00',
-      '4:00',
+      '04:00',
     ]);
   });
 
@@ -506,7 +506,7 @@ describe('DateTimeRangeGroup as FormValueControl (T5b)', () => {
     h.fixture.detectChanges();
 
     // The duration leaf still DISPLAYS the derived length…
-    expect(h.inputs()[LENGTH].value).toBe('9:00');
+    expect(h.inputs()[LENGTH].value).toBe('09:00');
 
     await commitIntoBound(h.fixture, h.inputs, END, '23:30');
 

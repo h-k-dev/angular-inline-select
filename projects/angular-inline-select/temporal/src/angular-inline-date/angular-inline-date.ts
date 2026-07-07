@@ -3,8 +3,11 @@ import {
   DestroyRef,
   ElementRef,
   Injector,
+
+  // Signals
   afterNextRender,
   computed,
+  contentChild,
   effect,
   inject,
   input,
@@ -12,17 +15,25 @@ import {
   model,
   output,
   signal,
-  untracked,
-  viewChild,
-  contentChild,
   type Signal,
   type TemplateRef,
   type WritableSignal,
+  untracked,
+  viewChild,
 } from '@angular/core';
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
-import { CdkConnectedOverlay, CdkOverlayOrigin, type ConnectedPosition } from '@angular/cdk/overlay';
+
+// CDK
+import {
+  CdkConnectedOverlay,
+  CdkOverlayOrigin,
+  type ConnectedPosition,
+} from '@angular/cdk/overlay';
+
+// Form
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
+// Core
 import { EditablePrefix, EditableSuffix } from 'angular-inline-select';
 import {
   parseDateInput,
@@ -520,7 +531,12 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   /** The current draft's ISO reading (`null` empty, `undefined` unreadable). */
   readonly parsedDraft = computed(() => {
     const key = this.focusTarget() ?? 'start';
-    return parseDateInput(this.#side(key).draft(), this.now()(), this.locale(), this.effectiveZone());
+    return parseDateInput(
+      this.#side(key).draft(),
+      this.now()(),
+      this.locale(),
+      this.effectiveZone(),
+    );
   });
 
   /** The parse gate: whether the focused draft fails the codec. Public for consumers. */
@@ -573,7 +589,12 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   /** The grid's pending day: the focused side's parsed draft, else its committed day. */
   protected pendingDay = computed<IsoDate | null>(() => {
     const key = this.focusTarget() ?? 'start';
-    const draft = parseDateInput(this.#side(key).draft(), this.now()(), this.locale(), this.effectiveZone());
+    const draft = parseDateInput(
+      this.#side(key).draft(),
+      this.now()(),
+      this.locale(),
+      this.effectiveZone(),
+    );
     if (typeof draft === 'string') return draft;
 
     return this.#side(key).committedDay() ?? this.internalRange().start;
@@ -585,7 +606,9 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   /** Quick-pick chips: consumer-injected, else yesterday/today/tomorrow. */
   protected quickPickList = computed(
-    () => this.quickPicks() ?? buildDateCommands(this.now()(), this.locale(), this.effectiveZone()).slice(0, 3),
+    () =>
+      this.quickPicks() ??
+      buildDateCommands(this.now()(), this.locale(), this.effectiveZone()).slice(0, 3),
   );
 
   protected overlayPositions: ConnectedPosition[] = [
@@ -744,7 +767,10 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * unreadable draft resolves to the BASELINE (snap-back; a brief flash +
    * aria-live announce the restoration, no persistent state).
    */
-  #settle(key: SideKey, options: { resolve?: IsoDate | null; revert?: boolean; keepOpen?: boolean } = {}) {
+  #settle(
+    key: SideKey,
+    options: { resolve?: IsoDate | null; revert?: boolean; keepOpen?: boolean } = {},
+  ) {
     const side = this.#side(key);
     if (!side.open()) return;
 
@@ -761,7 +787,12 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     } else if (options.resolve !== undefined) {
       day = options.resolve;
     } else {
-      const parsed = parseDateInput(side.draft(), this.now()(), this.locale(), this.effectiveZone());
+      const parsed = parseDateInput(
+        side.draft(),
+        this.now()(),
+        this.locale(),
+        this.effectiveZone(),
+      );
       snappedBack = parsed === undefined;
       day = parsed === undefined ? side.baselineDay : parsed;
     }
@@ -806,7 +837,10 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       case 'Enter': {
         event.preventDefault();
         const side = this.#side(key);
-        if (parseDateInput(side.draft(), this.now()(), this.locale(), this.effectiveZone()) === undefined) {
+        if (
+          parseDateInput(side.draft(), this.now()(), this.locale(), this.effectiveZone()) ===
+          undefined
+        ) {
           // The parse gate: the user ASKED for a commit — block and say why.
           side.saveAttempted.set(true);
           return;

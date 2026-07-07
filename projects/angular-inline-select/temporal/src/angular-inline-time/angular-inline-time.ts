@@ -28,7 +28,6 @@ import {
   composeDbEntry,
   localTimeOf,
   localDayOf,
-  parseDbEntry,
   parseDbEntryDraft,
   todayIn,
   type DbDateTime,
@@ -68,9 +67,9 @@ export interface InlineTimeSaved {
  * baseline, Tab/blur commits a readable draft and SNAPS an unreadable one
  * back — never traps, never persists a draft error.
  *
- * - Drafts are TYPED (`'9'` → 09:00, `'930'`, `'21:05'`) with a live
- *   interpretation preview; overflow hours declare the day over-count by
- *   hand (`'24:30'` → next day 00:30, previewed `✓ 00:30 +1 day`).
+ * - Drafts are TYPED (`'9'` → 09:00, `'930'`, `'21:05'`); overflow hours
+ *   declare the day over-count by hand (`'24:30'` → next day 00:30, the
+ *   `+1` badge perching on the field).
  * - **The picker is the OS's own, opt-in via `native`**: the field's own
  *   click drives a visually-hidden `<input type="time">` — `showPicker()`
  *   where the platform supports it, falling back to focusing the input
@@ -222,12 +221,6 @@ export interface InlineTimeSaved {
         0 2px 6px 2px rgba(0, 0, 0, 0.15)
       );
     }
-    .inline-time__preview {
-      padding: 2px 8px;
-      font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
-      color: var(--mat-sys-on-surface-variant, #5f6368);
-      font-variant-numeric: tabular-nums;
-    }
     .inline-time__errors:not([hidden]) {
       padding: 0 8px 4px;
       font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
@@ -267,7 +260,7 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
   /** Accessible name for the field. */
   ariaLabel = input<string | undefined>(undefined);
 
-  /** Locale for the idle display + preview (`Intl`); browser default when omitted. */
+  /** Locale for the idle display (`Intl`); browser default when omitted. */
   locale = input<string | string[] | undefined>(undefined);
 
   /**
@@ -455,40 +448,9 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
 
   protected errorSlotVisible = computed(() => this.errorsVisible() || this.parseGateVisible());
 
-  /** Live interpretation preview: `✓ 9:30 AM`, `✓ 00:30 +1 day` / `… raw`. */
-  protected preview = computed(() => {
-    const raw = this.draft().trim();
-    if (!raw) return '';
-
-    // A pasted full instant reads back whole: `✓ Jul 25, 2026, 8:00 AM`.
-    const explicit = this.explicitDraft();
-    if (explicit !== undefined) {
-      try {
-        return `✓ ${new Intl.DateTimeFormat(this.locale(), {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-          timeZone: this.effectiveZone(),
-        }).format(parseDbEntry(explicit)!)}`;
-      } catch {
-        return `✓ ${explicit}`;
-      }
-    }
-
-    const draft = this.parsedDraft();
-    if (draft === null || draft === undefined) return `… ${raw}`;
-
-    const reading = `✓ ${formatWallClock(draft.time, this.locale())}`;
-    if (draft.days === 0) return reading;
-
-    return `${reading} +${draft.days} ${draft.days === 1 ? 'day' : 'days'}`;
-  });
-
-  /** The panel appears when there is something to say — a reading or an error. */
+  /** The panel appears only to carry an error — there is no live preview. */
   protected panelOpen = computed(
-    () =>
-      this.#open() &&
-      !this.#panelDismissed() &&
-      (this.preview() !== '' || this.errorSlotVisible()),
+    () => this.#open() && !this.#panelDismissed() && this.errorSlotVisible(),
   );
 
   /** Public: whether the panel is showing (hosting containers coordinate on it). */
@@ -702,9 +664,9 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
   }
 
   /**
-   * Toggles the preview panel. PUBLIC — the container-click affordance a
-   * hosting container (the mat-form-field adapter) delegates to. (The
-   * panel stays content-gated: with nothing to say it remains empty-quiet.)
+   * Toggles the error panel. PUBLIC — the container-click affordance a
+   * hosting container (the mat-form-field adapter) delegates to. (With no
+   * error to show the panel stays empty-quiet — there is no live preview.)
    */
   togglePanel() {
     if (this.effectiveDisabled() || this.effectiveReadonly()) return;
