@@ -404,6 +404,35 @@
         </p>
       </div>
 
+      <div class="example-card" id="mat-native-range-example">
+        <h3 class="example-card__title">Baseline — stock Material datepickers in mat-form-fields</h3>
+        <p class="prose">
+          The reference point: Angular Material's OWN <code>&lt;mat-datepicker&gt;</code> and
+          <code>&lt;mat-date-range-picker&gt;</code> hosted in <code>&lt;mat-form-field&gt;</code>. One field is a range
+          (<code>matStartDate</code>/<code>matEndDate</code>), the other a single date — both start EMPTY and both use
+          <code>floatLabel="always"</code>, so the labels sit floated above the placeholders with nothing selected.
+        </p>
+
+        <div class="mat-quartet">
+          <mat-form-field appearance="outline" floatLabel="always">
+            <mat-label>Trip dates</mat-label>
+            <mat-date-range-input [rangePicker]="tripPicker">
+              <input matStartDate placeholder="Start date" />
+              <input matEndDate placeholder="End date" />
+            </mat-date-range-input>
+            <mat-datepicker-toggle matIconSuffix [for]="tripPicker" />
+            <mat-date-range-picker #tripPicker />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" floatLabel="always">
+            <mat-label>Single day</mat-label>
+            <input matInput [matDatepicker]="dayPicker" placeholder="Pick a date" />
+            <mat-datepicker-toggle matIconSuffix [for]="dayPicker" />
+            <mat-datepicker #dayPicker />
+          </mat-form-field>
+        </div>
+      </div>
+
       <div class="example-card" id="zone-example">
         <h3 class="example-card__title">Timezones (T6) — one instant, three walls</h3>
         <p class="prose">

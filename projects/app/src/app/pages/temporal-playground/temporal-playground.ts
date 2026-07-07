@@ -9,8 +9,11 @@ import {
 import { FormField, form, required } from '@angular/forms/signals';
 
 // Material
+import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatDatepickerModule } from '@angular/material/datepicker';
 
 // Components
 import {
@@ -37,10 +40,13 @@ import { InlineMatFormField } from 'angular-inline-select/temporal-mat';
   templateUrl: './temporal-playground.html',
   styleUrl: './temporal-playground.scss',
   changeDetection: ChangeDetectionStrategy.Eager,
+  providers: [provideNativeDateAdapter()],
   imports: [
     // Material
     MatButtonModule,
     MatFormFieldModule,
+    MatInputModule,
+    MatDatepickerModule,
     InlineMatFormField,
 
     // Forms
