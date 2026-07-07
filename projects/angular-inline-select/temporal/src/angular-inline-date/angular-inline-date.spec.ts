@@ -439,7 +439,7 @@ describe('AngularInlineDate calendar (T2)', () => {
     expect(activeCell()?.getAttribute('data-day')).toBe('2026-12-24');
   });
 
-  it('a pick while editing rewrites the live draft and closes the popup', async () => {
+  it('a pick IS the choice: it rewrites the draft and COMMITS the session', async () => {
     const h = setup();
     await typeText(h, '12.5.2026');
     await h.fixture.whenStable();
@@ -451,9 +451,19 @@ describe('AngularInlineDate calendar (T2)', () => {
     await h.fixture.whenStable();
     h.fixture.detectChanges();
 
-    expect(h.host.field().value()).toBe(db('2026-05-15')); // live channel followed
-    expect(calendar()).toBeNull(); // popup collapsed
-    expect(h.editor()).not.toBeNull(); // session still open
+    expect(h.host.saved).toEqual([db('2026-05-15')]); // committed, no Save button needed
+    expect(h.host.field().value()).toBe(db('2026-05-15'));
+    expect(h.editor()).toBeNull(); // session settled
+    expect(calendar()).toBeNull(); // panel (and grid) gone with it
+  });
+
+  it('the slim chrome: no Save/Discard buttons while the calendar is active', async () => {
+    const h = setup();
+    await typeText(h, '12.5.2026');
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(document.querySelector('.editable-panel__actions')).toBeNull();
   });
 
   it('keyboard navigation crosses month edges (the transition dance)', async () => {
@@ -473,7 +483,7 @@ describe('AngularInlineDate calendar (T2)', () => {
     expect(calendar()!.querySelector('.cal__label')?.textContent).toContain('June');
   });
 
-  it('Escape in the grid collapses the popup and keeps the session open', async () => {
+  it('Escape in the grid hands control back to the field (stage one of two)', async () => {
     const h = setup();
     await typeText(h, '12.5.2026');
     await h.fixture.whenStable();
@@ -484,11 +494,11 @@ describe('AngularInlineDate calendar (T2)', () => {
     );
     h.fixture.detectChanges();
 
-    expect(calendar()).toBeNull();
-    expect(h.editor()).not.toBeNull();
+    expect(h.editor()).not.toBeNull(); // session still open
+    expect(calendar()).not.toBeNull(); // the grid stays — it is part of the panel
   });
 
-  it('idle: the 📅 affix opens the grid and a pick COMMITS immediately', async () => {
+  it('idle: the 📅 affix opens the SESSION (one surface) and a pick commits', async () => {
     const h = setup();
 
     const trigger = h.fixture.nativeElement.querySelector('.date-trigger') as HTMLElement;
@@ -497,10 +507,13 @@ describe('AngularInlineDate calendar (T2)', () => {
     await h.fixture.whenStable();
     h.fixture.detectChanges();
 
-    expect(calendar()).not.toBeNull();
+    expect(h.editor()).not.toBeNull(); // the affix opens the session
+    expect(calendar()).not.toBeNull(); // panel + grid are one surface
     expect(activeCell()?.getAttribute('data-day')).toBe('2026-05-12'); // the committed day
 
     (calendar()!.querySelector('[data-day="2026-05-20"]') as HTMLElement).click();
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
     h.fixture.detectChanges();
 
     expect(h.host.saved).toEqual([db('2026-05-20')]);

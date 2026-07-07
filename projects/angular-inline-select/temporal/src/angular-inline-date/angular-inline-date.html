@@ -38,7 +38,7 @@
       type="button"
       class="date-trigger"
       aria-label="Open calendar"
-      [attr.aria-expanded]="calendarOpen()"
+      [attr.aria-expanded]="editing() && calendarActive()"
       (mousedown)="$event.preventDefault()"
       (click)="toggleCalendar($event)"
     >
@@ -70,6 +70,8 @@
   [suffixTemplate]="suffixActive() ? suffixTpl : undefined"
   [hintTemplate]="preview() ? previewTpl : undefined"
   [menuTemplate]="showDateMenu() ? dateMenu : undefined"
+  [panelTemplate]="calendarActive() ? calendarPanel : undefined"
+  [showActions]="!showCalendar()"
   (touch)="touch.emit()"
   (saved)="handleInnerSaved($event)"
 >
@@ -77,27 +79,17 @@
 </angular-inline-text>
 
 <!--
-  T2 — the calendar overlay. Open-on-edit NEVER steals focus (the grid is
-  a live mirror of the draft); ArrowDown hands focus over; Escape and
-  picks refocus the field BEFORE the popup collapses.
+  T2b — the calendar lives IN the panel (the menu's sibling slot). It
+  never steals focus on open (a live mirror of the draft); ArrowDown
+  hands focus over; Escape hands it back; a pick COMMITS the session.
 -->
-<ng-template
-  cdkConnectedOverlay
-  [cdkConnectedOverlayOrigin]="calendarOrigin()"
-  [cdkConnectedOverlayOpen]="calendarOpen()"
-  [cdkConnectedOverlayPositions]="calendarPositions"
-  [cdkConnectedOverlayViewportMargin]="8"
-  (overlayOutsideClick)="closeCalendar()"
-  (detach)="closeCalendar()"
->
-  <div class="date-calendar" role="dialog" aria-label="Calendar">
-    <angular-inline-calendar
-      [activeDay]="pendingDay()"
-      [selectedDay]="internalRange().start"
-      [locale]="locale()"
-      [now]="now()"
-      (picked)="pickDate($event)"
-      (escaped)="escapeCalendar()"
-    />
-  </div>
+<ng-template #calendarPanel>
+  <angular-inline-calendar
+    [activeDay]="pendingDay()"
+    [selectedDay]="internalRange().start"
+    [locale]="locale()"
+    [now]="now()"
+    (picked)="pickDate($event)"
+    (escaped)="escapeCalendar()"
+  />
 </ng-template>

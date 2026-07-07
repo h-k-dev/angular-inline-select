@@ -151,7 +151,7 @@ BEFORE the popup collapses; a pick while editing REWRITES the live draft
 (session stays open), idle it COMMITS immediately. `showCalendar`
 input(true) opts out.
 
-### T2b — the grid moves INTO the panel (DECIDED, next up)
+### T2b — the grid moves INTO the panel — SHIPPED (145 tests)
 
 The overlay-under-the-field was the flag-picker reflex, but the flag
 picker opens from IDLE — this grid lives inside an EDITING SESSION, so
@@ -172,7 +172,7 @@ no positioning math" — that decision already exists). Plan:
   are one surface); since picks commit, idle-pick-commits-immediately
   survives with less machinery. ArrowDown handoff unchanged.
 
-## The round-trip typing law (DECIDED — applies to every codec)
+## The round-trip typing law — SHIPPED (applies to every codec)
 
 **`parse(format(value))` must equal `value`, per locale.** Whatever the
 display shows, the user must be able to type back — TODAY this is
