@@ -184,6 +184,7 @@ describe('AngularInlineTime with a display zone (T6) + native bounds (T3)', () =
     <angular-inline-time
       [formField]="field"
       locale="de"
+      [native]="native()"
       (savedModelChange)="saved.push($event)"
       (saved)="sessions.push($event)"
     />
@@ -192,6 +193,7 @@ describe('AngularInlineTime with a display zone (T6) + native bounds (T3)', () =
 class TimeFormHost {
   model = signal<string | null>(at('09:30'));
   field = form(this.model);
+  native = signal(false);
 
   saved: (string | null)[] = [];
   sessions: InlineTimeSaved[] = [];
@@ -308,6 +310,36 @@ describe('AngularInlineTime (input rehost)', () => {
     expect(h.host.field().value()).toBe(at('09:30'));
     expect(h.input().value).toBe('09:30');
     expect(h.host.saved).toEqual([]);
+  });
+
+  it('there is no trigger button — native mode is the one picker affordance', () => {
+    expect(h.fixture.nativeElement.querySelector('button')).toBeNull();
+
+    h.host.native.set(true);
+    h.fixture.detectChanges();
+
+    expect(h.fixture.nativeElement.querySelector('button')).toBeNull();
+  });
+
+  it('native mode: a click on the field opens the OS picker, seeded with the value', () => {
+    h.host.native.set(true);
+    h.fixture.detectChanges();
+
+    const shown: string[] = [];
+    (h.native() as HTMLInputElement & { showPicker: () => void }).showPicker = function (
+      this: HTMLInputElement,
+    ) {
+      shown.push(this.value);
+    };
+
+    h.input().click();
+    expect(shown).toEqual(['09:30']);
+
+    // Off, the field's click stays a plain caret placement.
+    h.host.native.set(false);
+    h.fixture.detectChanges();
+    h.input().click();
+    expect(shown).toEqual(['09:30']);
   });
 
   it('an OS-picker change while idle commits immediately', () => {

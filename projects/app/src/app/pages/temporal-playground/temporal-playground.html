@@ -71,7 +71,7 @@
         <h3 class="example-card__title">Time — what the user sees vs the model</h3>
         <p class="prose">
           One <code>[formField]</code>. Type “930”, “9”, “21:05” — or overflow hours (“24:30” reads as next-day
-          00:30); the 🕐 opens the platform’s own picker. The local wall-clock display hides a FULL UTC instant that
+          00:30); in native mode a click on the field opens the platform’s own picker. The local wall-clock display hides a FULL UTC instant that
           carries its own day.
         </p>
 
@@ -90,6 +90,7 @@
                 <angular-inline-time
                   [formField]="timeForm.starts"
                   [locale]="dateLocale()"
+                  [native]="nativeTimePicker()"
                   ariaLabel="Start time"
                   (savedModelChange)="logEmit('starts.savedModelChange', $event)"
                 />
@@ -98,6 +99,12 @@
             </tr>
           </tbody>
         </table>
+
+        <div class="form-toggles" role="group" aria-label="Time picker mode">
+          <button mat-stroked-button (click)="nativeTimePicker.set(!nativeTimePicker())">
+            Native picker: {{ nativeTimePicker() ? 'on (click the field)' : 'off (typing only)' }}
+          </button>
+        </div>
       </div>
 
       <div class="example-card" id="duration-example">
@@ -212,6 +219,7 @@
               <td>
                 <angular-inline-time
                   rangeStart
+                  [native]="true"
                   [locale]="militaryLocale()"
                   ariaLabel="Shift start in 24-hour time"
                 />
@@ -223,6 +231,7 @@
               <td>
                 <angular-inline-time
                   rangeEnd
+                  [native]="true"
                   [locale]="militaryLocale()"
                   ariaLabel="Shift end in 24-hour time"
                 />
@@ -269,6 +278,7 @@
               <td>
                 <angular-inline-time
                   rangeStart
+                  [native]="true"
                   [locale]="militaryLocale()"
                   ariaLabel="Stay start in 24-hour time"
                 />
@@ -280,6 +290,7 @@
               <td>
                 <angular-inline-time
                   rangeEnd
+                  [native]="true"
                   [locale]="militaryLocale()"
                   ariaLabel="Stay end in 24-hour time"
                 />

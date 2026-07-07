@@ -1,8 +1,9 @@
 <!--
   The input rehost: one real <input> — the family look is CSS (dashed
-  underline idle, solid focused). The +n badge and the 🕐 trigger are
-  ADORNMENTS outside the input, never part of the draft. The native input
-  below is the OS picker's anchor — focusable but invisible.
+  underline idle, solid focused). The +n badge is an ADORNMENT outside the
+  input, never part of the draft. The native input below is the OS picker's
+  anchor — focusable but invisible; `native` mode opens it from the field's
+  own click (there is no trigger button).
 -->
 <span
   class="inline-time"
@@ -35,6 +36,7 @@
       [disabled]="effectiveDisabled()"
       [readonly]="effectiveReadonly()"
       (input)="handleInput(timeInput.value)"
+      (click)="handleFieldClick()"
       (focusin)="handleFocusIn()"
       (focusout)="handleFocusOut()"
       (keydown)="handleKeydown($event)"
@@ -51,16 +53,6 @@
     <span class="inline-time__affix" aria-hidden="true">
       <ng-container [ngTemplateOutlet]="tpl" />
     </span>
-  } @else if (showNativePicker()) {
-    <button
-      type="button"
-      class="inline-time__trigger"
-      aria-label="Open time picker"
-      (mousedown)="$event.preventDefault()"
-      (click)="openNativePicker($event)"
-    >
-      🕐
-    </button>
   }
 
   <input

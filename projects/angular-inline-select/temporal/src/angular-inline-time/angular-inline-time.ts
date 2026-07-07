@@ -71,11 +71,12 @@ export interface InlineTimeSaved {
  * - Drafts are TYPED (`'9'` → 09:00, `'930'`, `'21:05'`) with a live
  *   interpretation preview; overflow hours declare the day over-count by
  *   hand (`'24:30'` → next day 00:30, previewed `✓ 00:30 +1 day`).
- * - **The picker is the OS's own**: a 🕐 suffix drives a visually-hidden
- *   `<input type="time">` — `showPicker()` where the platform supports it,
- *   falling back to focusing the input (mobile opens its wheels on focus).
- *   While a session is open, a pick replaces the draft; idle, it commits
- *   immediately (the flag-picker convention).
+ * - **The picker is the OS's own, opt-in via `native`**: the field's own
+ *   click drives a visually-hidden `<input type="time">` — `showPicker()`
+ *   where the platform supports it, falling back to focusing the input
+ *   (mobile opens its wheels on focus). There is NO trigger button; typing
+ *   is the primary road everywhere. While a session is open, a pick
+ *   replaces the draft; idle, it commits immediately.
  */
 @Component({
   selector: 'angular-inline-time',
@@ -166,12 +167,13 @@ export interface InlineTimeSaved {
     /*
       The +n over-count perches on the input's TOP-RIGHT corner (the
       airline-ticket look) — absolutely positioned, so it costs no line
-      space and nothing in the row can crowd or obscure it.
+      space and nothing in the row can crowd or obscure it. The inline-end
+      overhang has the room it wants: no adornment follows the field.
     */
     .time-day-badge {
       position: absolute;
       top: -0.8em;
-      right: -0.5em;
+      inset-inline-end: -1.1em;
       z-index: 1;
       padding: 0 0.35em;
       border-radius: var(--mat-sys-corner-small, 0.5rem);
@@ -183,20 +185,6 @@ export interface InlineTimeSaved {
       white-space: nowrap;
       pointer-events: none;
       user-select: none;
-    }
-
-    .inline-time__trigger {
-      font: inherit;
-      line-height: 1;
-      padding: 0;
-      border: 0;
-      background: transparent;
-      cursor: pointer;
-      border-radius: var(--mat-sys-corner-extra-small, 0.25rem);
-    }
-    .inline-time__trigger:focus-visible {
-      outline: 2px solid var(--mat-sys-primary, #4285f4);
-      outline-offset: 2px;
     }
 
     /* Focusable but invisible — display:none would break focus + showPicker anchoring */
@@ -304,8 +292,14 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
   pickerMin = input<string | undefined>(undefined);
   pickerMax = input<string | undefined>(undefined);
 
-  /** The 🕐 OS-picker affordance. Off, or overridden by suffix content. */
-  showNativePicker = input(true);
+  /**
+   * NATIVE mode — the one picker affordance: a click on the input opens the
+   * OS time picker (the date control's calendar-on-edit convention). Typing
+   * stays fully available; the picker is an assist, never the only road.
+   * T3's support matrix: `showPicker()` feature-detected, focus fallback
+   * (mobile opens its wheels on focus).
+   */
+  native = input(false);
 
   /** Affix template passthrough (composition channel + content sugar). */
   prefixTemplate = input<TemplateRef<unknown> | undefined>(undefined);
@@ -726,10 +720,17 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
    * gesture or in cross-origin iframes — both roads fall back to focusing
    * the input (iOS opens its wheels on focus).
    */
-  protected openNativePicker(event: Event) {
-    event.preventDefault();
-    event.stopPropagation();
+  /**
+   * Native mode: the input's own click is the picker affordance. The click
+   * has already focused the field (the session is open), so a pick lands as
+   * a draft replacement — the calendar-on-edit convention.
+   */
+  protected handleFieldClick() {
+    if (!this.native() || this.effectiveDisabled() || this.effectiveReadonly()) return;
+    this.#showOsPicker();
+  }
 
+  #showOsPicker() {
     const native = this.nativeInput().nativeElement;
     native.value = this.localTime() ?? '';
 

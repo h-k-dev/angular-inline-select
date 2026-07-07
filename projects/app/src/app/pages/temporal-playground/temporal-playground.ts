@@ -83,6 +83,9 @@ export class TemporalPlayground {
   });
   protected timeForm = form(this.timeModel);
 
+  /** Native mode: the field itself opens the OS picker — no 🕐 suffix. */
+  protected nativeTimePicker = signal(false);
+
   // ---------------------------------------------------------------------------
   // Duration — form-driven: the model is seconds
   // ---------------------------------------------------------------------------
