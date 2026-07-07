@@ -49,6 +49,23 @@ describe('time codec', () => {
     expect(parseTime('24:30')).toBeUndefined();
   });
 
+  it('the round-trip law: the display 12 h formats parse back', () => {
+    expect(parseTime('9:30 AM', 'en')).toBe('09:30');
+    expect(parseTime('9:30 PM', 'en')).toBe('21:30');
+    expect(parseTime('12:00 AM', 'en')).toBe('00:00');
+    expect(parseTime('12:30 PM', 'en')).toBe('12:30');
+    expect(parseTime('9 pm')).toBe('21:00'); // universal spellings, no locale
+    expect(parseTime('13:00 PM', 'en')).toBeUndefined(); // nonsense hour with meridiem
+    expect(parseTimeDraft('24:30 PM', 'en')).toBeUndefined(); // overflow + AM/PM is nonsense
+
+    // Property: parse(format(time)) === time, per locale.
+    for (const locale of ['en', 'de']) {
+      for (const time of ['00:00', '09:30', '12:00', '21:05']) {
+        expect(parseTime(formatWallClock(time, locale), locale)).toBe(time);
+      }
+    }
+  });
+
   it('formats through Intl per locale', () => {
     expect(formatWallClock('09:30', 'en')).toBe('9:30 AM');
     expect(formatWallClock('21:05', 'de')).toBe('21:05');

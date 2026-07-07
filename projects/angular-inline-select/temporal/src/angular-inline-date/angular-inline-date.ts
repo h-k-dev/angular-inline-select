@@ -242,7 +242,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   });
 
   /** The current draft's ISO reading (`null` empty, `undefined` unreadable). */
-  readonly parsedDraft = computed(() => parseDateInput(this.innerValue(), this.now()()));
+  readonly parsedDraft = computed(() => parseDateInput(this.innerValue(), this.now()(), this.locale()));
 
   /** The parse gate: whether the current draft fails the codec. Public for consumers. */
   readonly parseFailed = computed(() => this.parsedDraft() === undefined);
@@ -387,7 +387,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   protected handleInnerValue(raw: string) {
     this.innerValue.set(raw);
 
-    const day = parseDateInput(raw, this.now()());
+    const day = parseDateInput(raw, this.now()(), this.locale());
     if (day === undefined) return;
 
     const echoed = this.#daysToDbShape(this.#mergeDay(day), this.shape());
@@ -396,7 +396,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   /** Retype the settled session: local days inside, DB entries in the echoed shape outside. */
   protected handleInnerSaved(session: InlineTextSaved) {
-    const day = parseDateInput(session.value, this.now()());
+    const day = parseDateInput(session.value, this.now()(), this.locale());
     const value =
       day === undefined
         ? this.value()

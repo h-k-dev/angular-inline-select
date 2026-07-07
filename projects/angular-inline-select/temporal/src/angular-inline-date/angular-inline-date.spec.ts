@@ -51,6 +51,25 @@ describe('date codec', () => {
     expect(parseDateInput('soon', NOW)).toBeUndefined();
   });
 
+  it('the round-trip law: whatever the display formats, the parser accepts', () => {
+    // The display's own outputs (medium + full), localized and English.
+    expect(parseDateInput('Dec 24, 2026', NOW, 'en')).toBe('2026-12-24');
+    expect(parseDateInput('Thursday, December 24, 2026', NOW, 'en')).toBe('2026-12-24');
+    expect(parseDateInput('24. Dezember 2026', NOW, 'de')).toBe('2026-12-24');
+    expect(parseDateInput('jun 07, 2024', NOW, 'en')).toBe('2024-06-07');
+    expect(parseDateInput('7 june', NOW, 'en')).toBe('2026-06-07'); // year from now
+    expect(parseDateInput('december 24', NOW, 'de')).toBe('2026-12-24'); // English always matches
+
+    // Property: parse(format(day)) === day, per locale.
+    for (const locale of ['en', 'de']) {
+      for (const day of ['2026-01-31', '2026-07-04', '2024-02-29']) {
+        expect(parseDateInput(formatIsoDate(day, locale), NOW, locale)).toBe(day);
+      }
+    }
+
+    expect(parseDateInput('notamonth 12', NOW, 'en')).toBeUndefined();
+  });
+
   it('formats ISO dates through Intl', () => {
     expect(formatIsoDate('2026-05-12', 'en')).toBe('May 12, 2026');
     expect(formatIsoDate(null)).toBe('');

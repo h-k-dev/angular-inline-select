@@ -89,14 +89,106 @@ function isoIfValid(year: number, month: number, day: number): IsoDate | undefin
   return roundTrips ? toIsoDate(date) : undefined;
 }
 
+// -----------------------------------------------------------------------------
+// The round-trip typing law: `parse(format(value))` must equal `value` —
+// whatever the display shows, the user can type back. Month and weekday
+// names come from an `Intl` REVERSE lookup (locale + English, long +
+// short forms) — zero bundled translations, the slash-menu lesson.
+// -----------------------------------------------------------------------------
+
+const normalizeToken = (token: string) => token.toLowerCase().replace(/[.,]+$/, '');
+
+const nameTableCache = new Map<string, { months: Map<string, number>; weekdays: Set<string> }>();
+
+function nameTable(locale: string | string[] | undefined) {
+  const key = JSON.stringify(locale ?? '');
+  const cached = nameTableCache.get(key);
+  if (cached) return cached;
+
+  const months = new Map<string, number>();
+  const weekdays = new Set<string>();
+
+  for (const tag of [locale, 'en'] as const) {
+    for (const style of ['long', 'short'] as const) {
+      try {
+        const monthFormat = new Intl.DateTimeFormat(tag, { month: style });
+        for (let month = 0; month < 12; month++) {
+          const name = normalizeToken(monthFormat.format(new Date(2024, month, 1)));
+          if (!months.has(name)) months.set(name, month + 1);
+        }
+
+        const weekdayFormat = new Intl.DateTimeFormat(tag, { weekday: style });
+        for (let day = 1; day <= 7; day++) {
+          weekdays.add(normalizeToken(weekdayFormat.format(new Date(2024, 0, day))));
+        }
+      } catch {
+        // Unknown locale tag — the English pass still fills the table.
+      }
+    }
+  }
+
+  const table = { months, weekdays };
+  nameTableCache.set(key, table);
+  return table;
+}
+
+/** `'Dec 24, 2026'`, `'24. Dezember 2026'`, `'Thursday, December 24, 2026'` … */
+function parseNamedDate(
+  raw: string,
+  now: Date,
+  locale: string | string[] | undefined,
+): IsoDate | undefined {
+  const { months, weekdays } = nameTable(locale);
+
+  const tokens = raw
+    .split(/[\s,]+/)
+    .map(normalizeToken)
+    .filter((token) => token.length > 0 && !weekdays.has(token));
+
+  let month: number | undefined;
+  let day: number | undefined;
+  let year: number | undefined;
+
+  for (const token of tokens) {
+    if (months.has(token)) {
+      if (month !== undefined) return undefined;
+      month = months.get(token);
+      continue;
+    }
+
+    if (!/^\d{1,4}$/.test(token)) return undefined;
+    const value = Number(token);
+
+    if (token.length === 4) {
+      if (year !== undefined) return undefined;
+      year = value;
+    } else if (day === undefined) {
+      day = value;
+    } else if (year === undefined) {
+      year = value < 100 ? 2000 + value : value;
+    } else {
+      return undefined;
+    }
+  }
+
+  if (month === undefined || day === undefined) return undefined;
+  return isoIfValid(year ?? now.getFullYear(), month, day);
+}
+
 /**
  * Parses a date draft into an ISO date. `''` → `null` (empty), text that is
  * not a calendar date → `undefined` (raises the parse gate).
  *
  * Accepted shapes: `'12.5.2026'`, `'12.5.26'` (→ 20xx), `'12.5.'` / `'12.5'`
- * (current year from `now`), `'2026-05-12'`, `'12/5/2026'`.
+ * (current year from `now`), `'2026-05-12'`, `'12/5/2026'` — and, per the
+ * round-trip law, everything the display formats: `'Dec 24, 2026'`,
+ * `'24. Dezember 2026'`, weekday prefixes stripped.
  */
-export function parseDateInput(raw: string, now: Date = new Date()): IsoDate | null | undefined {
+export function parseDateInput(
+  raw: string,
+  now: Date = new Date(),
+  locale?: string | string[],
+): IsoDate | null | undefined {
   const trimmed = raw.trim();
   if (trimmed === '') return null;
 
@@ -118,6 +210,9 @@ export function parseDateInput(raw: string, now: Date = new Date()): IsoDate | n
 
     return isoIfValid(year, month, day);
   }
+
+  // Named months (the display's own format, localized + English).
+  if (/[\p{L}]/u.test(trimmed)) return parseNamedDate(trimmed, now, locale);
 
   return undefined;
 }

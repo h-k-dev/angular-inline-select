@@ -243,7 +243,7 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
   });
 
   /** The current draft's canonical reading (`null` empty, `undefined` unreadable). */
-  readonly parsedDraft = computed(() => parseTimeDraft(this.innerValue()));
+  readonly parsedDraft = computed(() => parseTimeDraft(this.innerValue(), this.locale()));
 
   /** The parse gate: whether the current draft fails the codec. Public for consumers. */
   readonly parseFailed = computed(() => this.parsedDraft() === undefined);
@@ -274,7 +274,7 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
   protected handleInnerValue(raw: string) {
     this.innerValue.set(raw);
 
-    const draft = parseTimeDraft(raw);
+    const draft = parseTimeDraft(raw, this.locale());
     if (draft === undefined) return;
 
     const value = this.#toValue(draft);
@@ -283,7 +283,7 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
 
   /** Retype the settled session: local strings inside, DB entries outside. */
   protected handleInnerSaved(session: InlineTextSaved) {
-    const draft = parseTimeDraft(session.value);
+    const draft = parseTimeDraft(session.value, this.locale());
     const value = draft === undefined ? this.value() : this.#toValue(draft);
     const dayOverflow = draft === null || draft === undefined ? 0 : draft.days;
 
