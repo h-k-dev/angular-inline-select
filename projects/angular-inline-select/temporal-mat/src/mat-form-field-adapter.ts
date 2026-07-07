@@ -12,7 +12,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { _IdGenerator } from '@angular/cdk/a11y';
-import { MatFormFieldControl } from '@angular/material/form-field';
+import { MAT_FORM_FIELD, MatFormFieldControl } from '@angular/material/form-field';
 
 import {
   AngularInlineDate,
@@ -98,6 +98,14 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
     }
     this.#control = control;
 
+    // Anchor the date control's calendar to the form field's FLEX box (what
+    // mat-select/-datepicker/-autocomplete use), not the bare input wrapper —
+    // so the panel drops below the underline instead of at the text baseline.
+    // The control never learns what mat is; it only receives a CDK-generic
+    // ElementRef through its `overlayOrigin` seam. `getConnectedOverlayOrigin`
+    // reads a ViewChild, so defer to afterNextRender below.
+    const formField = inject(MAT_FORM_FIELD, { optional: true });
+
     // Container CHROME must not steal focus: a mousedown on the box's
     // padding/label/outline would blur the input, settle the session and
     // close the panel — and the click's `onContainerClick` would then
@@ -109,6 +117,10 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
     const destroyRef = inject(DestroyRef);
     afterNextRender(
       () => {
+        if (formField !== null && this.#control instanceof AngularInlineDate) {
+          this.#control.overlayOrigin.set(formField.getConnectedOverlayOrigin());
+        }
+
         const host = this.#element.nativeElement;
         const container = host.closest('mat-form-field');
         if (container === null) return;

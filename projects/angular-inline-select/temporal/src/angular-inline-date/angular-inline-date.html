@@ -95,7 +95,7 @@
 -->
 <ng-template
   cdkConnectedOverlay
-  [cdkConnectedOverlayOrigin]="origin"
+  [cdkConnectedOverlayOrigin]="overlayOrigin() ?? origin"
   [cdkConnectedOverlayOpen]="overlayOpen()"
   [cdkConnectedOverlayPositions]="overlayPositions"
   (overlayOutsideClick)="handleOutsideClick()"

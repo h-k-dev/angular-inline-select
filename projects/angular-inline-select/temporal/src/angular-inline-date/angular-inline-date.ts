@@ -360,6 +360,19 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   showCalendar = input(true);
 
   /**
+   * Generic overlay-anchor override — a container seam, NOT a mat one. When
+   * unset (the default) the panel anchors to the bare `.inline-date` wrapper.
+   * A host that draws its own chrome (the mat adapter passes the form field's
+   * flex box; a dense table cell could pass its own) hands the ElementRef/
+   * element here so the calendar anchors under the WHOLE field, below the
+   * underline — never learning what that container is. The control stays
+   * mat-ignorant; the type is CDK-generic, not Material. `model` (not
+   * `input`) so a host directive on the same element can `.set()` it
+   * programmatically — the same public-writable seam as `editing`.
+   */
+  overlayOrigin = model<ElementRef<HTMLElement> | HTMLElement | null>(null);
+
+  /**
    * Quick-pick commands rendered as chips in the panel. Defaults to
    * yesterday/today/tomorrow — INJECTABLE so a consumer's copy can grow
    * its own presets ("last 30 days") without touching the control.

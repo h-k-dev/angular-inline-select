@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form, required } from '@angular/forms/signals';
 import { MatFormFieldControl, MatFormFieldModule } from '@angular/material/form-field';
 
-import { AngularInlineTime } from 'angular-inline-select/temporal';
+import { AngularInlineDate, AngularInlineTime } from 'angular-inline-select/temporal';
 import { composeDbEntry } from 'angular-inline-select/temporal';
 import { InlineMatFormField } from './mat-form-field-adapter';
 
@@ -149,5 +149,60 @@ describe('InlineMatFormField (the temporal-mat adapter)', () => {
   it('describes the input with the form-field hint ids', () => {
     // Material calls setDescribedByIds with the mat-hint id after render.
     expect(h.input().getAttribute('aria-describedby')).toContain('mat-mdc-hint');
+  });
+});
+
+@Component({
+  imports: [MatFormFieldModule, AngularInlineDate, InlineMatFormField, FormField],
+  template: `
+    <mat-form-field>
+      <mat-label>Deadline</mat-label>
+      <angular-inline-date inlineMatFormField [formField]="field" />
+    </mat-form-field>
+  `,
+})
+class MatDateHost {
+  model = signal<string | null>(null);
+  field = form(this.model);
+}
+
+@Component({
+  imports: [AngularInlineDate, FormField],
+  template: `<angular-inline-date [formField]="field" />`,
+})
+class BareDateHost {
+  model = signal<string | null>(null);
+  field = form(this.model);
+}
+
+describe('InlineMatFormField calendar anchoring', () => {
+  it('anchors the calendar to the form-field FLEX box, not the bare input wrapper', () => {
+    const fixture = TestBed.createComponent(MatDateHost);
+    fixture.detectChanges();
+
+    const control = fixture.debugElement
+      .query((el) => el.name === 'angular-inline-date')!
+      .componentInstance as AngularInlineDate;
+    const origin = control.overlayOrigin();
+    // getConnectedOverlayOrigin() returns the text-field wrapper — the box
+    // INCLUDING the underline (line ripple), excluding the subscript row —
+    // the exact anchor mat-select/-datepicker use, not the text baseline.
+    const wrapper = fixture.nativeElement.querySelector(
+      '.mat-mdc-text-field-wrapper',
+    ) as HTMLElement;
+
+    expect(wrapper).not.toBeNull();
+    expect(origin).not.toBeNull();
+    expect((origin as { nativeElement: HTMLElement }).nativeElement).toBe(wrapper);
+  });
+
+  it('leaves the origin null when the control stands alone — anchors to its own wrapper', () => {
+    const fixture = TestBed.createComponent(BareDateHost);
+    fixture.detectChanges();
+
+    const control = fixture.debugElement
+      .query((el) => el.name === 'angular-inline-date')!
+      .componentInstance as AngularInlineDate;
+    expect(control.overlayOrigin()).toBeNull();
   });
 });
