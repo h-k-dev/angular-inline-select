@@ -314,7 +314,7 @@ describe('AngularInlineDate (input rehost)', () => {
     type(h, h.start(), '24.12.2026');
 
     expect(document.querySelector('.inline-date__preview')?.textContent?.trim()).toBe(
-      '✓ Thursday, December 24, 2026',
+      'Thursday, December 24, 2026',
     );
 
     press(h, h.start(), 'Enter');

@@ -6,6 +6,7 @@
   class="inline-duration"
   cdkOverlayOrigin
   #origin="cdkOverlayOrigin"
+  #field
   [class.inline-duration--invalid]="errorsVisible()"
 >
   @if (prefixTpl(); as tpl) {
@@ -46,6 +47,11 @@
   <!-- Snap-back is silent data-restoration — the announcement is not. -->
   <span class="inline-duration__sr" aria-live="polite">{{ revertNotice() }}</span>
 </span>
+
+<!-- Floating clear affordance — anchored to the whole field. -->
+<bubble-menu [origin]="field" [side]="clearBubbleSide()" [canShow]="clearCanShow()">
+  <button editableClearButton aria-label="Clear duration" (clear)="clearBubble()"></button>
+</bubble-menu>
 
 <ng-template
   cdkConnectedOverlay

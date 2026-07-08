@@ -192,14 +192,78 @@
 // BUBBLE: floating quick actions beside the field (CDK overlay container)
 // -----------------------------------------------------------------------------
 .editable-bubble {
+  // The hover BRIDGE + hit halo: the container TOUCHES the field (positional
+  // offset is 0) and carries an equal transparent pad on all four sides. The
+  // field-facing pad is the visual gap; the rest is a balanced, forgiving hit
+  // area around the button. All invisible — so the pointer never crosses a
+  // dead zone travelling from field to button (no lost-hover flicker).
+  --editable-bubble-pad: calc(var(--mat-sys-inner-spacing, 16px) * 0.75);
+
   display: inline-flex;
   align-items: center;
   gap: calc(var(--mat-sys-inner-spacing, 16px) / 4);
-  padding: calc(var(--mat-sys-inner-spacing, 16px) / 4);
+  padding: var(--editable-bubble-pad);
 
   border: 0 solid;
 
   animation: editable-bubble-enter 0.15s var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
+}
+
+// -----------------------------------------------------------------------------
+// ACTION BUTTONS: the shared pill buttons projected into the panel + bubble.
+// Global (not component-encapsulated) so a CONSUMER-projected button — rendered
+// in the overlay under the consumer's own encapsulation — still picks them up.
+// -----------------------------------------------------------------------------
+.editable-action {
+  border: 0 solid;
+  background: transparent;
+  cursor: pointer;
+  font: var(--mat-sys-body-small, 0.875rem/calc(1.25 / 0.875) system-ui);
+  color: var(--mat-sys-on-surface, #1f1f1f);
+
+  background-color: var(
+    --editable-text-action-background,
+    oklch(from var(--mat-sys-surface-container-highest, #eee) l c h / 0.75)
+  );
+  color: var(--editable-text-action-color, var(--mat-sys-on-surface-variant, #5f6368));
+  padding-inline: calc(var(--mat-sys-spacing, 0.25rem) * 2.5);
+  border-radius: var(--mat-sys-radius, 0.625rem);
+  height: calc(var(--mat-sys-spacing, 0.25rem) * 8);
+
+  transition: scale 0.15s cubic-bezier(0.23, 1, 0.32, 1);
+  scale: 1;
+
+  &:active {
+    scale: 0.98;
+  }
+
+  &:hover,
+  :focus-visible {
+    background-color: var(
+      --editable-text-action-hover-background,
+      var(--mat-sys-surface-container-highest, #eee)
+    );
+
+    color: var(--editable-text-action-hover-color, var(--mat-sys-on-surface-variant, #5f6368));
+  }
+}
+
+.editable-action-save {
+  min-width: calc(var(--mat-sys-spacing, 0.25rem) * 20);
+  background-color: var(--editable-text-action-save-background, var(--mat-sys-primary, #4285f4));
+  color: var(--editable-text-action-save-color, var(--mat-sys-on-primary, #fff));
+  &:hover,
+  :focus-visible {
+    background-color: var(
+      --editable-text-action-save-hover-background,
+      var(--mat-sys-primary, #4285f4)
+    );
+    color: var(--editable-text-action-save-hover-color, var(--mat-sys-on-primary, #fff));
+  }
+}
+
+.editable-action-clear {
+  height: calc(var(--mat-sys-spacing, 0.25rem) * 6);
 }
 
 @keyframes editable-bubble-enter {

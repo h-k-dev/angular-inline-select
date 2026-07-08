@@ -23,7 +23,13 @@ import {
 } from '@angular/cdk/overlay';
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
-import { EditablePrefix, EditableSuffix } from 'angular-inline-select';
+import {
+  EditablePrefix,
+  EditableSuffix,
+  type BubbleMenuSide,
+  BubbleMenu,
+  EditableClearButton,
+} from 'angular-inline-select';
 import { parseDuration, formatDuration, type DurationFormat } from './duration-codec';
 import { INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 
@@ -53,7 +59,7 @@ export interface InlineDurationSaved {
  */
 @Component({
   selector: 'angular-inline-duration',
-  imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgTemplateOutlet],
+  imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgTemplateOutlet, BubbleMenu, EditableClearButton],
   templateUrl: './angular-inline-duration.html',
   styleUrl: './angular-inline-duration.scss',
   host: {
@@ -79,6 +85,12 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
 
   /** Accessible name for the field. */
   ariaLabel = input<string | undefined>(undefined);
+
+  /**
+   * Which edge the clear bubble grows from — `'end'` (default) or `'start'`
+   * for a range group's inline-START leaf, so the outer leaves open outward.
+   */
+  clearBubbleSide = input<BubbleMenuSide>('end');
 
   /** How colon notation reads and how committed values render. */
   durationFormat = input<DurationFormat>('h:mm');
@@ -390,6 +402,38 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   togglePanel() {
     if (this.effectiveDisabled() || this.effectiveReadonly()) return;
     this.#panelDismissed.update((dismissed) => !dismissed);
+  }
+
+  // -- Clear affordance (idle hover bubble) --------------------------------------
+
+  /** The clear bubble may show while idle and non-empty on an unlocked field. */
+  protected clearCanShow = computed(
+    () =>
+      !this.required() &&
+      !this.effectiveDisabled() &&
+      !this.effectiveReadonly() &&
+      !this.editing() &&
+      !this.isEmpty(),
+  );
+
+  /**
+   * Clears the field from the idle hover bubble — a commit AND an interaction
+   * (mat-faithful): writes `null`, marks the field touched, and settles once
+   * so a bound schema (and a range group) sees the clear.
+   */
+  protected clearBubble() {
+    // Idle-only: the bubble is hidden while editing; guard anyway.
+    if (this.editing() || this.value() === null) return;
+
+    this.value.set(null);
+    this.#baselineValue = null;
+    this.draft.set(this.display());
+    this.#saveAttempted.set(false);
+
+    this.#selfTouched.set(true);
+    this.touch.emit();
+    this.savedModelChange.emit(null);
+    this.saved.emit({ value: null, changed: true });
   }
 
   // -- Form Value Contract ------------------------------------------------------------------

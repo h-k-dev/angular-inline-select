@@ -23,7 +23,13 @@ import {
 } from '@angular/cdk/overlay';
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
-import { EditablePrefix, EditableSuffix } from 'angular-inline-select';
+import {
+  EditablePrefix,
+  EditableSuffix,
+  BubbleMenu,
+  EditableClearButton,
+  type BubbleMenuSide,
+} from 'angular-inline-select';
 import { parseTime, parseTimeDraft, formatWallClock, type TimeDraft } from './time-codec';
 import { INLINE_TIME_DAY_OFFSET } from './day-offset';
 import { INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
@@ -83,7 +89,7 @@ export interface InlineTimeSaved {
  */
 @Component({
   selector: 'angular-inline-time',
-  imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgTemplateOutlet],
+  imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgTemplateOutlet, BubbleMenu, EditableClearButton],
   templateUrl: './angular-inline-time.html',
   styleUrl: './angular-inline-time.scss',
   host: {
@@ -112,6 +118,12 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
 
   /** Accessible name for the field. */
   ariaLabel = input<string | undefined>(undefined);
+
+  /**
+   * Which edge the clear bubble grows from — `'end'` (default) or `'start'`
+   * for a range group's inline-START leaf, so the outer leaves open outward.
+   */
+  clearBubbleSide = input<BubbleMenuSide>('end');
 
   /** Locale for the idle display (`Intl`); browser default when omitted. */
   locale = input<string | string[] | undefined>(undefined);
@@ -583,6 +595,38 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
       this.savedModelChange.emit(value);
       this.saved.emit({ value, changed: true, dayOverflow: 0, explicitDay: false });
     }
+  }
+
+  // -- Clear affordance (idle hover bubble) --------------------------------------
+
+  /** The clear bubble may show while idle and non-empty on an unlocked field. */
+  protected clearCanShow = computed(
+    () =>
+      !this.required() &&
+      !this.effectiveDisabled() &&
+      !this.effectiveReadonly() &&
+      !this.editing() &&
+      !this.isEmpty(),
+  );
+
+  /**
+   * Clears the field from the idle hover bubble — a commit AND an interaction
+   * (mat-faithful): writes `null`, marks the field touched, and settles once
+   * so a bound schema (and a range group) sees the clear.
+   */
+  protected clearBubble() {
+    // Idle-only: the bubble is hidden while editing; guard anyway.
+    if (this.editing() || this.value() === null) return;
+
+    this.value.set(null);
+    this.#baselineValue = null;
+    this.draft.set(this.display());
+    this.#saveAttempted.set(false);
+
+    this.#selfTouched.set(true);
+    this.touch.emit();
+    this.savedModelChange.emit(null);
+    this.saved.emit({ value: null, changed: true, dayOverflow: 0, explicitDay: false });
   }
 
   // -- Form Value Contract ------------------------------------------------------------------

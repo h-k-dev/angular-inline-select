@@ -139,7 +139,7 @@
       <div class="editable-panel__actions">
         <button
           type="button"
-          class="action action-reset"
+          class="editable-action editable-action-reset"
           (mousedown)="$event.preventDefault(); $event.stopPropagation()"
           (click)="cancel()"
           aria-label="Discard"
@@ -150,7 +150,7 @@
         <!-- Stays clickable while invalid: a save attempt reveals the errors (mat submit semantics) -->
         <button
           type="button"
-          class="action action-save"
+          class="editable-action editable-action-save"
           (mousedown)="$event.preventDefault(); $event.stopPropagation()"
           (click)="accept()"
           aria-label="Save"
@@ -162,29 +162,7 @@
   </div>
 </ng-template>
 
-<!-- Floating action bubble: CDK overlay, so it can never be clipped by table cells or dialogs -->
-<ng-template
-  cdkConnectedOverlay
-  [cdkConnectedOverlayOrigin]="bubbleOrigin()"
-  [cdkConnectedOverlayOpen]="showBubble()"
-  [cdkConnectedOverlayPositions]="bubblePositions"
-  [cdkConnectedOverlayViewportMargin]="8"
->
-  <div
-    class="editable-bubble"
-    role="toolbar"
-    aria-label="Field actions"
-    (mouseenter)="openBubble()"
-    (mouseleave)="scheduleCloseBubble()"
-  >
-    <button
-      class="action action-clear"
-      aria-label="Clear value"
-      type="button"
-      (mousedown)="$event.preventDefault(); $event.stopPropagation()"
-      (click)="clearValue($event)"
-    >
-      clear
-    </button>
-  </div>
-</ng-template>
+<!-- Floating clear affordance — anchored to the in-flow field area (after the suffix, not the text) -->
+<bubble-menu [origin]="fieldArea" [contentOffset]="clearContentOffset()" [canShow]="bubbleMenuCanShow()">
+  <button editableClearButton aria-label="Clear value" (clear)="clearValue($event)"></button>
+</bubble-menu>

@@ -1,0 +1,21 @@
+<!-- Floating action bubble: CDK overlay, so it can never be clipped by table cells or dialogs -->
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="overlayOrigin()"
+  [cdkConnectedOverlayOpen]="visible()"
+  [cdkConnectedOverlayPositions]="positions()"
+  [cdkConnectedOverlayViewportMargin]="8"
+  [cdkConnectedOverlayPush]="true"
+>
+  <div
+    class="editable-bubble"
+    role="toolbar"
+    aria-label="Field actions"
+    (mouseenter)="open()"
+    (mouseleave)="scheduleClose()"
+  >
+    <!-- Consumer-projected actions: buttons carry `editable-action …` for the
+         shared pill chrome (global, styles/_editable.scss) and own their click. -->
+    <ng-content />
+  </div>
+</ng-template>

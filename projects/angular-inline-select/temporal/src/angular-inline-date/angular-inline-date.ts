@@ -34,7 +34,13 @@ import {
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 // Core
-import { EditablePrefix, EditableSuffix } from 'angular-inline-select';
+import {
+  EditablePrefix,
+  EditableSuffix,
+  BubbleMenu,
+  EditableClearButton,
+  type BubbleMenuSide,
+} from 'angular-inline-select';
 import {
   parseDateInput,
   formatIsoDate,
@@ -133,6 +139,8 @@ interface DateSide {
 
     // Components
     Calendar,
+    BubbleMenu,
+    EditableClearButton,
   ],
   templateUrl: './angular-inline-date.html',
   styleUrl: './angular-inline-date.scss',
@@ -193,6 +201,13 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   /** Accessible base name; ranged fields append " start" / " end". */
   ariaLabel = input<string | undefined>(undefined);
+
+  /**
+   * Which edge a SINGLE field's clear bubble grows from — `'end'` (default)
+   * or `'start'` for a range group's inline-START leaf. Range fields ignore
+   * this: each side's bubble always opens outward (start→left, end→right).
+   */
+  clearBubbleSide = input<BubbleMenuSide>('end');
 
   /** Locale for display + parsing (`Intl`); browser default when omitted. */
   locale = input<string | string[] | undefined>(undefined);
@@ -415,7 +430,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   protected errorSlotVisible = computed(() => this.errorsVisible() || this.parseGateVisible());
 
-  /** Live interpretation preview: `✓ Tuesday, 12 May 2026` / `… raw`. */
+  /** Live interpretation preview: `Tuesday, 12 May 2026` / `… raw`. */
   protected preview = computed(() => {
     const key = this.focusTarget() ?? 'start';
     const raw = this.#side(key).draft().trim();
@@ -855,6 +870,61 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const element = this.#inputOf(key);
     if (element) element.focus();
     else afterNextRender(() => this.#inputOf(key)?.focus(), { injector: this.#injector });
+  }
+
+  // -- Clear affordance (idle hover bubble; per-side for a range) ----------------
+
+  /** Guards every clear bubble EXCEPT hover and per-side emptiness. */
+  #clearGuards = computed(
+    () =>
+      !this.required() &&
+      !this.effectiveDisabled() &&
+      !this.effectiveReadonly() &&
+      !this.editing(),
+  );
+
+  /** Single field: one bubble that clears the (only) value. */
+  protected clearCanShowSingle = computed(() => this.#clearGuards() && !this.isEmpty());
+
+  /** Range: the start side's bubble — shown while the start holds a day. */
+  protected clearCanShowStart = computed(
+    () => this.#clearGuards() && this.internalRange().start !== null,
+  );
+
+  /** Range: the end side's bubble — shown while the end holds a day. */
+  protected clearCanShowEnd = computed(
+    () => this.#clearGuards() && this.internalRange().end !== null,
+  );
+
+  /**
+   * Clears one side from the idle hover bubble — a commit AND an interaction
+   * (mat-faithful): it writes `null` into that side (the OTHER side is never
+   * nuked, shape-echoed), re-baselines both sides so a later focus can't
+   * re-commit a stale draft, marks the field touched, and settles once. In the
+   * single shape `key` is `'start'` and the whole value clears.
+   */
+  protected clearBubble(key: SideKey) {
+    // Idle-only: the bubble is hidden while editing; guard anyway so a stray
+    // clear can't strand a frozen draft mid-session.
+    if (this.editing()) return;
+
+    const before = this.value();
+    this.#writeSideDay(key, null);
+
+    for (const side of [this.#startSide, this.#endSide]) {
+      side.baselineDay = side.committedDay();
+      side.draft.set(side.display());
+      side.dirty = false;
+      side.saveAttempted.set(false);
+    }
+
+    this.#selfTouched.set(true);
+    this.touch.emit();
+
+    const value = this.value();
+    const changed = !dateValuesEqual(value, before);
+    if (changed) this.savedModelChange.emit(value);
+    this.saved.emit({ value, changed });
   }
 
   // -- Form Value Contract ------------------------------------------------------------

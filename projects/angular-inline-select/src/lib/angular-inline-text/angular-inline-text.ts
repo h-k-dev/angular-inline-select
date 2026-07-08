@@ -13,6 +13,7 @@ import {
   contentChild,
   input,
   effect,
+  afterNextRender,
   afterRenderEffect,
   signal,
   untracked,
@@ -29,6 +30,8 @@ import { getSelectionOffsets, setCaretOffset, replayEdit } from './caret';
 import { EditablePrefix, EditableSuffix } from './editable-affix';
 import { EditableHint } from './editable-hint';
 import { EditableMenu, detectSlashToken, type SlashToken } from './editable-menu';
+import { BubbleMenu } from '../bubble-menu/bubble-menu';
+import { EditableClearButton } from '../bubble-menu/editable-clear';
 
 interface ValueNormalizationDetails {
   value: string;
@@ -111,18 +114,6 @@ function panelPositions(paddingX: number): ConnectedPosition[] {
 }
 
 /**
- * Positions for the floating action bubble: prefers inline-end (right of the
- * field, vertically centered), then falls back anticlockwise around the field.
- * start/end are direction-aware, so RTL flips automatically.
- */
-const BUBBLE_POSITIONS: ConnectedPosition[] = [
-  { originX: 'end', originY: 'center', overlayX: 'start', overlayY: 'center', offsetX: 6 },
-  { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -6 },
-  { originX: 'start', originY: 'center', overlayX: 'end', overlayY: 'center', offsetX: -6 },
-  { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 6 },
-];
-
-/**
  * Inline text: a static in-flow text that elevates into a floating editor.
  *
  * Contract:
@@ -140,6 +131,9 @@ const BUBBLE_POSITIONS: ConnectedPosition[] = [
     // CDK
     OverlayModule,
     A11yModule,
+
+    BubbleMenu,
+    EditableClearButton,
   ],
   templateUrl: './angular-inline-text.html',
   styleUrl: './angular-inline-text.scss',
@@ -148,8 +142,6 @@ const BUBBLE_POSITIONS: ConnectedPosition[] = [
     '[class.editable-text--editing]': 'editing()',
     '[class.editable-text--invalid]': 'errorsVisible()',
     '[style.display]': 'hidden() ? "none" : null',
-    '(mouseenter)': 'openBubble()',
-    '(mouseleave)': 'scheduleCloseBubble()',
     '(focus)': 'focus()',
   },
 })
@@ -157,7 +149,7 @@ export class AngularInlineText implements FormValueControl<string> {
   /** The static in-flow text. Focusable, caret-able — but never mutated by typing. */
   protected display = viewChild.required<ElementRef<HTMLElement>>('display');
 
-  /** The in-flow field area: prefix + display + suffix. Anchors the action bubble. */
+  /** The in-flow field area (prefix + display + suffix) — the bubble's anchor + measure box. */
   protected fieldArea = viewChild.required<ElementRef<HTMLElement>>('fieldArea');
 
   /** The contenteditable inside the elevated panel. Exists only while editing. */
@@ -901,47 +893,95 @@ export class AngularInlineText implements FormValueControl<string> {
   });
 
   // ---------------------------------------------------------------------------
-  // Floating action bubble (Notion-style, CDK overlay — never clipped)
+  // Clear affordance (the floating bubble lives in BubbleMenu)
   // ---------------------------------------------------------------------------
 
-  protected bubblePositions = BUBBLE_POSITIONS;
-  protected bubbleOrigin = computed(() => this.fieldArea());
+  /**
+   * Whether the clear bubble may show — every term EXCEPT hover (the bubble
+   * owns that): never for empty/required/locked fields or while editing.
+   * `required()` keeps the bubble hidden — a guaranteed-doomed clear stays
+   * unavailable.
+   */
+  protected bubbleMenuCanShow = computed(
+    () =>
+      !this.required() &&
+      !this.disabled() &&
+      !this.readonly() &&
+      !this.isEmpty() &&
+      !this.editing(),
+  );
 
-  /** Pointer intent: over the field or over the bubble itself. */
-  #bubbleHover = signal(false);
-  #bubbleCloseTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * The offset from the field box's inline-end/block-end CORNER to where the
+   * content actually ENDS — the last line's final glyph, vertically centred on
+   * that line. A multi-line field is a tall box whose inline-end sits far past
+   * a short final line ("…something." + surplus space); this pins the bubble
+   * right after the final word instead of out in the void. Single-line lands
+   * ≈(0, −½line) — so the anchor scheme is IDENTICAL single- or multi-line
+   * (no more center-vs-bottom drift), and it stays a delta on the ELEMENT
+   * origin so CDK re-resolves it on scroll — correct inside a scrolling table.
+   *
+   * Measured off the ONE reflow the field already allows — the commit — and on
+   * resize (a rewrap moves the last line), never per hover.
+   */
+  #contentOffset = signal<{ x: number; y: number } | null>(null);
+  protected clearContentOffset = computed(() => this.#contentOffset());
 
-  /** The delayed close must not fire into a destroyed component. */
-  #cancelBubbleTimerOnDestroy = inject(DestroyRef).onDestroy(() => {
-    if (this.#bubbleCloseTimer !== null) clearTimeout(this.#bubbleCloseTimer);
-  });
+  /** Bumped by the ResizeObserver to re-run the measure after the next render. */
+  #measureTick = signal(0);
 
-  /** The bubble shows on hover intent — never for empty/required/locked fields or while editing. */
-  protected showBubble = computed(() => {
-    if (this.required() || this.disabled() || this.readonly()) return false;
-    if (this.isEmpty() || this.editing()) return false;
-
-    return this.#bubbleHover();
-  });
-
-  protected openBubble() {
-    if (this.#bubbleCloseTimer !== null) {
-      clearTimeout(this.#bubbleCloseTimer);
-      this.#bubbleCloseTimer = null;
+  #measureContentOffset() {
+    const el = this.fieldArea().nativeElement;
+    if (this.isEmpty()) {
+      this.#contentOffset.set(null);
+      return;
     }
 
-    this.#bubbleHover.set(true);
+    // getClientRects yields one rect per line of the field's content; the last
+    // rect's inline-end is where the final line stops (past the suffix, if any).
+    const box = el.getBoundingClientRect();
+    const range = el.ownerDocument.createRange();
+    range.selectNodeContents(el);
+    const rects = range.getClientRects();
+    if (rects.length === 0) {
+      this.#contentOffset.set(null);
+      return;
+    }
+
+    // Box-corner → content-end delta. Scroll-invariant: box and content shift
+    // together, so CDK re-applies it against the live element rect.
+    const last = rects[rects.length - 1];
+    this.#contentOffset.set({
+      x: last.right - box.right,
+      y: last.top + last.height / 2 - box.bottom,
+    });
   }
 
-  /** Delayed close so the pointer can cross the gap between field and bubble. */
-  protected scheduleCloseBubble() {
-    if (this.#bubbleCloseTimer !== null) clearTimeout(this.#bubbleCloseTimer);
+  // The commit is the one point the page reflows; `displayText` flips to the
+  // committed value then. Re-measuring in the render READ phase rides that
+  // settled layout instead of forcing a fresh one — and re-runs when the
+  // committed text or the wrap width (via the resize tick) changes.
+  #measureContentOffsetEffect = afterRenderEffect({
+    read: () => {
+      this.displayText();
+      this.isSingleLine();
+      this.#measureTick();
+      this.#measureContentOffset();
+    },
+  });
 
-    this.#bubbleCloseTimer = setTimeout(() => {
-      this.#bubbleCloseTimer = null;
-      this.#bubbleHover.set(false);
-    }, 150);
-  }
+  #resizeObserver =
+    typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => this.#measureTick.update((tick) => tick + 1));
+
+  #observeForRemeasure = afterNextRender(() =>
+    this.#resizeObserver?.observe(this.fieldArea().nativeElement),
+  );
+
+  #disconnectObserverOnDestroy = inject(DestroyRef).onDestroy(() =>
+    this.#resizeObserver?.disconnect(),
+  );
 
   /**
    * Clear is a commit *and* an interaction (mat-faithful): it always commits

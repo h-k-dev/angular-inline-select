@@ -9,6 +9,7 @@
   class="inline-time"
   cdkOverlayOrigin
   #origin="cdkOverlayOrigin"
+  #field
   [class.inline-time--invalid]="errorsVisible()"
 >
   @if (prefixTpl(); as tpl) {
@@ -72,6 +73,11 @@
   <!-- Snap-back is silent data-restoration — the announcement is not. -->
   <span class="inline-time__sr" aria-live="polite">{{ revertNotice() }}</span>
 </span>
+
+<!-- Floating clear affordance — anchored to the whole field. -->
+<bubble-menu [origin]="field" [side]="clearBubbleSide()" [canShow]="clearCanShow()">
+  <button editableClearButton aria-label="Clear time" (clear)="clearBubble()"></button>
+</bubble-menu>
 
 <!-- The panel: the error slot only — it opens when there is an error to show. -->
 <ng-template

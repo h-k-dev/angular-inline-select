@@ -1,0 +1,12 @@
+// The host only DECLARES the overlay template — it portals into the CDK
+// overlay container, so the host element itself renders nothing and must not
+// disturb the field's layout (a stray flex item / inline gap).
+//
+// The bubble container (`.editable-bubble`) and the projected action buttons
+// (`.editable-action*`) are styled globally in styles/_editable.scss — they
+// render in the CDK overlay container, and the buttons come from the CONSUMER's
+// template (a different encapsulation), so their chrome cannot be encapsulated
+// here.
+:host {
+  display: none;
+}
