@@ -1,9 +1,11 @@
 <!--
-  The input rehost: one real <input> — the family look is CSS (dashed
+  The input rehost: two real <input> elements (one in single-string mode) —
+  native Tab order IS the range flow; the family look is CSS (dashed
   underline idle, solid focused). The +n badge is an ADORNMENT outside the
-  input, never part of the draft. The native input below is the OS picker's
-  anchor — focusable but invisible; `native` mode opens it from the field's
-  own click (there is no trigger button).
+  input, never part of the draft — it perches on the single field
+  (group-fed) or the range's END field (intrinsic). The native input below
+  is the OS picker's anchor — focusable but invisible; `native` mode opens
+  it from a side's own click (there is no trigger button).
 -->
 <span
   class="inline-time"
@@ -21,34 +23,76 @@
   <!-- The badge anchors to the input's TOP-RIGHT corner — zero line footprint. -->
   <span class="inline-time__field">
     <input
-      #timeInput
+      #startInput
       class="inline-time__input"
-      [class.inline-time__input--reverted]="revertFlash()"
+      [class.inline-time__input--reverted]="revertFlash() === 'start'"
       type="text"
       autocomplete="off"
       autocapitalize="off"
       spellcheck="false"
-      [attr.aria-label]="ariaLabel() ?? 'Time'"
-      [attr.aria-invalid]="ariaInvalid() || null"
+      [attr.aria-label]="ariaLabelOf('start')"
+      [attr.aria-invalid]="ariaInvalidOf('start') || null"
       [attr.aria-required]="required() || null"
-      [attr.size]="sizeOf()"
-      [value]="draft()"
+      [attr.size]="sizeOf('start')"
+      [value]="startDraft()"
       [placeholder]="placeholder()"
       [disabled]="effectiveDisabled()"
       [readonly]="effectiveReadonly()"
-      (input)="handleInput(timeInput.value)"
-      (click)="handleFieldClick()"
-      (focusin)="handleFocusIn()"
+      (input)="handleInput('start', startInput.value)"
+      (click)="handleFieldClick('start')"
+      (focusin)="handleFocusIn('start')"
       (focusout)="handleFocusOut()"
-      (keydown)="handleKeydown($event)"
+      (keydown)="handleKeydown('start', $event)"
     />
 
-    @if (dayOffset() > 0) {
+    @if (!twoFields() && dayOffset() > 0) {
       <span class="time-day-badge" role="img" [attr.aria-label]="dayBadgeAria()"
         >+{{ dayOffset() }}</span
       >
     }
   </span>
+
+  @if (twoFields()) {
+    <span class="inline-time__separator" aria-hidden="true">–</span>
+    <span class="inline-time__field">
+      <input
+        #endInput
+        class="inline-time__input"
+        [class.inline-time__input--reverted]="revertFlash() === 'end'"
+        type="text"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        [attr.aria-label]="ariaLabelOf('end')"
+        [attr.aria-invalid]="ariaInvalidOf('end') || null"
+        [attr.aria-required]="required() || null"
+        [attr.size]="sizeOf('end')"
+        [value]="endDraft()"
+        [placeholder]="effectiveEndPlaceholder()"
+        [disabled]="effectiveDisabled()"
+        [readonly]="effectiveReadonly()"
+        (input)="handleInput('end', endInput.value)"
+        (click)="handleFieldClick('end')"
+        (focusin)="handleFocusIn('end')"
+        (focusout)="handleFocusOut()"
+        (keydown)="handleKeydown('end', $event)"
+      />
+
+      @if (dayOffset() > 0) {
+        <span class="time-day-badge" role="img" [attr.aria-label]="dayBadgeAria()"
+          >+{{ dayOffset() }}</span
+        >
+      }
+    </span>
+
+    <!-- Range: a bubble per side, each opening OUTWARD (start→left, end→right). -->
+    <bubble-menu [origin]="startInput" side="start" [canShow]="clearCanShowStart()">
+      <button editableClearButton aria-label="Clear start time" (clear)="clearBubble('start')"></button>
+    </bubble-menu>
+    <bubble-menu [origin]="endInput" side="end" [canShow]="clearCanShowEnd()">
+      <button editableClearButton aria-label="Clear end time" (clear)="clearBubble('end')"></button>
+    </bubble-menu>
+  }
 
   @if (consumerSuffixTpl(); as tpl) {
     <span class="inline-time__affix" aria-hidden="true">
@@ -74,10 +118,12 @@
   <span class="inline-time__sr" aria-live="polite">{{ revertNotice() }}</span>
 </span>
 
-<!-- Floating clear affordance — anchored to the whole field. -->
-<bubble-menu [origin]="field" [side]="clearBubbleSide()" [canShow]="clearCanShow()">
-  <button editableClearButton aria-label="Clear time" (clear)="clearBubble()"></button>
-</bubble-menu>
+<!-- Single field: one bubble anchored to the whole field, clearing the value. -->
+@if (!twoFields()) {
+  <bubble-menu [origin]="field" [side]="effectiveClearBubbleSide()" [canShow]="clearCanShowSingle()">
+    <button editableClearButton aria-label="Clear time" (clear)="clearBubble('start')"></button>
+  </bubble-menu>
+}
 
 <!-- The panel: the error slot only — it opens when there is an error to show. -->
 <ng-template

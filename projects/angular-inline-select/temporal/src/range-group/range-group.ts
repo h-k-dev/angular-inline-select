@@ -15,9 +15,14 @@ import { FormField, type ValidationError } from '@angular/forms/signals';
 import { AngularInlineDate } from '../angular-inline-date/angular-inline-date';
 import { toInternalRange } from '../angular-inline-date/date-codec';
 import { AngularInlineTime } from '../angular-inline-time/angular-inline-time';
+import { toInternalTimeRange } from '../angular-inline-time/time-codec';
 import { INLINE_TIME_DAY_OFFSET } from '../angular-inline-time/day-offset';
 import { AngularInlineDuration } from '../angular-inline-duration/angular-inline-duration';
-import { INLINE_TEMPORAL_LEAF_STATE, type TemporalLeafState } from '../leaf-state';
+import {
+  INLINE_TEMPORAL_BUBBLE_SIDE,
+  INLINE_TEMPORAL_LEAF_STATE,
+  type TemporalLeafState,
+} from '../leaf-state';
 import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
 import {
   addLocalDays,
@@ -28,11 +33,10 @@ import {
   localDayDiff,
   localDayOf,
   localTimeOf,
+  rollDbEntryForward,
   shiftDbEntry,
   type DbDateTime,
 } from '../datetime/db-entry';
-
-const DAY_SECONDS = 86_400;
 
 /**
  * The group's composed DATE value: the stay's day boundaries as DB entries
@@ -209,9 +213,19 @@ export class DateTimeRangeGroup {
     return [];
   });
 
-  /** The endpoint instants and duration, read live off the controls. */
-  readonly start = computed<DbDateTime | null>(() => this.#start()?.value() ?? null);
-  readonly end = computed<DbDateTime | null>(() => this.#end()?.value() ?? null);
+  /**
+   * The endpoint instants and duration, read live off the controls. The
+   * time leaves are SINGLE-shape here (the group composes the range from
+   * two of them) — read through the internal model, like `rangeDay` does.
+   */
+  readonly start = computed<DbDateTime | null>(() => {
+    const control = this.#start();
+    return control ? toInternalTimeRange(control.value()).start : null;
+  });
+  readonly end = computed<DbDateTime | null>(() => {
+    const control = this.#end();
+    return control ? toInternalTimeRange(control.value()).start : null;
+  });
   readonly length = computed<number | null>(() => this.#length()?.value() ?? null);
 
   /**
@@ -411,16 +425,12 @@ export class DateTimeRangeGroup {
 
   // -- Commit propagation ------------------------------------------------------
 
-  /** Rolls `end` forward by whole days until it strictly follows `start`, then induces. */
+  /** Rolls `end` forward by whole LOCAL days until it strictly follows `start`, then induces. */
   #induceFrom(start: DbDateTime, end: DbDateTime) {
-    let diff = diffDbEntrySeconds(start, end)!;
-    while (diff <= 0) {
-      end = shiftDbEntry(end, DAY_SECONDS);
-      diff += DAY_SECONDS;
-    }
+    end = rollDbEntryForward(start, end, this.effectiveZone());
 
     this.#writeEnd(end);
-    this.#writeLength(diff);
+    this.#writeLength(diffDbEntrySeconds(start, end)!);
   }
 
   /**
@@ -574,8 +584,15 @@ function provideLeafState(withErrors: boolean) {
 /** Whether THIS leaf element carries its own `[formField]` (legacy per-leaf mode). */
 const leafHasOwnField = () => inject(FormField, { optional: true, self: true }) !== null;
 
-/** Marks the group's date control: `<angular-inline-date rangeDay />`. */
-@Directive({ selector: 'angular-inline-date[rangeDay]', providers: [provideLeafState(false)] })
+/**
+ * Marks the group's date control: `<angular-inline-date rangeDay />`. The
+ * pair's inline-START leaf — its clear bubble opens outward (leftward) by
+ * default via `INLINE_TEMPORAL_BUBBLE_SIDE`.
+ */
+@Directive({
+  selector: 'angular-inline-date[rangeDay]',
+  providers: [provideLeafState(false), { provide: INLINE_TEMPORAL_BUBBLE_SIDE, useValue: 'start' }],
+})
 export class RangeDay {
   constructor() {
     const group = inject(DateTimeRangeGroup);
@@ -589,8 +606,15 @@ export class RangeDay {
   }
 }
 
-/** Marks the group's start time: `<angular-inline-time rangeStart />`. */
-@Directive({ selector: 'angular-inline-time[rangeStart]', providers: [provideLeafState(false)] })
+/**
+ * Marks the group's start time: `<angular-inline-time rangeStart />`. An
+ * inline-START leaf — its clear bubble opens outward (leftward) by default
+ * via `INLINE_TEMPORAL_BUBBLE_SIDE`.
+ */
+@Directive({
+  selector: 'angular-inline-time[rangeStart]',
+  providers: [provideLeafState(false), { provide: INLINE_TEMPORAL_BUBBLE_SIDE, useValue: 'start' }],
+})
 export class RangeStart {
   constructor() {
     const group = inject(DateTimeRangeGroup);

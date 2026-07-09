@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineTime, type InlineTimeSaved } from './angular-inline-time';
-import { parseTime, parseTimeDraft, formatWallClock } from './time-codec';
+import { parseTime, parseTimeDraft, formatWallClock, type InlineTimeValue } from './time-codec';
 import {
   composeDbEntry,
   dayToDbEntry,
@@ -195,7 +195,7 @@ class TimeFormHost {
   field = form(this.model);
   native = signal(false);
 
-  saved: (string | null)[] = [];
+  saved: InlineTimeValue[] = [];
   sessions: InlineTimeSaved[] = [];
 }
 
@@ -266,7 +266,9 @@ describe('AngularInlineTime (input rehost)', () => {
     press(h, 'Enter');
 
     expect(h.host.saved).toEqual([at('21:05')]);
-    expect(h.host.sessions).toEqual([{ value: at('21:05'), changed: true, dayOverflow: 0, explicitDay: false }]);
+    expect(h.host.sessions).toEqual([
+      { value: at('21:05'), changed: true, dayOverflow: 0, explicitDay: false, side: 'start' },
+    ]);
     expect(h.host.model()).toBe(at('21:05'));
     expect(localDayOf(h.host.model())).toBe(DAY); // the day survives the edit
     expect(h.input().value).toBe('21:05');
@@ -289,7 +291,9 @@ describe('AngularInlineTime (input rehost)', () => {
     expect(h.host.field().value()).toBe(at('09:30'));
     expect(h.input().value).toBe('09:30');
     expect(h.host.saved).toEqual([]);
-    expect(h.host.sessions).toEqual([{ value: at('09:30'), changed: false, dayOverflow: 0, explicitDay: false }]);
+    expect(h.host.sessions).toEqual([
+      { value: at('09:30'), changed: false, dayOverflow: 0, explicitDay: false, side: 'start' },
+    ]);
   });
 
   it('blur with a readable draft COMMITS (navigation never traps)', async () => {
@@ -297,7 +301,9 @@ describe('AngularInlineTime (input rehost)', () => {
     await blurAway(h);
 
     expect(h.host.saved).toEqual([at('21:05')]);
-    expect(h.host.sessions).toEqual([{ value: at('21:05'), changed: true, dayOverflow: 0, explicitDay: false }]);
+    expect(h.host.sessions).toEqual([
+      { value: at('21:05'), changed: true, dayOverflow: 0, explicitDay: false, side: 'start' },
+    ]);
   });
 
   it('Escape reverts to the session baseline', () => {
@@ -347,7 +353,9 @@ describe('AngularInlineTime (input rehost)', () => {
 
     expect(h.host.model()).toBe(at('14:45'));
     expect(h.host.saved).toEqual([at('14:45')]);
-    expect(h.host.sessions).toEqual([{ value: at('14:45'), changed: true, dayOverflow: 0, explicitDay: false }]);
+    expect(h.host.sessions).toEqual([
+      { value: at('14:45'), changed: true, dayOverflow: 0, explicitDay: false, side: 'start' },
+    ]);
     expect(h.input().value).toBe('14:45');
   });
 
@@ -374,7 +382,13 @@ describe('AngularInlineTime (input rehost)', () => {
 
     expect(h.host.model()).toBe(composeDbEntry('2026-07-22', '00:30'));
     expect(h.host.sessions).toEqual([
-      { value: composeDbEntry('2026-07-22', '00:30'), changed: true, dayOverflow: 1, explicitDay: false },
+      {
+        value: composeDbEntry('2026-07-22', '00:30'),
+        changed: true,
+        dayOverflow: 1,
+        explicitDay: false,
+        side: 'start',
+      },
     ]);
   });
 
@@ -392,6 +406,7 @@ describe('AngularInlineTime (input rehost)', () => {
         changed: true,
         dayOverflow: 0,
         explicitDay: true,
+        side: 'start',
       },
     ]);
     expect(localDayOf(h.host.model())).toBe('2026-07-25'); // the day CAME ALONG
@@ -407,5 +422,335 @@ describe('AngularInlineTime (input rehost)', () => {
     const value = h.host.model();
     expect(localTimeOf(value)).toBe('08:00');
     expect(localDayOf(value)).toBe(localDayOf(new Date().toISOString()));
+  });
+
+  it('an EMPTY-STRING bound value anchors like empty — the typed time is never dropped', () => {
+    // A raw DB default: '' is not null, but it is no instant either.
+    h.host.model.set('');
+    h.fixture.detectChanges();
+
+    type(h, '9');
+    press(h, 'Enter');
+
+    const value = h.host.model();
+    expect(localTimeOf(value)).toBe('09:00');
+    expect(localDayOf(value)).toBe(localDayOf(new Date().toISOString()));
+  });
+});
+
+// =============================================================================
+// The two-field range — shape-echo, the overnight roll, per-side sessions
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineTime],
+  template: `
+    <angular-inline-time
+      [(value)]="value"
+      [ranged]="ranged()"
+      [native]="native()"
+      locale="en-u-hc-h23"
+      (savedModelChange)="saved.push($event)"
+      (saved)="sessions.push($event)"
+    />
+  `,
+})
+class TimeShapeHost {
+  // Seeded OVERNIGHT: the end instant is on the next day (the +1 badge).
+  value = signal<InlineTimeValue>({
+    start: at('22:00'),
+    end: composeDbEntry('2026-07-22', '01:30'),
+  });
+  ranged = signal(false);
+  native = signal(false);
+
+  saved: InlineTimeValue[] = [];
+  sessions: InlineTimeSaved[] = [];
+}
+
+interface RangeHarness {
+  fixture: ComponentFixture<TimeShapeHost>;
+  host: TimeShapeHost;
+  inputs: () => HTMLInputElement[];
+  start: () => HTMLInputElement;
+  end: () => HTMLInputElement | undefined;
+  badge: () => HTMLElement | null;
+}
+
+function setupRange(): RangeHarness {
+  const fixture = TestBed.createComponent(TimeShapeHost);
+  fixture.detectChanges();
+
+  const inputs = () =>
+    [...fixture.nativeElement.querySelectorAll('.inline-time__input')] as HTMLInputElement[];
+
+  return {
+    fixture,
+    host: fixture.componentInstance,
+    inputs,
+    start: () => inputs()[0],
+    end: () => inputs()[1],
+    badge: () => fixture.nativeElement.querySelector('.time-day-badge') as HTMLElement | null,
+  };
+}
+
+function typeInto(r: RangeHarness, input: HTMLInputElement, text: string) {
+  input.focus();
+  r.fixture.detectChanges();
+  input.value = text;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  r.fixture.detectChanges();
+}
+
+function pressOn(r: RangeHarness, input: HTMLInputElement, key: string) {
+  input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  r.fixture.detectChanges();
+}
+
+async function settleRange(r: RangeHarness) {
+  r.fixture.detectChanges();
+  await new Promise((resolve) => setTimeout(resolve));
+  r.fixture.detectChanges();
+}
+
+async function blurAwayRange(r: RangeHarness) {
+  (document.activeElement as HTMLElement | null)?.blur();
+  await settleRange(r);
+}
+
+describe('AngularInlineTime two-field range', () => {
+  let r: RangeHarness;
+
+  beforeEach(() => {
+    r = setupRange();
+  });
+
+  afterEach(async () => {
+    await blurAwayRange(r);
+  });
+
+  it('a string binding renders one field; object shapes render the pair with the +n badge', () => {
+    r.host.value.set(at('09:30'));
+    r.fixture.detectChanges();
+    expect(r.inputs().length).toBe(1);
+    expect(r.badge()).toBeNull(); // standalone single: no group feed, no badge
+
+    r.host.value.set({ start: at('22:00'), end: composeDbEntry('2026-07-22', '01:30') });
+    r.fixture.detectChanges();
+    expect(r.inputs().length).toBe(2);
+    expect(r.start().value).toBe('22:00');
+    expect(r.end()!.value).toBe('01:30');
+    expect(r.badge()!.textContent).toBe('+1'); // intrinsic — the pair's own days
+  });
+
+  it('null + ranged=true cold-starts as the pair and emits the range shape', () => {
+    r.host.value.set(null);
+    r.host.ranged.set(true);
+    r.fixture.detectChanges();
+
+    expect(r.inputs().length).toBe(2);
+    expect(r.start().placeholder).toBe('time'); // fully empty: both hint the placeholder
+    expect(r.end()!.placeholder).toBe('time');
+
+    typeInto(r, r.start(), '22');
+    pressOn(r, r.start(), 'Enter');
+
+    const start = r.host.value();
+    expect(typeof start).toBe('object'); // the range shape, not a bare string
+    expect((start as { start: string | null; end: string | null }).end).toBeNull();
+    expect(r.end()!.placeholder).toBe('…'); // half-open: the end side hints continuation
+  });
+
+  it('a native pick lands on the side the picker was OPENED for, even after focus strayed', async () => {
+    r.host.native.set(true);
+    r.fixture.detectChanges();
+
+    const native = r.fixture.nativeElement.querySelector('.inline-time__native') as HTMLInputElement;
+    (native as HTMLInputElement & { showPicker: () => void }).showPicker = () => {};
+
+    // Open the picker FOR THE END (native mode: the field's own click).
+    r.end()!.focus();
+    r.fixture.detectChanges();
+    r.end()!.click();
+    r.fixture.detectChanges();
+    expect(native.value).toBe('01:30'); // seeded with the end's wall clock
+
+    // Focus strays to the start before the picker's change lands.
+    r.start().focus();
+    r.fixture.detectChanges();
+
+    native.value = '02:45';
+    native.dispatchEvent(new Event('change', { bubbles: true }));
+    r.fixture.detectChanges();
+    await settleRange(r);
+
+    // The pick belongs to the END — the start must not swallow it.
+    const value = r.host.value() as { start: string | null; end: string | null };
+    expect(value.start).toBe(at('22:00'));
+    expect(value.end).toBe(composeDbEntry('2026-07-22', '02:45'));
+  });
+
+  it('Tab-advance settles the departing side BEFORE the landing session baselines — Escape restores the rolled pair', async () => {
+    // A same-day pair, so typing a later start inverts it until the roll.
+    r.host.value.set({ start: at('22:00'), end: at('23:00') });
+    r.fixture.detectChanges();
+
+    typeInto(r, r.start(), '23:30'); // live channel: {23:30, 23:00} — inverted, not yet rolled
+    r.end()!.focus(); // Tab lands in the end
+    r.fixture.detectChanges();
+
+    // Landing settled the start synchronously: the end rolled next-day.
+    const rolled = { start: at('23:30'), end: composeDbEntry('2026-07-22', '23:00') };
+    expect(r.host.value()).toEqual(rolled);
+    expect(r.badge()!.textContent).toBe('+1');
+
+    pressOn(r, r.end()!, 'Escape');
+    await settleRange(r);
+
+    // The end session's baseline is the RECONCILED pair — Escape must never
+    // resurrect the inverted mid-session state.
+    expect(r.host.value()).toEqual(rolled);
+    expect(r.badge()!.textContent).toBe('+1');
+  });
+
+  it('a typed end at-or-before the start ROLLS next-day on settlement (overnight law)', () => {
+    typeInto(r, r.end()!, '21:00');
+    pressOn(r, r.end()!, 'Enter');
+
+    // 21:00 is before the 22:00 start → the end lands NEXT day 21:00.
+    expect(r.host.value()).toEqual({
+      start: at('22:00'),
+      end: composeDbEntry('2026-07-22', '21:00'),
+    });
+    expect(r.badge()!.textContent).toBe('+1');
+    expect(r.host.sessions.at(-1)!.changed).toBe(true);
+  });
+
+  it('a typed end after the start stays same-day and drops the badge', () => {
+    typeInto(r, r.end()!, '23:30');
+    pressOn(r, r.end()!, 'Enter');
+
+    expect(r.host.value()).toEqual({ start: at('22:00'), end: at('23:30') });
+    expect(r.badge()).toBeNull();
+  });
+
+  it('an overflow end draft anchors the over-count on the START day', () => {
+    typeInto(r, r.end()!, '25:15');
+    pressOn(r, r.end()!, 'Enter');
+
+    expect(r.host.value()).toEqual({
+      start: at('22:00'),
+      end: composeDbEntry('2026-07-22', '01:15'),
+    });
+    expect(r.host.sessions.at(-1)).toEqual({
+      value: { start: at('22:00'), end: composeDbEntry('2026-07-22', '01:15') },
+      changed: true,
+      dayOverflow: 1,
+      explicitDay: false,
+      side: 'end',
+    });
+  });
+
+  it('a pasted FULL ISO end is EXPLICIT — taken as-is, never re-anchored or rolled', () => {
+    typeInto(r, r.end()!, '2026-07-20 08:00');
+    pressOn(r, r.end()!, 'Enter');
+
+    // Before the start — the paste stands (the decomposition law); no badge.
+    expect(r.host.value()).toEqual({
+      start: at('22:00'),
+      end: composeDbEntry('2026-07-20', '08:00'),
+    });
+    expect(r.badge()).toBeNull();
+    expect(r.host.sessions.at(-1)!.explicitDay).toBe(true);
+  });
+
+  it('Escape reverts the PAIR — a side session can move the partner, so the whole value restores', () => {
+    typeInto(r, r.end()!, '05');
+    // The live channel already moved the end (no roll until settlement).
+    expect(r.host.value()).toEqual({ start: at('22:00'), end: at('05:00') });
+
+    pressOn(r, r.end()!, 'Escape');
+
+    expect(r.host.value()).toEqual({
+      start: at('22:00'),
+      end: composeDbEntry('2026-07-22', '01:30'),
+    });
+    expect(r.end()!.value).toBe('01:30');
+  });
+
+  it('blur with an unreadable end draft SNAPS BACK to the baseline', async () => {
+    typeInto(r, r.end()!, '9:99');
+    await blurAwayRange(r);
+
+    expect(r.host.value()).toEqual({
+      start: at('22:00'),
+      end: composeDbEntry('2026-07-22', '01:30'),
+    });
+    expect(r.end()!.value).toBe('01:30');
+    expect(r.host.saved).toEqual([]);
+  });
+
+  it('Tab-advance: focus moving start → end settles the start; the pair keeps rolling', async () => {
+    typeInto(r, r.start(), '23:00');
+    r.end()!.focus(); // what Tab does
+    await settleRange(r);
+
+    // The start settled at 23:00; the end (next-day 01:30) still follows it.
+    expect(r.host.value()).toEqual({
+      start: at('23:00'),
+      end: composeDbEntry('2026-07-22', '01:30'),
+    });
+    expect(r.host.sessions.length).toBe(1);
+    expect(r.host.sessions[0]!.changed).toBe(true);
+  });
+
+  it('a start settling PAST the end rolls the end forward (the pair stays ordered)', () => {
+    // End sits at next-day 01:30; move the start past it.
+    r.host.value.set({ start: at('22:00'), end: at('23:00') });
+    r.fixture.detectChanges();
+
+    typeInto(r, r.start(), '23:30');
+    pressOn(r, r.start(), 'Enter');
+
+    expect(r.host.value()).toEqual({
+      start: at('23:30'),
+      end: composeDbEntry('2026-07-22', '23:00'),
+    });
+    expect(r.badge()!.textContent).toBe('+1');
+  });
+
+  it('each side owns its clear — the other side is NEVER nuked', () => {
+    typeInto(r, r.end()!, '');
+    pressOn(r, r.end()!, 'Enter');
+    expect(r.host.value()).toEqual({ start: at('22:00'), end: null });
+
+    typeInto(r, r.start(), '');
+    pressOn(r, r.start(), 'Enter');
+    expect(r.host.value()).toEqual({ start: null, end: null });
+  });
+
+  it('the one-key { start } shape grows the end key only on an END edit', () => {
+    r.host.value.set({ start: at('22:00') });
+    r.fixture.detectChanges();
+    expect(r.inputs().length).toBe(2); // start-only IS a (half-open) range
+
+    typeInto(r, r.start(), '21:00');
+    pressOn(r, r.start(), 'Enter');
+    expect(r.host.value()).toEqual({ start: at('21:00') }); // still one-key
+
+    typeInto(r, r.end()!, '23:30');
+    pressOn(r, r.end()!, 'Enter');
+    expect(r.host.value()).toEqual({ start: at('21:00'), end: at('23:30') });
+  });
+
+  it('null remembers the last seen shape: a cleared one-key field stays one-key', () => {
+    r.host.value.set({ start: at('22:00') });
+    r.fixture.detectChanges();
+
+    typeInto(r, r.start(), '');
+    pressOn(r, r.start(), 'Enter');
+
+    expect(r.host.value()).toEqual({ start: null });
+    expect(r.inputs().length).toBe(2);
   });
 });

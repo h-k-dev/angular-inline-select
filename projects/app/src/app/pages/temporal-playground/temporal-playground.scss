@@ -32,6 +32,27 @@
   }
 }
 
+// The quartet-per-row table: the time-range pair rides in ONE column (the
+// ranged control's look — start – end); the label column hugs its content
+// like the other model tables.
+.quartet-table {
+  td {
+    width: 25%;
+    white-space: nowrap;
+  }
+}
+
+.time-range-pair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+}
+
+.time-range-pair__separator {
+  user-select: none;
+  color: var(--mat-sys-on-surface-variant);
+}
+
 // The T4 card: four labeled mat boxes in one row, wrapping on narrow screens.
 .mat-quartet {
   display: flex;

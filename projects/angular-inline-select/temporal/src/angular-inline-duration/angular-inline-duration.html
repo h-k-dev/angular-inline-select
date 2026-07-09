@@ -49,7 +49,7 @@
 </span>
 
 <!-- Floating clear affordance — anchored to the whole field. -->
-<bubble-menu [origin]="field" [side]="clearBubbleSide()" [canShow]="clearCanShow()">
+<bubble-menu [origin]="field" [side]="effectiveClearBubbleSide()" [canShow]="clearCanShow()">
   <button editableClearButton aria-label="Clear duration" (clear)="clearBubble()"></button>
 </bubble-menu>
 

@@ -14,12 +14,17 @@
 
     <div class="example__body example-stack">
       <div class="example-card" id="date-example">
-        <h3 class="example-card__title">Date — what the user sees vs the model</h3>
+        <h3 class="example-card__title">Date &amp; date range — what the user sees vs the model</h3>
         <p class="prose">
-          One <code>[formField]</code>. Type “24.12.” (year auto-completes), an ISO date, or a month name — focus
-          opens the calendar panel without stealing the caret (ArrowDown enters the grid; yesterday/today/tomorrow
-          chips are the quick-picks, labels via <code>Intl</code>). The model behind the local calendar day is the
-          UTC ISO DB entry of its local <code>startOf('day')</code>.
+          The SAME date control twice — the binding shape IS the mode. <em>Deadline</em> is one
+          <code>[formField]</code>: type “24.12.” (year auto-completes), an ISO date, or a month name — focus opens
+          the calendar panel without stealing the caret (ArrowDown enters the grid; yesterday/today/tomorrow chips
+          are the quick-picks, labels via <code>Intl</code>); the model is the UTC ISO DB entry of the local
+          <code>startOf('day')</code>. <em>Vacation</em> binds <code>{{ '{' }} start, end {{ '}' }}</code> — the
+          shape-echo renders the TWO-FIELD pair: <code>start</code> = local <code>startOf('day')</code>,
+          <code>end</code> = <code>endOf('day')</code>. Tab commits the start and lands in the end; each side owns
+          its clear (half-open ranges are real states). On the calendar: PRESS-HOLD-DRAG paints the range,
+          Ctrl/Cmd+click restarts it half-open. The toggles below apply to BOTH fields.
         </p>
 
         <table class="model-table">
@@ -36,7 +41,7 @@
               <td>
                 <angular-inline-date
                   #due
-                  [formField]="deadlineForm.due"
+                  [formField]="dateForm.due"
                   [locale]="dateLocale()"
                   ariaLabel="Deadline date"
                   (savedModelChange)="logEmit('deadline.savedModelChange', $event)"
@@ -50,29 +55,51 @@
                   </span>
                 </angular-inline-date>
               </td>
-              <td><code>{{ deadlineModel().due ?? '∅' }}</code></td>
+              <td><code>{{ dateModel().due ?? '∅' }}</code></td>
+            </tr>
+            <tr>
+              <th scope="row">Vacation</th>
+              <td>
+                <angular-inline-date
+                  [formField]="dateForm.vacation"
+                  [ranged]="true"
+                  [locale]="dateLocale()"
+                  ariaLabel="Vacation dates"
+                  (savedModelChange)="logEmit('vacation.savedModelChange', $event)"
+                />
+              </td>
+              <td>
+                <code>{{ dateModel().vacation?.start ?? '∅' }}</code>
+                →
+                <code>{{ dateModel().vacation?.end ?? '∅' }}</code>
+              </td>
             </tr>
           </tbody>
         </table>
 
-        <div class="form-toggles" role="group" aria-label="Date field state">
+        <div class="form-toggles" role="group" aria-label="Date fields state">
           <button mat-stroked-button (click)="fieldRequired.update((v) => !v)">
             Required: {{ fieldRequired() ? 'on' : 'off' }}
           </button>
           <button mat-stroked-button (click)="dateLocale.set(dateLocale() === 'en' ? 'de' : 'en')">
             Locale: {{ dateLocale() }}
           </button>
-          <button mat-stroked-button (click)="deadlineForm().markAsTouched()">Mark touched</button>
-          <button mat-stroked-button (click)="deadlineForm.due().reset()">Reset field</button>
+          <button mat-stroked-button (click)="dateForm().markAsTouched()">Mark touched</button>
+          <button mat-stroked-button (click)="resetDateFields()">Reset fields</button>
         </div>
       </div>
 
       <div class="example-card" id="time-example">
-        <h3 class="example-card__title">Time — what the user sees vs the model</h3>
+        <h3 class="example-card__title">Time &amp; time range — what the user sees vs the model</h3>
         <p class="prose">
-          One <code>[formField]</code>. Type “930”, “9”, “21:05” — or overflow hours (“24:30” reads as next-day
-          00:30); in native mode a click on the field opens the platform’s own picker. The local wall-clock display hides a FULL UTC instant that
-          carries its own day.
+          The SAME time control twice. <em>Starts at</em> is one <code>[formField]</code>: type “930”, “9”, “21:05” —
+          the local wall-clock display hides a FULL UTC instant that carries its own day. <em>Shift</em> binds
+          <code>{{ '{' }} start, end {{ '}' }}</code> — the shape-echo renders the TWO-FIELD pair (no group, no
+          leaves). The range house rules live INSIDE the control: a typed end is wall-clock intent anchored on the
+          START's day — at-or-before the start it rolls next-day (the overnight seed wears the intrinsic
+          <code>+{{ shiftTime.dayOffset() }}</code> badge), overflow hours like “25:15” type the over-count by hand,
+          and a pasted full ISO datetime stands as-is, never re-anchored. Tab commits the start and lands in the end;
+          Escape reverts the PAIR. The native-picker toggle below applies to BOTH fields.
         </p>
 
         <table class="model-table">
@@ -97,12 +124,31 @@
               </td>
               <td><code>{{ timeModel().starts ?? '∅' }}</code></td>
             </tr>
+            <tr>
+              <th scope="row">Shift</th>
+              <td>
+                <angular-inline-time
+                  #shiftTime
+                  [formField]="timeForm.shift"
+                  [ranged]="true"
+                  [native]="nativeTimePicker()"
+                  [locale]="militaryLocale()"
+                  ariaLabel="Shift in 24-hour time"
+                  (savedModelChange)="logEmit('shift.savedModelChange', $event)"
+                />
+              </td>
+              <td>
+                <code>{{ timeModel().shift?.start ?? '∅' }}</code>
+                →
+                <code>{{ timeModel().shift?.end ?? '∅' }}</code>
+              </td>
+            </tr>
           </tbody>
         </table>
 
         <div class="form-toggles" role="group" aria-label="Time picker mode">
           <button mat-stroked-button (click)="nativeTimePicker.set(!nativeTimePicker())">
-            Native picker: {{ nativeTimePicker() ? 'on (click the field)' : 'off (typing only)' }}
+            Native picker: {{ nativeTimePicker() ? 'on (click the fields)' : 'off (typing only)' }}
           </button>
         </div>
       </div>
@@ -145,101 +191,6 @@
           <button mat-stroked-button (click)="durationFormat.set('mm:ss')">mm:ss</button>
           <span class="form-toggles__hint">current: {{ durationFormat() }}</span>
         </div>
-      </div>
-
-      <div class="example-card" id="date-range-example">
-        <h3 class="example-card__title">Date range — the binding shape IS the mode</h3>
-        <p class="prose">
-          The SAME date control, bound with <code>{{ '{' }} start, end {{ '}' }}</code> — the shape-echo renders the
-          TWO-FIELD pair and echoes commits in that shape: <code>start</code> = local <code>startOf('day')</code>,
-          <code>end</code> = <code>endOf('day')</code>. Tab commits the start and lands in the end; each side owns
-          its clear (half-open ranges are real states); an unreadable draft snaps back on blur — Enter is the only
-          gesture the parse gate blocks. On the calendar: PRESS-HOLD-DRAG paints the range, Ctrl/Cmd+click restarts
-          it half-open, and a pasted full ISO datetime reads as its local day.
-        </p>
-
-        <table class="model-table">
-          <thead>
-            <tr>
-              <th scope="col">Field</th>
-              <th scope="col">Display (local)</th>
-              <th scope="col">Model (UTC, SQL-friendly)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row">Vacation</th>
-              <td>
-                <angular-inline-date
-                  [formField]="dateRangeForm.vacation"
-                  [ranged]="true"
-                  [locale]="dateLocale()"
-                  ariaLabel="Vacation dates"
-                  (savedModelChange)="logEmit('vacation.savedModelChange', $event)"
-                />
-              </td>
-              <td>
-                <code>{{ dateRangeModel().vacation?.start ?? '∅' }}</code>
-                →
-                <code>{{ dateRangeModel().vacation?.end ?? '∅' }}</code>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div
-        class="example-card"
-        id="time-range-example"
-        dateTimeRangeGroup
-        #shiftGroup="dateTimeRangeGroup"
-        [formField]="shiftForm"
-        (savedModelChange)="logEmit('shift.savedModelChange', $event)"
-      >
-        <h3 class="example-card__title">Time range — two time leaves, {{ '{' }} start, end {{ '}' }}</h3>
-        <p class="prose">
-          The same <code>DateTimeRangeGroup</code> with ONLY <code>rangeStart</code>/<code>rangeEnd</code> registered
-          — no day, no duration leaf. The model binds <code>{{ '{' }} start, end {{ '}' }}</code> and the shape-echo
-          never grows a duration key. Overnight seed: the end wears the
-          <code>+{{ shiftGroup.endDayOffset() }}</code> badge; a typed end is wall-clock intent (at-or-before the
-          start rolls next-day, overflow hours like “25:15” type the over by hand).
-        </p>
-
-        <table class="model-table">
-          <thead>
-            <tr>
-              <th scope="col">Field</th>
-              <th scope="col">Display (local)</th>
-              <th scope="col">Model (UTC, SQL-friendly)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row">Shift starts</th>
-              <td>
-                <angular-inline-time
-                  rangeStart
-                  [native]="true"
-                  [locale]="militaryLocale()"
-                  ariaLabel="Shift start in 24-hour time"
-                />
-              </td>
-              <td><code>{{ shiftModel()?.start ?? '∅' }}</code></td>
-            </tr>
-            <tr>
-              <th scope="row">Shift ends</th>
-              <td>
-                <angular-inline-time
-                  rangeEnd
-                  [native]="true"
-                  [locale]="militaryLocale()"
-                  ariaLabel="Shift end in 24-hour time"
-                />
-              </td>
-              <td><code>{{ shiftModel()?.end ?? '∅' }}</code></td>
-            </tr>
-          </tbody>
-        </table>
       </div>
 
       <div
@@ -330,6 +281,65 @@
         </p>
       </div>
 
+      <div class="example-card" id="quartet-table-example">
+        <h3 class="example-card__title">The quartet in a table — each ROW is one control</h3>
+        <p class="prose">
+          Five shifts, one <code>dateTimeRangeGroup</code> per <code>&lt;tr&gt;</code>, its
+          <code>{{ '{' }} start, end, duration {{ '}' }}</code> value two-way bound per row — day, time range and
+          length are the group's leaves in the row's cells. <em>Night</em> is seeded overnight, so its end wears the
+          <code>+1</code> badge; <em>On-call</em> runs a day and a half. Type overflow hours (“25:15”) into any
+          <em>Ends</em> to roll its day by hand — a length commit moves the end, a day commit shifts the whole row.
+        </p>
+
+        <table class="model-table quartet-table">
+          <thead>
+            <tr>
+              <th scope="col">Shift</th>
+              <th scope="col">Day</th>
+              <th scope="col">Time</th>
+              <th scope="col">Length</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of stayRows; track row.label) {
+              <tr
+                dateTimeRangeGroup
+                [(value)]="row.value"
+                (savedModelChange)="logEmit('table.' + row.label + '.savedModelChange', $event)"
+              >
+                <th scope="row">{{ row.label }}</th>
+                <td>
+                  <angular-inline-date rangeDay [locale]="dateLocale()" [ariaLabel]="row.label + ' day'" />
+                </td>
+                <td>
+                  <span class="time-range-pair">
+                    <angular-inline-time
+                      rangeStart
+                      [locale]="militaryLocale()"
+                      [ariaLabel]="row.label + ' start in 24-hour time'"
+                    />
+                    <span class="time-range-pair__separator" aria-hidden="true">–</span>
+                    <angular-inline-time
+                      rangeEnd
+                      [locale]="militaryLocale()"
+                      [ariaLabel]="row.label + ' end in 24-hour time'"
+                    />
+                  </span>
+                </td>
+                <td>
+                  <angular-inline-duration
+                    rangeLength
+                    durationFormat="h:mm"
+                    [step]="60"
+                    [ariaLabel]="row.label + ' length'"
+                  />
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
       <div
         class="example-card"
         id="mat-quartet-example"
@@ -354,7 +364,6 @@
             <angular-inline-date
               rangeDay
               inlineMatFormField
-              clearBubbleSide="start"
               [locale]="dateLocale()"
               placeholder=""
               ariaLabel="Mat stay day"
@@ -432,59 +441,6 @@
             <mat-datepicker #dayPicker />
           </mat-form-field>
         </div>
-      </div>
-
-      <div class="example-card" id="zone-example">
-        <h3 class="example-card__title">Timezones (T6) — one instant, three walls</h3>
-        <p class="prose">
-          Values NEVER carry the zone — they stay UTC ISO DB entries. The DISPLAY ZONE is configuration: a
-          <code>zone</code> input per field, or app-wide via <code>provideInlineTemporalZone</code> (the
-          <code>ServerSideDatetimeConfiguration</code> analogue). All three fields below bind THE SAME instant;
-          editing any wall re-composes the instant in THAT zone.
-        </p>
-
-        <table class="model-table">
-          <thead>
-            <tr>
-              <th scope="col">Wall</th>
-              <th scope="col">Display</th>
-              <th scope="col">Model (UTC, SQL-friendly)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row">Machine zone</th>
-              <td>
-                <angular-inline-time [(value)]="zonedInstant" locale="en-u-hc-h23" ariaLabel="Local wall clock" />
-              </td>
-              <td rowspan="3"><code>{{ zonedInstant() ?? '∅' }}</code></td>
-            </tr>
-            <tr>
-              <th scope="row">New York</th>
-              <td>
-                <angular-inline-time
-                  [(value)]="zonedInstant"
-                  zone="America/New_York"
-                  locale="en-u-hc-h23"
-                  ariaLabel="New York wall clock"
-                />
-              </td>
-            </tr>
-            <tr>
-              <th scope="row">Tokyo day</th>
-              <td>
-                <angular-inline-date
-                  [value]="zonedInstant()"
-                  zone="Asia/Tokyo"
-                  [locale]="dateLocale()"
-                  [readonly]="true"
-                  [showCalendar]="false"
-                  ariaLabel="Tokyo calendar day"
-                />
-              </td>
-            </tr>
-          </tbody>
-        </table>
       </div>
 
       @if (emittedEvents().length > 0) {

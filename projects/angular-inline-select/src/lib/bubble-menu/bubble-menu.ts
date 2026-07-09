@@ -19,11 +19,13 @@ import { OverlayModule, type ConnectedPosition } from '@angular/cdk/overlay';
 export type BubbleMenuSide = 'start' | 'end';
 
 /**
- * Default side: grow toward inline-END, anchored to the field's BOTTOM
- * (block-end) — so on a tall multi-line field the bubble lands at the END of
- * the paragraph, where the eye already is, not floating at the vertical
- * centre. Falls back to bottom-right (below the field, end-aligned) when there
- * is no inline room. start/end are direction-aware — RTL flips for free.
+ * Default side: grow toward inline-END, vertically CENTRED on the field — the
+ * same vertical placement the text control's measured `contentOffset` resolves
+ * to on a single line, so every single-line field (the temporal family) sits
+ * on the line instead of riding high off the box's bottom corner. Multi-line
+ * text never lands here: it always feeds `contentOffset` (and hides the bubble
+ * while empty). Falls back to bottom-right (below the field, end-aligned) when
+ * there is no inline room. start/end are direction-aware — RTL flips for free.
  *
  * The inline offset is ZERO: the container TOUCHES the field so there is no
  * dead zone for the pointer to cross. The visual gap is transparent
@@ -31,17 +33,17 @@ export type BubbleMenuSide = 'start' | 'end';
  * styles/_editable.scss.
  */
 const END_POSITIONS: ConnectedPosition[] = [
-  { originX: 'end', originY: 'bottom', overlayX: 'start', overlayY: 'bottom', offsetX: 0 },
+  { originX: 'end', originY: 'center', overlayX: 'start', overlayY: 'center', offsetX: 0 },
   { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 8 },
 ];
 
 /**
  * Start side (the inline-START field of a range): grow toward inline-START,
- * bottom-anchored, falling back to bottom-left — the mirror of {@link END_POSITIONS},
+ * centre-anchored, falling back to bottom-left — the mirror of {@link END_POSITIONS},
  * so a range pair's two bubbles open outward and never collide.
  */
 const START_POSITIONS: ConnectedPosition[] = [
-  { originX: 'start', originY: 'bottom', overlayX: 'end', overlayY: 'bottom', offsetX: 0 },
+  { originX: 'start', originY: 'center', overlayX: 'end', overlayY: 'center', offsetX: 0 },
   { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 8 },
 ];
 

@@ -2,10 +2,83 @@
  * Time codec — the canonical value is a 24 h wall-clock string
  * (`'HH:mm' | null`): locale/timezone-free, the time analogue of the date
  * control's ISO string. Display localizes through `Intl`.
+ *
+ * The `InlineTimeValue` shapes below speak DB entries (full instants) —
+ * they are the control's VALUE boundary, the time mirror of the date
+ * codec's `InlineDateValue` machinery.
  */
+
+import type { DbDateTime } from '../datetime/db-entry';
 
 /** `'HH:mm'`. */
 export type WallClockTime = string;
+
+/** The object shapes of `InlineTimeValue`: a missing `end` key is a HALF-OPEN range. */
+export interface DbTimeRange {
+  start: DbDateTime | null;
+  end?: DbDateTime | null;
+}
+
+/**
+ * The polymorphic bound value. The consumer's binding shape IS the mode
+ * declaration: a string binds a single time field, an object binds the
+ * start–end pair. The control echoes the shape it received and never
+ * invents another one.
+ */
+export type InlineTimeValue = DbDateTime | DbTimeRange | null;
+
+/** The shape a non-null value declares; `null` declares nothing (shape-ambiguous). */
+export type TimeValueShape = 'single' | 'start-only' | 'range';
+
+export function inferTimeShape(value: InlineTimeValue): TimeValueShape | null {
+  if (value === null) return null;
+  if (typeof value === 'string') return 'single';
+
+  return 'end' in value ? 'range' : 'start-only';
+}
+
+/** One canonical internal model, always — whatever shape came in. */
+export interface InternalTimeRange {
+  start: DbDateTime | null;
+  end: DbDateTime | null;
+}
+
+/**
+ * Unlike a single DATE (the day-range `[start, start]`), a single time is
+ * one instant and a zero-length range is meaningless — so `{ start }` is a
+ * HALF-OPEN range (`end: null`), never a mirror.
+ */
+export function toInternalTimeRange(value: InlineTimeValue): InternalTimeRange {
+  if (value === null) return { start: null, end: null };
+  if (typeof value === 'string') return { start: value, end: null };
+
+  return { start: value.start ?? null, end: value.end ?? null };
+}
+
+/**
+ * The echo: renders the internal range back in the consumer's shape.
+ * `start-only` keeps its one-key form until the data actually has an end —
+ * only then does it grow the `end` key.
+ */
+export function echoTimeShape(internal: InternalTimeRange, shape: TimeValueShape): InlineTimeValue {
+  switch (shape) {
+    case 'single':
+      return internal.start;
+    case 'start-only':
+      return internal.end === null
+        ? { start: internal.start }
+        : { start: internal.start, end: internal.end };
+    case 'range':
+      return { start: internal.start, end: internal.end };
+  }
+}
+
+/** Structural equality over the polymorphic value — echo writes must not loop. */
+export function timeValuesEqual(a: InlineTimeValue, b: InlineTimeValue): boolean {
+  if (a === null || b === null || typeof a === 'string' || typeof b === 'string') return a === b;
+
+  return a.start === b.start && a.end === b.end;
+}
 
 const pad = (value: number) => String(value).padStart(2, '0');
 
@@ -48,7 +121,8 @@ function dayPeriods(locale: string | string[] | undefined) {
     const period = (hour: number) =>
       format
         .formatToParts(new Date(2024, 0, 1, hour))
-        .find((part) => part.type === 'dayPeriod')?.value.toLowerCase();
+        .find((part) => part.type === 'dayPeriod')
+        ?.value.toLowerCase();
 
     const localAm = period(9);
     const localPm = period(21);
@@ -136,15 +210,27 @@ export function parseTime(
   return draft.days === 0 ? draft.time : undefined;
 }
 
+// Formatter construction is the expensive part of Intl — cache per locale
+// (the dayPeriodCache pattern): the display computeds re-run per keystroke.
+const wallClockFormatCache = new Map<string, Intl.DateTimeFormat>();
+
+function wallClockFormat(locale?: string | string[]): Intl.DateTimeFormat {
+  const key = JSON.stringify(locale ?? '');
+  const cached = wallClockFormatCache.get(key);
+  if (cached) return cached;
+
+  const format = new Intl.DateTimeFormat(locale, { timeStyle: 'short' });
+  wallClockFormatCache.set(key, format);
+  return format;
+}
+
 /** Localized display (`'9:30 AM'` under `en`, `'09:30'` under `de`). */
 export function formatWallClock(time: WallClockTime | null, locale?: string | string[]): string {
   if (time === null) return '';
 
   const [hours, minutes] = time.split(':').map(Number);
   try {
-    return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(
-      new Date(2000, 0, 1, hours, minutes),
-    );
+    return wallClockFormat(locale).format(new Date(2000, 0, 1, hours, minutes));
   } catch {
     return time;
   }

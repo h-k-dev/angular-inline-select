@@ -1,18 +1,15 @@
 import {
   Component,
-  DestroyRef,
   ElementRef,
   computed,
   contentChild,
-  effect,
   inject,
   input,
-  linkedSignal,
   model,
   output,
   signal,
-  untracked,
   viewChild,
+  type Signal,
   type TemplateRef,
 } from '@angular/core';
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
@@ -30,15 +27,40 @@ import {
   EditableClearButton,
   type BubbleMenuSide,
 } from 'angular-inline-select';
-import { parseTime, parseTimeDraft, formatWallClock, type TimeDraft } from './time-codec';
+import {
+  parseTime,
+  parseTimeDraft,
+  formatWallClock,
+  inferTimeShape,
+  toInternalTimeRange,
+  echoTimeShape,
+  timeValuesEqual,
+  type InlineTimeValue,
+  type TimeDraft,
+  type TimeValueShape,
+  type InternalTimeRange,
+} from './time-codec';
 import { INLINE_TIME_DAY_OFFSET } from './day-offset';
-import { INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
+import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
+import {
+  makeSideSessionChrome,
+  makeClearBubbleVisibility,
+  makeShapeMemory,
+  makeSideCore,
+  sideAriaLabel,
+  sideSize,
+  wireEditingBridge,
+  type SideCore,
+  type SideKey,
+} from '../side-session';
 import {
   addLocalDays,
   composeDbEntry,
-  localTimeOf,
+  localDayDiff,
   localDayOf,
+  localTimeOf,
   parseDbEntryDraft,
+  rollDbEntryForward,
   todayIn,
   type DbDateTime,
 } from '../datetime/db-entry';
@@ -46,8 +68,8 @@ import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineTimeSaved {
-  /** The value the session settled on — a UTC ISO DB entry, or `null` for empty. */
-  value: DbDateTime | null;
+  /** The value the session settled on, in the consumer's bound shape. */
+  value: InlineTimeValue;
   /** Whether the settled value differs from the session baseline. */
   changed: boolean;
   /**
@@ -62,15 +84,60 @@ export interface InlineTimeSaved {
    * never re-anchor it onto the start's day.
    */
   explicitDay: boolean;
+  /**
+   * WHICH side's session settled — always `'start'` in single mode. A
+   * range group's `rangeTimes` role dispatches on it (the pair replaces
+   * two single leaves, but propagation stays per-endpoint).
+   */
+  side: SideKey;
+}
+
+export type { SideKey };
+
+/**
+ * The time side: the shared session core (see `SideCore`) plus what a TIME
+ * session must snapshot. A session opens on focusin — capturing the
+ * baseline and FREEZING the anchor day — and settles on Enter, Escape, or
+ * focus leaving.
+ */
+interface TimeSide extends SideCore<DbDateTime> {
+  /**
+   * The WHOLE value at session start — Escape and snap-back restore it.
+   * Whole on purpose: a side's settlement can move the PARTNER too (the
+   * overnight roll), so a per-side baseline could not undo a session.
+   */
+  baselineValue: InlineTimeValue;
+  /**
+   * The day a typed wall-clock composes onto, FROZEN at session start —
+   * live writes move the instant's own day (overflow hours), and a
+   * drifting anchor would double-apply them.
+   */
+  anchorDay: string;
+  /**
+   * The draft's codec reading, CACHED per side (`null` empty, `undefined`
+   * unreadable) — the one parse per keystroke every consumer (live channel,
+   * parse gate, settlement) reads.
+   */
+  readonly parsed: Signal<TimeDraft | null | undefined>;
+  /** A pasted FULL ISO datetime (the decomposition gesture), cached per side. */
+  readonly explicit: Signal<DbDateTime | undefined>;
 }
 
 /**
- * Inline time on a NATIVE INPUT — the input rehost (see ROADMAP-DATETIME).
- * A `FormValueControl` for times. Canonical value: a **UTC ISO DB entry**
- * (`'2026-07-21T19:00:00.000Z'` — iusta's `toDBEntry`), `null` for empty;
- * the DISPLAY is the local wall-clock reading, localized via `Intl`. The
- * value carries its own date: typed `'HH:mm'` drafts set the local
- * time-of-day on the value's existing day (or `now`'s day when empty).
+ * Inline time on NATIVE INPUTS — the input rehost (see ROADMAP-DATETIME).
+ * A `FormValueControl` for times and time RANGES. Canonical value: **UTC
+ * ISO DB entries** (`'2026-07-21T19:00:00.000Z'` — iusta's `toDBEntry`),
+ * SHAPE-ECHOED like the date control — a string binds ONE field, an object
+ * binds the start–end pair (`{ start }` is a HALF-OPEN range). The DISPLAY
+ * is the local wall-clock reading, localized via `Intl`. Each value carries
+ * its own date: typed `'HH:mm'` drafts set the local time-of-day on a
+ * frozen ANCHOR day (the value's existing day, or `now`'s when empty).
+ *
+ * Ranged, the pair keeps the range-group's house rules INSIDE the control:
+ * a typed END is wall-clock intent — it anchors on the START's day and an
+ * end at-or-before the start rolls forward by whole days on settlement
+ * (overnight lands as `+1`, worn by the badge on the end field). A pasted
+ * FULL ISO datetime is explicit and never re-anchored or rolled.
  *
  * Session semantics are GESTURE-TIERED (the family rule): Enter commits
  * (an unreadable draft BLOCKS with the error), Escape reverts to the
@@ -78,9 +145,8 @@ export interface InlineTimeSaved {
  * back — never traps, never persists a draft error.
  *
  * - Drafts are TYPED (`'9'` → 09:00, `'930'`, `'21:05'`); overflow hours
- *   declare the day over-count by hand (`'24:30'` → next day 00:30, the
- *   `+1` badge perching on the field).
- * - **The picker is the OS's own, opt-in via `native`**: the field's own
+ *   declare the day over-count by hand (`'24:30'` → next day 00:30).
+ * - **The picker is the OS's own, opt-in via `native`**: a side's own
  *   click drives a visually-hidden `<input type="time">` — `showPicker()`
  *   where the platform supports it, falling back to focusing the input
  *   (mobile opens its wheels on focus). There is NO trigger button; typing
@@ -89,18 +155,34 @@ export interface InlineTimeSaved {
  */
 @Component({
   selector: 'angular-inline-time',
-  imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgTemplateOutlet, BubbleMenu, EditableClearButton],
+  imports: [
+    CdkConnectedOverlay,
+    CdkOverlayOrigin,
+    NgTemplateOutlet,
+    BubbleMenu,
+    EditableClearButton,
+  ],
   templateUrl: './angular-inline-time.html',
   styleUrl: './angular-inline-time.scss',
   host: {
     '[style.display]': 'hidden() ? "none" : null',
   },
 })
-export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
+export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   #document = inject(DOCUMENT);
 
-  /** The committed value channel: a UTC ISO DB entry, or `null`. */
-  value = model<DbDateTime | null>(null);
+  /**
+   * The committed value channel — polymorphic UTC ISO DB entries: a single
+   * string binds a single time, `{ start, end? }` binds a range, and the
+   * control ECHOES whichever shape it received.
+   */
+  value = model<InlineTimeValue>(null);
+
+  /**
+   * Cold-start shape default: which shape a `null`-bound field emits before
+   * any non-null value has declared one. Ignored once a shape has been seen.
+   */
+  ranged = input(false);
 
   /** Reference clock — anchors the day of a time typed into an EMPTY field. */
   now = input<() => Date>(() => new Date());
@@ -115,15 +197,36 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
   hidden = input(false);
 
   placeholder = input<string>('time');
+  /**
+   * End-field placeholder override. Unset, a FULLY EMPTY range shows the
+   * placeholder on both sides; once a start exists the end side switches
+   * to the half-open display (`'21:00 – …'`).
+   */
+  endPlaceholder = input<string | undefined>(undefined);
 
-  /** Accessible name for the field. */
+  protected effectiveEndPlaceholder = computed(() => {
+    const explicit = this.endPlaceholder();
+    if (explicit !== undefined) return explicit;
+    return this.internalRange().start === null ? this.placeholder() : '…';
+  });
+
+  /** Accessible base name; ranged fields append " start" / " end". */
   ariaLabel = input<string | undefined>(undefined);
 
   /**
-   * Which edge the clear bubble grows from — `'end'` (default) or `'start'`
-   * for a range group's inline-START leaf, so the outer leaves open outward.
+   * Which edge a SINGLE field's clear bubble grows from. Unset, the leaf
+   * ROLE decides (`INLINE_TEMPORAL_BUBBLE_SIDE` — `rangeDay`/`rangeStart`
+   * provide `'start'` so inline-START leaves open outward), else `'end'`.
+   * Range fields ignore this: each side's bubble always opens outward
+   * (start→left, end→right).
    */
-  clearBubbleSide = input<BubbleMenuSide>('end');
+  clearBubbleSide = input<BubbleMenuSide | undefined>(undefined);
+
+  #bubbleSideDefault = inject(INLINE_TEMPORAL_BUBBLE_SIDE, { optional: true });
+
+  protected effectiveClearBubbleSide = computed(
+    () => this.clearBubbleSide() ?? this.#bubbleSideDefault ?? 'end',
+  );
 
   /** Locale for the idle display (`Intl`); browser default when omitted. */
   locale = input<string | string[] | undefined>(undefined);
@@ -151,11 +254,11 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
   pickerMax = input<string | undefined>(undefined);
 
   /**
-   * NATIVE mode — the one picker affordance: a click on the input opens the
-   * OS time picker (the date control's calendar-on-edit convention). Typing
-   * stays fully available; the picker is an assist, never the only road.
-   * T3's support matrix: `showPicker()` feature-detected, focus fallback
-   * (mobile opens its wheels on focus).
+   * NATIVE mode — the one picker affordance: a click on a side's input
+   * opens the OS time picker for THAT side (the date control's
+   * calendar-on-edit convention). Typing stays fully available; the picker
+   * is an assist, never the only road. T3's support matrix: `showPicker()`
+   * feature-detected, focus fallback (mobile opens its wheels on focus).
    */
   native = input(false);
 
@@ -197,8 +300,21 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
     () => this.invalid() || (this.#leafState?.invalid() ?? false),
   );
 
-  /** Days the composed end overflows past the start's calendar day (`+1` badge). */
-  readonly dayOffset = computed(() => this.#groupDayOffset?.() ?? 0);
+  /**
+   * Days the end overflows past the start's calendar day (the `+n` badge).
+   * Ranged, it is INTRINSIC — the local day difference of the pair's own
+   * instants; single, it is the group-fed offset (the leaf role's token).
+   */
+  readonly dayOffset = computed(() => {
+    if (this.twoFields()) {
+      const { start, end } = this.internalRange();
+      if (start === null || end === null) return 0;
+
+      return Math.max(0, localDayDiff(start, end, this.effectiveZone()) ?? 0);
+    }
+
+    return this.#groupDayOffset?.() ?? 0;
+  });
 
   protected dayBadgeAria = computed(() =>
     this.dayOffset() === 1 ? 'plus one day' : `plus ${this.dayOffset()} days`,
@@ -207,8 +323,8 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
   /** Form Value Contract: touch — emitted whenever a session settles. */
   touch = output<void>();
 
-  /** Hard commit event: fires once per changed settlement — a DB entry or `null`. */
-  savedModelChange = output<DbDateTime | null>();
+  /** Hard commit event: fires once per changed settlement, in the bound shape. */
+  savedModelChange = output<InlineTimeValue>();
 
   /** Emitted exactly once per settled session (commit, snap-back, Escape, clear). */
   saved = output<InlineTimeSaved>();
@@ -216,73 +332,86 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
   /** Whether an edit session is open (= focus is within). Two-way bindable. */
   editing = model(false);
 
-  /** The value's DISPLAY-ZONE wall-clock reading — the user-facing side of the split. */
-  readonly localTime = computed(() => localTimeOf(this.value(), this.effectiveZone()));
-
-  protected display = computed(() => formatWallClock(this.localTime(), this.locale()));
-
-  // -- The session (one field, the date control's side pattern) ------------------
-
-  /** Whether a session is open on this field. */
-  #open = signal(false);
-
-  /**
-   * The input's text: user-owned while the session is open (frozen
-   * linkedSignal — a value write mid-session never rewrites text under the
-   * caret), the committed display otherwise.
-   */
-  protected draft = linkedSignal<string, string>({
-    source: this.display,
-    computation: (source, prev) => (this.#open() ? (prev?.value ?? source) : source),
+  #shapeMemory = makeShapeMemory<InlineTimeValue, TimeValueShape>({
+    value: this.value,
+    infer: inferTimeShape,
+    ranged: this.ranged,
+    singleShape: 'single',
+    rangeShape: 'range',
   });
 
-  /** The committed VALUE at session start — what Escape and snap-back restore. */
-  #baselineValue: DbDateTime | null = null;
+  /** The effective shape: last seen, or the `ranged` cold-start default. */
+  readonly shape = this.#shapeMemory.shape;
 
-  /**
-   * Whether the USER touched the draft since the last settlement. An
-   * untouched session settles WHERE THE VALUE STANDS — re-composing it from
-   * the draft would undo external writes (the group re-anchoring an end
-   * instant onto the start's day) with a stale frozen anchor.
-   */
-  #dirty = false;
+  /** Object shapes render the start–end input pair; a string renders one field. */
+  protected twoFields = this.#shapeMemory.twoFields;
 
-  /** Enter was pressed on an unreadable draft — reveals the parse-gate error. */
-  #saveAttempted = signal(false);
+  /** One canonical internal model, always: per-side DB-entry instants. */
+  readonly internalRange = computed<InternalTimeRange>(() => toInternalTimeRange(this.value()));
 
-  /** Enter/Escape hide the panel until the next keystroke or session. */
-  #panelDismissed = signal(false);
-
-  /**
-   * The day anchoring a commit: the value's own local day, else `now`'s.
-   * FROZEN while a session is open (the linkedSignal freeze pattern) — the
-   * live channel writes overflow days into the value, and a drifting
-   * anchor would apply them twice.
-   */
-  #anchorDay = linkedSignal<string, string>({
-    source: () =>
-      localDayOf(this.value(), this.effectiveZone()) ?? todayIn(this.now()(), this.effectiveZone()),
-    computation: (source, prev) => (this.#open() ? (prev?.value ?? source) : source),
-  });
-
-  /**
-   * Composes a typed draft onto the anchor day — the ONE outbound path.
-   * Overflow hours shift the day (`'24:30'` → anchor + 1 at 00:30).
-   */
-  #toValue(draft: TimeDraft | null): DbDateTime | null {
-    if (draft === null) return null;
-
-    const day = draft.days === 0 ? this.#anchorDay() : addLocalDays(this.#anchorDay(), draft.days);
-    return composeDbEntry(day, draft.time, this.effectiveZone());
+  /** The value boundary, outbound: per-side instants → the echoed shape. */
+  #writeInstants(start: DbDateTime | null, end: DbDateTime | null) {
+    const echoed = echoTimeShape({ start, end }, this.shape());
+    if (!timeValuesEqual(echoed, this.value())) this.value.set(echoed);
   }
 
-  /** The current draft's canonical reading (`null` empty, `undefined` unreadable). */
-  readonly parsedDraft = computed(() => parseTimeDraft(this.draft(), this.locale()));
+  // -- The two sides -----------------------------------------------------------
+
+  readonly #startSide = this.#makeSide('start');
+  readonly #endSide = this.#makeSide('end');
+
+  #side(key: SideKey): TimeSide {
+    return key === 'start' ? this.#startSide : this.#endSide;
+  }
+
+  #makeSide(key: SideKey): TimeSide {
+    const committed = computed(() => this.internalRange()[key]);
+    const display = computed(() =>
+      formatWallClock(localTimeOf(committed(), this.effectiveZone()), this.locale()),
+    );
+    const core = makeSideCore(key, committed, display);
+
+    return {
+      ...core,
+      baselineValue: null,
+      anchorDay: '',
+      parsed: computed(() => parseTimeDraft(core.draft(), this.locale())),
+      explicit: computed(() => parseDbEntryDraft(core.draft(), this.effectiveZone())),
+    };
+  }
+
+  protected startDraft = computed(() => this.#startSide.draft());
+  protected endDraft = computed(() => this.#endSide.draft());
+
+  /** The shared session chrome: focus target, snap-back flash, focus timers. */
+  #chrome = makeSideSessionChrome((key) => this.#inputOf(key));
+
+  protected focusTarget = this.#chrome.focusTarget;
+
+  /**
+   * The day anchoring a side's typed wall clock: the START's day (a typed
+   * END is intent relative to it; the start side is its own), then the
+   * partner's, then `now`'s — the same chain for both sides. Falls THROUGH
+   * `localDayOf`, so an unreadable bound value (an empty-string DB default)
+   * drops to the next anchor instead of poisoning the compose with `null`.
+   */
+  #anchorDay(): string {
+    const zone = this.effectiveZone();
+    const { start, end } = this.internalRange();
+    return localDayOf(start, zone) ?? localDayOf(end, zone) ?? todayIn(this.now()(), zone);
+  }
+
+  /**
+   * The current draft's canonical reading (`null` empty, `undefined`
+   * unreadable) — a SELECTION over the sides' cached parses, so a focus
+   * flip never re-parses an unchanged draft.
+   */
+  readonly parsedDraft = computed(() => this.#side(this.focusTarget() ?? 'start').parsed());
 
   /** A pasted FULL ISO datetime — the decomposition gesture carries its own day. */
-  readonly explicitDraft = computed(() => parseDbEntryDraft(this.draft(), this.effectiveZone()));
+  readonly explicitDraft = computed(() => this.#side(this.focusTarget() ?? 'start').explicit());
 
-  /** The parse gate: whether the current draft fails the codec. Public for consumers. */
+  /** The parse gate: whether the focused draft fails the codec. Public for consumers. */
   readonly parseFailed = computed(
     () => this.parsedDraft() === undefined && this.explicitDraft() === undefined,
   );
@@ -305,16 +434,26 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
     () => this.isInvalid() && (this.effectiveTouched() || this.#selfTouched()),
   );
 
-  /** Public: whether the field holds no value. */
-  readonly isEmpty = computed(() => this.value() === null);
+  /** Public: whether the field holds no value at all (both sides empty). */
+  readonly isEmpty = computed(() => {
+    const { start, end } = this.internalRange();
+    return start === null && end === null;
+  });
 
-  protected parseGateVisible = computed(() => this.#saveAttempted() && this.parseFailed());
+  /** Enter/Escape hide the panel until the next keystroke or session. */
+  #panelDismissed = signal(false);
+
+  /** The parse-gate reveal: Enter was attempted on an unreadable draft. */
+  protected parseGateVisible = computed(() => {
+    const key = this.focusTarget();
+    return key !== null && this.#side(key).saveAttempted() && this.parseFailed();
+  });
 
   protected errorSlotVisible = computed(() => this.errorsVisible() || this.parseGateVisible());
 
   /** The panel appears only to carry an error — there is no live preview. */
   protected panelOpen = computed(
-    () => this.#open() && !this.#panelDismissed() && this.errorSlotVisible(),
+    () => this.editing() && !this.#panelDismissed() && this.errorSlotVisible(),
   );
 
   /** Public: whether the panel is showing (hosting containers coordinate on it). */
@@ -330,197 +469,241 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
     { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
   ];
 
-  protected revertFlash = signal(false);
-  protected revertNotice = signal('');
+  protected revertFlash = this.#chrome.revertFlash;
+  protected revertNotice = this.#chrome.revertNotice;
 
-  protected timeInput = viewChild<ElementRef<HTMLInputElement>>('timeInput');
+  protected startInput = viewChild<ElementRef<HTMLInputElement>>('startInput');
+  protected endInput = viewChild<ElementRef<HTMLInputElement>>('endInput');
   protected nativeInput = viewChild.required<ElementRef<HTMLInputElement>>('nativeInput');
   protected panelRef = viewChild<ElementRef<HTMLElement>>('panel');
 
-  #focusCheckTimer: ReturnType<typeof setTimeout> | null = null;
-  #flashTimer: ReturnType<typeof setTimeout> | null = null;
-
   constructor() {
-    inject(DestroyRef).onDestroy(() => {
-      if (this.#focusCheckTimer !== null) clearTimeout(this.#focusCheckTimer);
-      if (this.#flashTimer !== null) clearTimeout(this.#flashTimer);
-    });
-
-    // The editing bridge: external `editing.set(true)` focuses the input;
-    // `set(false)` settles and blurs. Internal focus flow writes the model,
-    // so states already agree there.
-    effect(() => {
-      const editing = this.editing();
-      untracked(() => {
-        const open = this.#open();
-        if (editing && !open) {
-          this.timeInput()?.nativeElement.focus();
-        } else if (!editing && open) {
-          this.#settle();
-          this.timeInput()?.nativeElement.blur();
-        }
-      });
+    wireEditingBridge({
+      editing: this.editing,
+      focusTarget: this.focusTarget,
+      focusSide: (key) => this.#chrome.focusSide(key),
+      deactivate: (focused) => {
+        this.#settle(focused);
+        this.focusTarget.set(null);
+        this.#inputOf(focused)?.blur();
+      },
     });
   }
 
-  protected sizeOf(): number {
-    return Math.max(1, (this.draft() || this.placeholder()).length);
+  // -- Sizing (no layout shift: content-sized, placeholder-floored) -------------
+
+  protected sizeOf(key: SideKey): number {
+    const placeholder = key === 'end' ? this.effectiveEndPlaceholder() : this.placeholder();
+    return sideSize(this.#side(key).draft(), placeholder);
   }
 
-  protected ariaInvalid(): boolean {
-    return this.errorsVisible() || (this.#open() && this.#saveAttempted() && this.parseFailed());
+  protected ariaLabelOf(key: SideKey): string {
+    return sideAriaLabel(this.ariaLabel() ?? 'Time', key, this.twoFields());
+  }
+
+  protected ariaInvalidOf(key: SideKey): boolean {
+    const side = this.#side(key);
+    return this.errorsVisible() || (side.open() && side.saveAttempted() && this.parseFailed());
   }
 
   // -- The live channel -----------------------------------------------------------
 
-  #openSession() {
-    if (this.#open()) return;
-    this.#baselineValue = this.value();
-    this.#dirty = false;
-    this.#saveAttempted.set(false);
+  #openSession(key: SideKey) {
+    const side = this.#side(key);
+    if (side.open()) return;
+
+    side.baselineValue = this.value();
+    side.anchorDay = this.#anchorDay();
+    side.dirty = false;
+    side.saveAttempted.set(false);
     this.#panelDismissed.set(false);
-    this.#open.set(true);
+    side.open.set(true);
   }
 
-  /** Every keystroke: readable drafts flow into the model live. */
-  protected handleInput(raw: string) {
-    this.#openSession();
-    this.draft.set(raw);
-    this.#dirty = true;
-    this.#saveAttempted.set(false);
+  /**
+   * A side's CURRENT draft as an instant: explicit ISO paste, else
+   * wall-clock on the frozen anchor. Reads the side's cached parses — call
+   * after `draft.set(...)`, never with a raw string of its own.
+   */
+  #resolveDraft(
+    key: SideKey,
+  ): { instant: DbDateTime | null; days: number; explicit: boolean } | undefined {
+    const side = this.#side(key);
+
+    const explicit = side.explicit();
+    if (explicit !== undefined) return { instant: explicit, days: 0, explicit: true };
+
+    const draft = side.parsed();
+    if (draft === undefined) return undefined;
+    if (draft === null) return { instant: null, days: 0, explicit: false };
+
+    const day = draft.days === 0 ? side.anchorDay : addLocalDays(side.anchorDay, draft.days);
+    return {
+      instant: composeDbEntry(day, draft.time, this.effectiveZone()),
+      days: draft.days,
+      explicit: false,
+    };
+  }
+
+  /** Every keystroke: readable drafts flow into the model live (no roll — that is settlement's). */
+  protected handleInput(key: SideKey, raw: string) {
+    this.#openSession(key);
+    const side = this.#side(key);
+    side.draft.set(raw);
+    side.dirty = true;
+    side.saveAttempted.set(false);
     this.#panelDismissed.set(false);
 
-    // A pasted full ISO datetime is an EXPLICIT instant — no anchor day.
-    const explicit = parseDbEntryDraft(raw, this.effectiveZone());
-    if (explicit !== undefined) {
-      if (explicit !== this.value()) this.value.set(explicit);
-      return;
-    }
+    const resolved = this.#resolveDraft(key);
+    if (resolved === undefined) return;
 
-    const draft = parseTimeDraft(raw, this.locale());
-    if (draft === undefined) return;
-
-    const value = this.#toValue(draft);
-    if (value !== this.value()) this.value.set(value);
+    const current = this.internalRange();
+    if (key === 'start') this.#writeInstants(resolved.instant, current.end);
+    else this.#writeInstants(current.start, resolved.instant);
   }
 
   // -- Focus flow -------------------------------------------------------------------
 
-  protected handleFocusIn() {
-    this.#openSession();
+  protected handleFocusIn(key: SideKey) {
+    // Tab-advance: focus landing HERE ends the partner's session. It settles
+    // NOW — before this session snapshots its baseline/anchor — so Escape and
+    // snap-back restore the reconciled (rolled) pair, never the un-rolled
+    // mid-session state the deferred focusout timer would still be holding.
+    const partner = this.#side(key === 'start' ? 'end' : 'start');
+    if (partner.open()) this.#settle(partner.key);
+
+    this.#openSession(key);
+    this.focusTarget.set(key);
     this.editing.set(true);
   }
 
   /**
-   * Focusout settles ASYNCHRONOUSLY: focus landing on the native picker
-   * input or the panel stays inside the session; anywhere else settles —
-   * commit-if-readable, snap-back if not. Never trap.
+   * Focusout settles ASYNCHRONOUSLY: where focus LANDS decides what happens
+   * (the other input = Tab-advance, the native picker or panel = same
+   * session, outside = settle), and that is only knowable a tick later.
    */
   protected handleFocusOut() {
-    if (this.#focusCheckTimer !== null) clearTimeout(this.#focusCheckTimer);
-    this.#focusCheckTimer = setTimeout(() => this.#onFocusSettled(), 0);
+    this.#chrome.scheduleFocusSettle(() => this.#onFocusSettled());
   }
 
   #onFocusSettled() {
-    this.#focusCheckTimer = null;
     const active = this.#document.activeElement;
-    const inField = active !== null && active === this.timeInput()?.nativeElement;
+    const inStart = active !== null && active === this.startInput()?.nativeElement;
+    const inEnd = active !== null && active === this.endInput()?.nativeElement;
     const inNative = active !== null && active === this.nativeInput().nativeElement;
     const inPanel = (active !== null && this.panelRef()?.nativeElement.contains(active)) ?? false;
 
-    if (!inField && !inNative && !inPanel) {
-      this.#settle();
+    // A side that lost focus to anywhere outside the session settles NOW:
+    // commit-if-readable, snap-back if not. Never trap, never block.
+    if (!inNative && !inPanel) {
+      if (this.#startSide.open() && !inStart) this.#settle('start');
+      if (this.#endSide.open() && !inEnd) this.#settle('end');
+    }
+
+    if (!inStart && !inEnd && !inNative && !inPanel) {
+      this.focusTarget.set(null);
       this.editing.set(false);
+    } else if (inStart) {
+      this.focusTarget.set('start');
+    } else if (inEnd) {
+      this.focusTarget.set('end');
     }
   }
 
   // -- Settlement (ONE per session — commit, snap-back, Escape, clear) --------------
 
-  #settle(options: { revert?: boolean; keepOpen?: boolean } = {}) {
-    if (!this.#open()) return;
+  /**
+   * The settled side lands and the pair reconciles — the range house rule
+   * (`rollDbEntryForward`, shared with the range group): an end at-or-before
+   * the start rolls forward by whole LOCAL days (a typed end is wall-clock
+   * intent; overnight lands as +1, DST never drifts the reading). An
+   * EXPLICIT end (a pasted full instant) is taken as-is — the decomposition
+   * law: never re-anchor, never roll.
+   */
+  #reconcile(key: SideKey, instant: DbDateTime | null, explicit: boolean) {
+    const current = this.internalRange();
+    const start = key === 'start' ? instant : current.start;
+    let end = key === 'end' ? instant : current.end;
 
-    // An untouched session settles where the value stands (see #dirty).
-    const untouched = !options.revert && !this.#dirty;
+    const skipRoll = explicit && key === 'end';
+    if (this.twoFields() && !skipRoll && start !== null && end !== null) {
+      end = rollDbEntryForward(start, end, this.effectiveZone());
+    }
 
-    let value: DbDateTime | null;
+    this.#writeInstants(start, end);
+  }
+
+  #settle(key: SideKey, options: { revert?: boolean; keepOpen?: boolean } = {}) {
+    const side = this.#side(key);
+    if (!side.open()) return;
+
+    // An untouched session settles where the value stands (see TimeSide.dirty).
+    const untouched = !options.revert && !side.dirty;
+
     let dayOverflow = 0;
     let explicitDay = false;
     let snappedBack = false;
 
     if (untouched) {
-      value = this.value();
+      // Nothing to derive — the value stands.
     } else if (options.revert) {
-      value = this.#baselineValue;
+      if (!timeValuesEqual(side.baselineValue, this.value())) this.value.set(side.baselineValue);
     } else {
-      const explicit = parseDbEntryDraft(this.draft(), this.effectiveZone());
-      if (explicit !== undefined) {
-        // The decomposition gesture: the instant carries its own day.
-        value = explicit;
-        explicitDay = true;
+      const resolved = this.#resolveDraft(key);
+      if (resolved === undefined) {
+        // Snap-back: an unreadable draft reverts to the session baseline.
+        snappedBack = true;
+        if (!timeValuesEqual(side.baselineValue, this.value())) this.value.set(side.baselineValue);
       } else {
-        const draft = parseTimeDraft(this.draft(), this.locale());
-        if (draft === undefined) {
-          // Snap-back: an unreadable draft reverts to the session baseline.
-          snappedBack = true;
-          value = this.#baselineValue;
-        } else {
-          value = this.#toValue(draft);
-          dayOverflow = draft?.days ?? 0;
-        }
+        dayOverflow = resolved.days;
+        explicitDay = resolved.explicit;
+        this.#reconcile(key, resolved.instant, resolved.explicit);
       }
     }
 
-    if (!untouched && value !== this.value()) this.value.set(value);
-    const changed = !untouched && value !== this.#baselineValue;
-    this.#dirty = false;
+    const changed = !untouched && !timeValuesEqual(this.value(), side.baselineValue);
+    side.dirty = false;
 
     if (options.keepOpen) {
-      this.#baselineValue = value;
-      this.draft.set(this.display());
-      this.#saveAttempted.set(false);
+      side.baselineValue = this.value();
+      side.anchorDay = this.#anchorDay();
+      side.draft.set(side.display());
+      side.saveAttempted.set(false);
     } else {
-      this.#open.set(false);
-      this.#saveAttempted.set(false);
+      side.open.set(false);
+      side.saveAttempted.set(false);
     }
 
-    if (snappedBack) this.#announceRevert(value);
+    if (snappedBack) this.#chrome.announceRevert(key, this.#side(key).display());
 
     this.#selfTouched.set(true);
     this.touch.emit();
 
+    const value = this.value();
     if (changed) this.savedModelChange.emit(value);
-    this.saved.emit({ value, changed, dayOverflow, explicitDay });
-  }
-
-  #announceRevert(value: DbDateTime | null) {
-    const restored = value === null ? 'empty' : formatWallClock(localTimeOf(value), this.locale());
-    this.revertNotice.set(`Reverted to ${restored}`);
-    this.revertFlash.set(true);
-
-    if (this.#flashTimer !== null) clearTimeout(this.#flashTimer);
-    this.#flashTimer = setTimeout(() => this.revertFlash.set(false), 600);
+    this.saved.emit({ value, changed, dayOverflow, explicitDay, side: key });
   }
 
   // -- Keyboard -----------------------------------------------------------------------
 
-  protected handleKeydown(event: KeyboardEvent) {
+  protected handleKeydown(key: SideKey, event: KeyboardEvent) {
     switch (event.key) {
       case 'Enter': {
         event.preventDefault();
         if (this.parseFailed()) {
           // The parse gate: the user ASKED for a commit — block and say why.
-          this.#saveAttempted.set(true);
+          this.#side(key).saveAttempted.set(true);
           return;
         }
 
-        this.#settle({ keepOpen: true });
+        this.#settle(key, { keepOpen: true });
         this.#panelDismissed.set(true);
         return;
       }
       case 'Escape': {
         event.preventDefault();
         event.stopPropagation();
-        this.#settle({ revert: true, keepOpen: true });
+        this.#settle(key, { revert: true, keepOpen: true });
         this.#panelDismissed.set(true);
         return;
       }
@@ -540,25 +723,34 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
   // -- The OS picker ---------------------------------------------------------------------
 
   /**
-   * Opens the OS time picker. T3's support matrix: `showPicker()` where the
-   * platform ships it (Chrome/Edge/Android; feature-DETECTED — Safari
-   * desktop lacks the method entirely) and may still throw without a user
-   * gesture or in cross-origin iframes — both roads fall back to focusing
-   * the input (iOS opens its wheels on focus).
+   * Native mode: a side's own click is the picker affordance. The click has
+   * already focused that side (its session is open), so a pick lands as a
+   * draft replacement — the calendar-on-edit convention.
    */
-  /**
-   * Native mode: the input's own click is the picker affordance. The click
-   * has already focused the field (the session is open), so a pick lands as
-   * a draft replacement — the calendar-on-edit convention.
-   */
-  protected handleFieldClick() {
+  protected handleFieldClick(key: SideKey) {
     if (!this.native() || this.effectiveDisabled() || this.effectiveReadonly()) return;
-    this.#showOsPicker();
+    this.#showOsPicker(key);
   }
 
-  #showOsPicker() {
+  /**
+   * The side the shared native input is currently serving — recorded at
+   * open time, because the pick's `change` event may fire AFTER focus has
+   * already strayed to the other side (`focusTarget` is live, the picker
+   * is not).
+   */
+  #pickerSide: SideKey | null = null;
+
+  /**
+   * Opens the OS time picker seeded with a side's committed wall clock.
+   * T3's support matrix: `showPicker()` where the platform ships it
+   * (feature-DETECTED — Safari desktop lacks the method entirely) and may
+   * still throw without a user gesture — both roads fall back to focusing
+   * the input (iOS opens its wheels on focus).
+   */
+  #showOsPicker(key: SideKey) {
+    this.#pickerSide = key;
     const native = this.nativeInput().nativeElement;
-    native.value = this.localTime() ?? '';
+    native.value = localTimeOf(this.#side(key).committed(), this.effectiveZone()) ?? '';
 
     if (typeof native.showPicker !== 'function') {
       native.focus();
@@ -573,66 +765,101 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
   }
 
   /**
-   * A pick from the OS picker: replaces the draft while a session is open,
-   * commits immediately while idle (the flag-picker convention).
+   * A pick from the OS picker: replaces the focused side's draft while a
+   * session is open, commits immediately while idle (the flag-picker
+   * convention).
    */
   protected handleNativePick(raw: string) {
     const time = parseTime(raw);
     if (time === undefined) return;
 
-    if (this.#open()) {
-      this.draft.set(raw);
-      this.#dirty = true;
+    // The pick belongs to the side the picker was OPENED for — focus may
+    // have strayed since (the change fires on close/scrub, not on gesture).
+    const key = this.#pickerSide ?? this.focusTarget() ?? 'start';
+    const side = this.#side(key);
+
+    if (side.open()) {
+      side.draft.set(raw);
+      side.dirty = true;
       this.#panelDismissed.set(false);
-      const value = time === null ? null : this.#toValue({ time, days: 0 });
-      if (value !== this.value()) this.value.set(value);
+
+      const resolved = this.#resolveDraft(key);
+      if (resolved !== undefined) {
+        const current = this.internalRange();
+        if (key === 'start') this.#writeInstants(resolved.instant, current.end);
+        else this.#writeInstants(current.start, resolved.instant);
+      }
       return;
     }
 
-    const value = time === null ? null : this.#toValue({ time, days: 0 });
-    if (value !== this.value()) {
-      this.value.set(value);
+    // Idle: one whole commit — anchor like an idle session would.
+    const instant =
+      time === null ? null : composeDbEntry(this.#anchorDay(), time, this.effectiveZone());
+    const before = this.value();
+    this.#reconcile(key, instant, false);
+    if (!timeValuesEqual(this.value(), before)) {
+      const value = this.value();
       this.savedModelChange.emit(value);
-      this.saved.emit({ value, changed: true, dayOverflow: 0, explicitDay: false });
+      this.saved.emit({ value, changed: true, dayOverflow: 0, explicitDay: false, side: key });
     }
   }
 
-  // -- Clear affordance (idle hover bubble) --------------------------------------
+  // -- Clear affordance (idle hover bubble; per-side for a range) --------------
 
-  /** The clear bubble may show while idle and non-empty on an unlocked field. */
-  protected clearCanShow = computed(
-    () =>
-      !this.required() &&
-      !this.effectiveDisabled() &&
-      !this.effectiveReadonly() &&
-      !this.editing() &&
-      !this.isEmpty(),
-  );
+  #clearVisibility = makeClearBubbleVisibility({
+    required: this.required,
+    disabled: this.effectiveDisabled,
+    readonly: this.effectiveReadonly,
+    editing: this.editing,
+    range: this.internalRange,
+  });
+
+  protected clearCanShowSingle = this.#clearVisibility.single;
+  protected clearCanShowStart = this.#clearVisibility.start;
+  protected clearCanShowEnd = this.#clearVisibility.end;
 
   /**
-   * Clears the field from the idle hover bubble — a commit AND an interaction
-   * (mat-faithful): writes `null`, marks the field touched, and settles once
-   * so a bound schema (and a range group) sees the clear.
+   * Clears one side from the idle hover bubble — a commit AND an interaction
+   * (mat-faithful): writes `null` into that side (the OTHER side is never
+   * nuked, shape-echoed — half-open ranges are real states), re-baselines
+   * both sides so a later focus can't re-commit a stale draft, marks the
+   * field touched, and settles once. In the single shape `key` is `'start'`
+   * and the whole value clears.
    */
-  protected clearBubble() {
-    // Idle-only: the bubble is hidden while editing; guard anyway.
-    if (this.editing() || this.value() === null) return;
+  protected clearBubble(key: SideKey) {
+    // Idle-only: the bubble is hidden while editing; guard anyway so a stray
+    // clear can't strand a frozen draft mid-session.
+    if (this.editing()) return;
 
-    this.value.set(null);
-    this.#baselineValue = null;
-    this.draft.set(this.display());
-    this.#saveAttempted.set(false);
+    const before = this.value();
+    const current = this.internalRange();
+    if (key === 'start') this.#writeInstants(null, current.end);
+    else this.#writeInstants(current.start, null);
+
+    for (const side of [this.#startSide, this.#endSide]) {
+      side.baselineValue = this.value();
+      side.draft.set(side.display());
+      side.dirty = false;
+      side.saveAttempted.set(false);
+    }
 
     this.#selfTouched.set(true);
     this.touch.emit();
-    this.savedModelChange.emit(null);
-    this.saved.emit({ value: null, changed: true, dayOverflow: 0, explicitDay: false });
+
+    const value = this.value();
+    const changed = !timeValuesEqual(value, before);
+    if (changed) this.savedModelChange.emit(value);
+    this.saved.emit({ value, changed, dayOverflow: 0, explicitDay: false, side: key });
+  }
+
+  #inputOf(key: SideKey): HTMLInputElement | undefined {
+    return (key === 'start' ? this.startInput() : this.endInput())?.nativeElement;
   }
 
   // -- Form Value Contract ------------------------------------------------------------------
 
   focus(options?: FocusOptions) {
-    this.timeInput()?.nativeElement.focus(options);
+    this.#inputOf('start')?.focus(options);
   }
 
   /**
@@ -641,11 +868,17 @@ export class AngularInlineTime implements FormValueControl<DbDateTime | null> {
    * stealing.
    */
   reset() {
-    if (!this.#open()) return;
+    for (const key of ['start', 'end'] as const) {
+      const side = this.#side(key);
+      if (!side.open()) continue;
 
-    if (this.#baselineValue !== this.value()) this.value.set(this.#baselineValue);
-    this.draft.set(this.display());
-    this.#saveAttempted.set(false);
+      if (!timeValuesEqual(side.baselineValue, this.value())) this.value.set(side.baselineValue);
+      side.baselineValue = this.value();
+      side.draft.set(side.display());
+      side.dirty = false;
+      side.saveAttempted.set(false);
+    }
+
     this.#panelDismissed.set(true);
   }
 }

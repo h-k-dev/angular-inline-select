@@ -526,6 +526,21 @@ describe('AngularInlineDate two-field range', () => {
     expect(h.host.value()).toEqual({ start: null, end: null });
   });
 
+  it('a typed end BEFORE the start commits the SORTED pair (the calendar-pick law)', async () => {
+    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.fixture.detectChanges();
+
+    type(h, h.end()!, '2026-05-08');
+    press(h, h.end()!, 'Enter');
+
+    // Days carry no overnight reading (that is the TIME control's roll) —
+    // backwards just sorts, exactly like an inverted calendar pick.
+    expect(h.host.value()).toEqual({ start: db('2026-05-08'), end: dbEnd('2026-05-12') });
+    expect(h.start().value).toBe('May 8, 2026');
+    expect(h.end()!.value).toBe('May 12, 2026');
+    expect(h.host.sessions.at(-1)!.changed).toBe(true);
+  });
+
   it('a start edit in the one-key { start } shape moves the single-day range whole', async () => {
     h.host.value.set({ start: db('2026-05-12') });
     h.fixture.detectChanges();

@@ -31,7 +31,7 @@ import {
   EditableClearButton,
 } from 'angular-inline-select';
 import { parseDuration, formatDuration, type DurationFormat } from './duration-codec';
-import { INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
+import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineDurationSaved {
@@ -87,10 +87,17 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   ariaLabel = input<string | undefined>(undefined);
 
   /**
-   * Which edge the clear bubble grows from — `'end'` (default) or `'start'`
-   * for a range group's inline-START leaf, so the outer leaves open outward.
+   * Which edge the clear bubble grows from. Unset, the leaf ROLE decides
+   * (`INLINE_TEMPORAL_BUBBLE_SIDE` — inline-START leaves provide `'start'`
+   * so the outer leaves open outward), else `'end'`.
    */
-  clearBubbleSide = input<BubbleMenuSide>('end');
+  clearBubbleSide = input<BubbleMenuSide | undefined>(undefined);
+
+  #bubbleSideDefault = inject(INLINE_TEMPORAL_BUBBLE_SIDE, { optional: true });
+
+  protected effectiveClearBubbleSide = computed(
+    () => this.clearBubbleSide() ?? this.#bubbleSideDefault ?? 'end',
+  );
 
   /** How colon notation reads and how committed values render. */
   durationFormat = input<DurationFormat>('h:mm');

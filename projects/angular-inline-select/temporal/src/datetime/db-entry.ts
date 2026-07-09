@@ -119,6 +119,29 @@ export function diffDbEntrySeconds(start: DbDateTime, end: DbDateTime): number |
 }
 
 /**
+ * Rolls `end` forward by whole LOCAL days until it strictly follows `start` —
+ * the range house rule, shared by the ranged time control and the range
+ * group (a typed end is WALL-CLOCK intent: at-or-before the start it means a
+ * later day — `23:30` the same evening, `06:00` overnight). Calendar-day
+ * math in the display zone, so the end's wall-clock reading survives DST
+ * transitions (a fixed 86 400 s shift would drift it an hour). Unreadable
+ * inputs return `end` unchanged.
+ */
+export function rollDbEntryForward(start: DbDateTime, end: DbDateTime, zone?: ZoneId): DbDateTime {
+  const from = toDateTime(start, zone);
+  let to = toDateTime(end, zone);
+  if (from === null || to === null || to > from) return end;
+
+  // Jump the local-day gap in ONE calendar shift, then nudge over the rare
+  // DST-length wobble — never a per-day walk.
+  const dayGap = Math.round(from.startOf('day').diff(to.startOf('day'), 'days').days);
+  if (dayGap > 0) to = to.plus({ days: dayGap });
+  while (to <= from) to = to.plus({ days: 1 });
+
+  return fromDateTime(to);
+}
+
+/**
  * Display-zone calendar days from `start`'s day to `end`'s day — the end
  * field's `+n` over-count, now intrinsic to the values.
  */

@@ -1,6 +1,5 @@
 import {
   Component,
-  DestroyRef,
   ElementRef,
   Injector,
 
@@ -8,17 +7,13 @@ import {
   afterNextRender,
   computed,
   contentChild,
-  effect,
   inject,
   input,
-  linkedSignal,
   model,
   output,
   signal,
   type Signal,
   type TemplateRef,
-  type WritableSignal,
-  untracked,
   viewChild,
 } from '@angular/core';
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
@@ -57,9 +52,20 @@ import {
   type DateValueShape,
   type InternalDateRange,
 } from './date-codec';
-import { INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
+import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 import { dayToDbEntry, dayEndToDbEntry, localDayOf } from '../datetime/db-entry';
 import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
+import {
+  makeSideSessionChrome,
+  makeClearBubbleVisibility,
+  makeShapeMemory,
+  makeSideCore,
+  sideAriaLabel,
+  sideSize,
+  wireEditingBridge,
+  type SideCore,
+  type SideKey,
+} from '../side-session';
 import { Calendar } from './calendar/calendar';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
@@ -70,38 +76,19 @@ export interface InlineDateSaved {
   changed: boolean;
 }
 
-type SideKey = 'start' | 'end';
-
 /**
- * Everything one field of the pair owns. A SESSION is a continuous stretch
- * of focus on one side: it opens on focusin (capturing the baseline) and
- * settles on Enter, Escape, or focus leaving the side.
+ * The date side: the shared session core (see `SideCore`; `committed` is
+ * this side's LOCAL day) plus what a DATE session must snapshot.
  */
-interface DateSide {
-  readonly key: SideKey;
-  /** This side's committed LOCAL day (the value boundary stays DB entries). */
-  readonly committedDay: Signal<IsoDate | null>;
-  /** Localized display of the committed day — what the input shows idle. */
-  readonly display: Signal<string>;
-  /** Whether a session is open on this side. */
-  readonly open: WritableSignal<boolean>;
-  /**
-   * The input's text: user-owned while a session is open (frozen linkedSignal
-   * — a value write mid-session never rewrites text under the caret), the
-   * committed display otherwise.
-   */
-  readonly draft: WritableSignal<string>;
+interface DateSide extends SideCore<IsoDate> {
   /** The committed day at session start — what Escape and snap-back restore. */
   baselineDay: IsoDate | null;
   /**
-   * Whether the USER touched the draft since the last settlement. An
-   * untouched session settles WHERE THE VALUE STANDS — re-deriving it from
-   * the draft would undo external writes (a group re-anchoring this leaf)
-   * with stale session state.
+   * The draft's codec reading, CACHED per side (`null` empty, `undefined`
+   * unreadable) — the one parse per keystroke every consumer (live channel,
+   * grid, preview, parse gate, settlement) reads.
    */
-  dirty: boolean;
-  /** Enter was pressed on an unreadable draft — reveals the parse-gate error. */
-  readonly saveAttempted: WritableSignal<boolean>;
+  readonly parsed: Signal<IsoDate | null | undefined>;
 }
 
 /**
@@ -203,11 +190,19 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   ariaLabel = input<string | undefined>(undefined);
 
   /**
-   * Which edge a SINGLE field's clear bubble grows from — `'end'` (default)
-   * or `'start'` for a range group's inline-START leaf. Range fields ignore
-   * this: each side's bubble always opens outward (start→left, end→right).
+   * Which edge a SINGLE field's clear bubble grows from. Unset, the leaf
+   * ROLE decides (`INLINE_TEMPORAL_BUBBLE_SIDE` — `rangeDay`/`rangeStart`
+   * provide `'start'` so inline-START leaves open outward), else `'end'`.
+   * Range fields ignore this: each side's bubble always opens outward
+   * (start→left, end→right).
    */
-  clearBubbleSide = input<BubbleMenuSide>('end');
+  clearBubbleSide = input<BubbleMenuSide | undefined>(undefined);
+
+  #bubbleSideDefault = inject(INLINE_TEMPORAL_BUBBLE_SIDE, { optional: true });
+
+  protected effectiveClearBubbleSide = computed(
+    () => this.clearBubbleSide() ?? this.#bubbleSideDefault ?? 'end',
+  );
 
   /** Locale for display + parsing (`Intl`); browser default when omitted. */
   locale = input<string | string[] | undefined>(undefined);
@@ -293,23 +288,19 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   /** Whether an edit session is open (= focus is within). Two-way bindable. */
   editing = model(false);
 
-  /**
-   * `null` is the only shape-ambiguous value: this remembers the last shape
-   * a non-null value declared, so a cleared field keeps emitting the shape
-   * its consumer speaks.
-   */
-  #lastShape = linkedSignal<InlineDateValue, DateValueShape | null>({
-    source: this.value,
-    computation: (value, prev) => inferDateShape(value) ?? prev?.value ?? null,
+  #shapeMemory = makeShapeMemory<InlineDateValue, DateValueShape>({
+    value: this.value,
+    infer: inferDateShape,
+    ranged: this.ranged,
+    singleShape: 'single',
+    rangeShape: 'range',
   });
 
   /** The effective shape: last seen, or the `ranged` cold-start default. */
-  readonly shape = computed<DateValueShape>(
-    () => this.#lastShape() ?? (this.ranged() ? 'range' : 'single'),
-  );
+  readonly shape = this.#shapeMemory.shape;
 
   /** Object shapes render the start–end input pair; a string renders one field. */
-  protected twoFields = computed(() => this.shape() !== 'single');
+  protected twoFields = this.#shapeMemory.twoFields;
 
   /**
    * One canonical internal model, always: `{ start, end }` as LOCAL
@@ -348,31 +339,26 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   }
 
   #makeSide(key: SideKey): DateSide {
-    const committedDay = computed(() => this.internalRange()[key]);
-    const display = computed(() => formatIsoDate(committedDay(), this.locale()));
-    const open = signal(false);
-    const draft = linkedSignal<string, string>({
-      source: display,
-      computation: (source, prev) => (open() ? (prev?.value ?? source) : source),
-    });
+    const committed = computed(() => this.internalRange()[key]);
+    const display = computed(() => formatIsoDate(committed(), this.locale()));
+    const core = makeSideCore(key, committed, display);
 
     return {
-      key,
-      committedDay,
-      display,
-      open,
-      draft,
+      ...core,
       baselineDay: null,
-      dirty: false,
-      saveAttempted: signal(false),
+      parsed: computed(() =>
+        parseDateInput(core.draft(), this.now()(), this.locale(), this.effectiveZone()),
+      ),
     };
   }
 
   protected startDraft = computed(() => this.#startSide.draft());
   protected endDraft = computed(() => this.#endSide.draft());
 
-  /** Which side holds focus — the side the grid, preview and picks serve. */
-  protected focusTarget = signal<SideKey | null>(null);
+  /** The shared session chrome: focus target, snap-back flash, focus timers. */
+  #chrome = makeSideSessionChrome((key) => this.#inputOf(key));
+
+  protected focusTarget = this.#chrome.focusTarget;
 
   protected overlayOpen = signal(false);
 
@@ -384,16 +370,12 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   protected calendar = viewChild(Calendar);
   protected panelRef = viewChild<ElementRef<HTMLElement>>('panel');
 
-  /** The current draft's ISO reading (`null` empty, `undefined` unreadable). */
-  readonly parsedDraft = computed(() => {
-    const key = this.focusTarget() ?? 'start';
-    return parseDateInput(
-      this.#side(key).draft(),
-      this.now()(),
-      this.locale(),
-      this.effectiveZone(),
-    );
-  });
+  /**
+   * The current draft's ISO reading (`null` empty, `undefined` unreadable)
+   * — a SELECTION over the sides' cached parses, so a focus flip never
+   * re-parses an unchanged draft.
+   */
+  readonly parsedDraft = computed(() => this.#side(this.focusTarget() ?? 'start').parsed());
 
   /** The parse gate: whether the focused draft fails the codec. Public for consumers. */
   readonly parseFailed = computed(() => this.parsedDraft() === undefined);
@@ -432,11 +414,11 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   /** Live interpretation preview: `Tuesday, 12 May 2026` / `… raw`. */
   protected preview = computed(() => {
-    const key = this.focusTarget() ?? 'start';
-    const raw = this.#side(key).draft().trim();
+    const side = this.#side(this.focusTarget() ?? 'start');
+    const raw = side.draft().trim();
     if (!raw) return '';
 
-    const iso = parseDateInput(raw, this.now()(), this.locale(), this.effectiveZone());
+    const iso = side.parsed();
     if (iso === null || iso === undefined) return `… ${raw}`;
 
     return `${describeIsoDate(iso, this.locale())}`;
@@ -444,16 +426,11 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   /** The grid's pending day: the focused side's parsed draft, else its committed day. */
   protected pendingDay = computed<IsoDate | null>(() => {
-    const key = this.focusTarget() ?? 'start';
-    const draft = parseDateInput(
-      this.#side(key).draft(),
-      this.now()(),
-      this.locale(),
-      this.effectiveZone(),
-    );
+    const side = this.#side(this.focusTarget() ?? 'start');
+    const draft = side.parsed();
     if (typeof draft === 'string') return draft;
 
-    return this.#side(key).committedDay() ?? this.internalRange().start;
+    return side.committed() ?? this.internalRange().start;
   });
 
   protected selectedForGrid = computed(() =>
@@ -472,50 +449,33 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
   ];
 
-  /** Snap-back flash target + the aria-live announcement text. */
-  protected revertFlash = signal<SideKey | null>(null);
-  protected revertNotice = signal('');
-
-  #focusCheckTimer: ReturnType<typeof setTimeout> | null = null;
-  #flashTimer: ReturnType<typeof setTimeout> | null = null;
+  protected revertFlash = this.#chrome.revertFlash;
+  protected revertNotice = this.#chrome.revertNotice;
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => {
-      if (this.#focusCheckTimer !== null) clearTimeout(this.#focusCheckTimer);
-      if (this.#flashTimer !== null) clearTimeout(this.#flashTimer);
-    });
-
-    // The editing bridge: external `editing.set(true)` focuses the start
-    // input (focusin opens the session); `set(false)` settles and blurs.
-    // Internal focus flow writes the model, so states already agree there.
-    effect(() => {
-      const editing = this.editing();
-      untracked(() => {
-        const focused = this.focusTarget();
-        if (editing && focused === null) {
-          this.#focusSide('start');
-        } else if (!editing && focused !== null) {
-          this.#settle(focused);
-          this.overlayOpen.set(false);
-          this.focusTarget.set(null);
-          this.#inputOf(focused)?.blur();
-        }
-      });
+    wireEditingBridge({
+      editing: this.editing,
+      focusTarget: this.focusTarget,
+      focusSide: (key) => this.#chrome.focusSide(key),
+      deactivate: (focused) => {
+        this.#settle(focused);
+        this.overlayOpen.set(false);
+        this.focusTarget.set(null);
+        this.#inputOf(focused)?.blur();
+      },
     });
   }
 
   // -- Sizing (no layout shift: content-sized, placeholder-floored) -------------
 
   protected sizeOf(key: SideKey): number {
-    const side = this.#side(key);
     const placeholder =
       key === 'end' ? this.effectiveEndPlaceholder() : this.effectivePlaceholder();
-    return Math.max(1, (side.draft() || placeholder).length);
+    return sideSize(this.#side(key).draft(), placeholder);
   }
 
   protected ariaLabelOf(key: SideKey): string {
-    const base = this.ariaLabel() ?? 'Date';
-    return this.twoFields() ? `${base} ${key}` : base;
+    return sideAriaLabel(this.ariaLabel() ?? 'Date', key, this.twoFields());
   }
 
   protected ariaInvalidOf(key: SideKey): boolean {
@@ -531,7 +491,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     // A settled-but-still-focused field (Enter, outside click) restarts its
     // session on the next keystroke.
     if (!side.open()) {
-      side.baselineDay = side.committedDay();
+      side.baselineDay = side.committed();
       side.open.set(true);
     }
 
@@ -540,7 +500,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     side.saveAttempted.set(false);
     this.overlayOpen.set(true);
 
-    const day = parseDateInput(raw, this.now()(), this.locale(), this.effectiveZone());
+    const day = side.parsed();
     if (day !== undefined) this.#writeSideDay(key, day);
   }
 
@@ -568,7 +528,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   protected handleFocusIn(key: SideKey) {
     const side = this.#side(key);
     if (!side.open()) {
-      side.baselineDay = side.committedDay();
+      side.baselineDay = side.committed();
       side.dirty = false;
       side.saveAttempted.set(false);
       side.open.set(true);
@@ -585,12 +545,10 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * settle + close), and that is only knowable a tick later.
    */
   protected handleFocusOut() {
-    if (this.#focusCheckTimer !== null) clearTimeout(this.#focusCheckTimer);
-    this.#focusCheckTimer = setTimeout(() => this.#onFocusSettled(), 0);
+    this.#chrome.scheduleFocusSettle(() => this.#onFocusSettled());
   }
 
   #onFocusSettled() {
-    this.#focusCheckTimer = null;
     const active = this.#document.activeElement;
     const inStart = active !== null && active === this.startInput()?.nativeElement;
     const inEnd = active !== null && active === this.endInput()?.nativeElement;
@@ -637,23 +595,29 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     let day: IsoDate | null;
     let snappedBack = false;
     if (untouched) {
-      day = side.committedDay();
+      day = side.committed();
     } else if (options.revert) {
       day = side.baselineDay;
     } else if (options.resolve !== undefined) {
       day = options.resolve;
     } else {
-      const parsed = parseDateInput(
-        side.draft(),
-        this.now()(),
-        this.locale(),
-        this.effectiveZone(),
-      );
+      const parsed = side.parsed();
       snappedBack = parsed === undefined;
       day = parsed === undefined ? side.baselineDay : parsed;
     }
 
-    if (!untouched) this.#writeSideDay(key, day);
+    if (!untouched) {
+      this.#writeSideDay(key, day);
+
+      // A typed commit sorts like a calendar pick (iusta-style): a date
+      // pair never lands inverted — days carry no overnight reading (that
+      // is the TIME control's roll), so end-before-start is only ever
+      // backwards. Restorations (Escape, snap-back) stay literal.
+      if (!options.revert && !snappedBack) {
+        this.#sortIfInverted();
+        day = side.committed();
+      }
+    }
     const changed = !untouched && day !== side.baselineDay;
     side.dirty = false;
 
@@ -667,7 +631,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       side.saveAttempted.set(false);
     }
 
-    if (snappedBack) this.#announceRevert(key, day);
+    if (snappedBack) this.#chrome.announceRevert(key, formatIsoDate(day, this.locale()));
 
     this.#selfTouched.set(true);
     this.touch.emit();
@@ -677,15 +641,6 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     this.saved.emit({ value, changed });
   }
 
-  #announceRevert(key: SideKey, day: IsoDate | null) {
-    const restored = day === null ? 'empty' : formatIsoDate(day, this.locale());
-    this.revertNotice.set(`Reverted to ${restored}`);
-    this.revertFlash.set(key);
-
-    if (this.#flashTimer !== null) clearTimeout(this.#flashTimer);
-    this.#flashTimer = setTimeout(() => this.revertFlash.set(null), 600);
-  }
-
   // -- Keyboard -------------------------------------------------------------------
 
   protected handleInputKeydown(key: SideKey, event: KeyboardEvent) {
@@ -693,10 +648,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       case 'Enter': {
         event.preventDefault();
         const side = this.#side(key);
-        if (
-          parseDateInput(side.draft(), this.now()(), this.locale(), this.effectiveZone()) ===
-          undefined
-        ) {
+        if (side.parsed() === undefined) {
           // The parse gate: the user ASKED for a commit — block and say why.
           side.saveAttempted.set(true);
           return;
@@ -740,7 +692,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const key = this.focusTarget() ?? 'start';
     const side = this.#side(key);
     if (!side.open()) {
-      side.baselineDay = side.committedDay();
+      side.baselineDay = side.committed();
       side.open.set(true);
     }
 
@@ -750,14 +702,14 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     // commit it back, un-sorting the pair.
     this.#writeSideDay(key, day);
     this.#sortIfInverted();
-    this.#settle(key, { resolve: side.committedDay(), keepOpen: true });
+    this.#settle(key, { resolve: side.committed(), keepOpen: true });
 
     const other: SideKey = key === 'start' ? 'end' : 'start';
-    if (this.twoFields() && this.#side(other).committedDay() === null) {
-      this.#focusSide(other);
+    if (this.twoFields() && this.#side(other).committed() === null) {
+      this.#chrome.focusSide(other);
     } else {
       this.overlayOpen.set(false);
-      this.#focusSide(key);
+      this.#chrome.focusSide(key);
     }
   }
 
@@ -780,7 +732,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
     for (const key of ['start', 'end'] as const) {
       const side = this.#side(key);
-      side.baselineDay = side.committedDay();
+      side.baselineDay = side.committed();
       side.draft.set(side.display());
       side.dirty = false;
       side.saveAttempted.set(false);
@@ -798,7 +750,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   protected commitDraggedRange(range: { start: IsoDate; end: IsoDate }) {
     this.#commitBothSides(range.start, range.end);
     this.overlayOpen.set(false);
-    this.#focusSide(this.focusTarget() ?? 'start');
+    this.#chrome.focusSide(this.focusTarget() ?? 'start');
   }
 
   /**
@@ -813,12 +765,12 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     }
 
     this.#commitBothSides(day, null);
-    this.#focusSide('end');
+    this.#chrome.focusSide('end');
   }
 
   /** Escape in the grid hands control back to the focused input (session continues). */
   protected escapeCalendar() {
-    this.#focusSide(this.focusTarget() ?? 'start');
+    this.#chrome.focusSide(this.focusTarget() ?? 'start');
   }
 
   /**
@@ -835,7 +787,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       return;
     }
 
-    if (this.focusTarget() === null) this.#focusSide('start');
+    if (this.focusTarget() === null) this.#chrome.focusSide('start');
     this.overlayOpen.set(true);
   }
 
@@ -866,35 +818,19 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     return (key === 'start' ? this.startInput() : this.endInput())?.nativeElement;
   }
 
-  #focusSide(key: SideKey) {
-    const element = this.#inputOf(key);
-    if (element) element.focus();
-    else afterNextRender(() => this.#inputOf(key)?.focus(), { injector: this.#injector });
-  }
-
   // -- Clear affordance (idle hover bubble; per-side for a range) ----------------
 
-  /** Guards every clear bubble EXCEPT hover and per-side emptiness. */
-  #clearGuards = computed(
-    () =>
-      !this.required() &&
-      !this.effectiveDisabled() &&
-      !this.effectiveReadonly() &&
-      !this.editing(),
-  );
+  #clearVisibility = makeClearBubbleVisibility({
+    required: this.required,
+    disabled: this.effectiveDisabled,
+    readonly: this.effectiveReadonly,
+    editing: this.editing,
+    range: this.internalRange,
+  });
 
-  /** Single field: one bubble that clears the (only) value. */
-  protected clearCanShowSingle = computed(() => this.#clearGuards() && !this.isEmpty());
-
-  /** Range: the start side's bubble — shown while the start holds a day. */
-  protected clearCanShowStart = computed(
-    () => this.#clearGuards() && this.internalRange().start !== null,
-  );
-
-  /** Range: the end side's bubble — shown while the end holds a day. */
-  protected clearCanShowEnd = computed(
-    () => this.#clearGuards() && this.internalRange().end !== null,
-  );
+  protected clearCanShowSingle = this.#clearVisibility.single;
+  protected clearCanShowStart = this.#clearVisibility.start;
+  protected clearCanShowEnd = this.#clearVisibility.end;
 
   /**
    * Clears one side from the idle hover bubble — a commit AND an interaction
@@ -912,7 +848,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     this.#writeSideDay(key, null);
 
     for (const side of [this.#startSide, this.#endSide]) {
-      side.baselineDay = side.committedDay();
+      side.baselineDay = side.committed();
       side.draft.set(side.display());
       side.dirty = false;
       side.saveAttempted.set(false);
@@ -944,7 +880,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       if (!side.open()) continue;
 
       this.#writeSideDay(key, side.baselineDay);
-      side.baselineDay = side.committedDay();
+      side.baselineDay = side.committed();
       side.draft.set(side.display());
       side.saveAttempted.set(false);
     }

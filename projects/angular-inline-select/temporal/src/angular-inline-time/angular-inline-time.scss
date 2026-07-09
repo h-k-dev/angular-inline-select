@@ -73,6 +73,11 @@
   color: var(--editable-text-affix-color, var(--mat-sys-on-surface-variant, inherit));
 }
 
+.inline-time__separator {
+  user-select: none;
+  color: var(--mat-sys-on-surface-variant, #5f6368);
+}
+
 /* The badge's anchor: the input's own box. */
 .inline-time__field {
   position: relative;

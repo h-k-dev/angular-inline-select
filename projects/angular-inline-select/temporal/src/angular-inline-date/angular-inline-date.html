@@ -56,6 +56,7 @@
       [attr.aria-expanded]="overlayOpen()"
       [attr.aria-label]="ariaLabelOf('end')"
       [attr.aria-invalid]="ariaInvalidOf('end') || null"
+      [attr.aria-required]="required() || null"
       [attr.size]="sizeOf('end')"
       [value]="endDraft()"
       [placeholder]="effectiveEndPlaceholder()"
@@ -99,7 +100,7 @@
 
 <!-- Single field: one bubble anchored to the whole field, clearing the value. -->
 @if (!twoFields()) {
-  <bubble-menu [origin]="dateField" [side]="clearBubbleSide()" [canShow]="clearCanShowSingle()">
+  <bubble-menu [origin]="dateField" [side]="effectiveClearBubbleSide()" [canShow]="clearCanShowSingle()">
     <button editableClearButton aria-label="Clear date" (clear)="clearBubble('start')"></button>
   </bubble-menu>
 }
