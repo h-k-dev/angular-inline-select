@@ -180,6 +180,13 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   readonly effectivePlaceholder = computed(
     () => this.placeholder() ?? localeDatePlaceholder(this.locale()),
   );
+
+  /**
+   * The UNIFORM adapter surface (every temporal control exposes it): the
+   * resolved placeholder text, so hosting containers never branch on the
+   * concrete control.
+   */
+  readonly placeholderText = computed(() => this.effectivePlaceholder());
   protected effectiveEndPlaceholder = computed(() => {
     const explicit = this.endPlaceholder();
     if (explicit !== undefined) return explicit;
@@ -526,6 +533,13 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   // -- Focus flow ----------------------------------------------------------------
 
   protected handleFocusIn(key: SideKey) {
+    // Tab-advance: focus landing HERE ends the partner's session. It settles
+    // NOW — before this session snapshots its baseline — so Escape and
+    // snap-back never resurrect a pre-SORT pair (a settle can move the
+    // partner: the typed-commit sort).
+    const partner = this.#side(key === 'start' ? 'end' : 'start');
+    if (partner.open()) this.#settle(partner.key);
+
     const side = this.#side(key);
     if (!side.open()) {
       side.baselineDay = side.committed();

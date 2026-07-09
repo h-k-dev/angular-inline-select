@@ -117,7 +117,9 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
     const destroyRef = inject(DestroyRef);
     afterNextRender(
       () => {
-        if (formField !== null && this.#control instanceof AngularInlineDate) {
+        // Duck-typed: only panel-floating controls (the date's calendar)
+        // carry the seam; the adapter never branches on the concrete class.
+        if (formField !== null && 'overlayOrigin' in this.#control) {
           this.#control.overlayOrigin.set(formField.getConnectedOverlayOrigin());
         }
 
@@ -158,11 +160,9 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
     return this.#control.value();
   }
 
-  /** Date resolves its own default (the locale pattern) — read the verdict, not the input. */
+  /** Every control resolves its own default — read the uniform verdict, never the input. */
   #placeholder(): string {
-    return this.#control instanceof AngularInlineDate
-      ? this.#control.effectivePlaceholder()
-      : this.#control.placeholder();
+    return this.#control.placeholderText();
   }
 
   get placeholder(): string {

@@ -99,8 +99,10 @@ export function dayEndToDbEntry(day: string, zone?: ZoneId): DbDateTime {
  * preserved time).
  */
 export function composeDbEntry(day: string, time: string, zone?: ZoneId): DbDateTime {
-  const [hour, minute] = time.split(':').map(Number);
-  return fromDateTime(dayIn(day, zone).set({ hour, minute, second: 0, millisecond: 0 }));
+  // `'HH:mm:ss'` composes with its seconds (iusta's HOUR_MINUTE_SECOND
+  // format); bare `'HH:mm'` stays second-less.
+  const [hour, minute, second = 0] = time.split(':').map(Number);
+  return fromDateTime(dayIn(day, zone).set({ hour, minute, second, millisecond: 0 }));
 }
 
 /** Shifts a DB entry by whole seconds (`shiftFromDuration`'s primitive) — zone-free. */

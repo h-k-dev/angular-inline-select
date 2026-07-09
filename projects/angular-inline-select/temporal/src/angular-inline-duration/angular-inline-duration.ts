@@ -83,6 +83,13 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
 
   placeholder = input<string>('0:00');
 
+  /**
+   * The UNIFORM adapter surface (every temporal control exposes it): the
+   * resolved placeholder text, so hosting containers never branch on the
+   * concrete control.
+   */
+  readonly placeholderText = computed(() => this.placeholder());
+
   /** Accessible name for the field. */
   ariaLabel = input<string | undefined>(undefined);
 

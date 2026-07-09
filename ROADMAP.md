@@ -103,13 +103,21 @@ reset value, per design.
 
 ## Remaining
 
-### Complete Phase 3 — remove the legacy outputs
+### ~~Complete Phase 3 — remove the legacy outputs~~ — REVERSED (2026-07-09)
 
-Delete `savedModelChange` and `reverted` (breaking; pre-1.0), migrate the
-demo bindings to `(saved)` (`$event.value`), drop the comparison entries from
-the event console. Do this once the `saved` payload has proven itself in use.
-Note `reverted` is the only carrier of the *discarded draft text* — confirm
-nothing needs it before deleting.
+**USER DECISION: `savedModelChange` is PERMANENT — the DNA of the
+library.** It is part of every editable, here and in iusta, and will never
+be deprecated. `saved` (the session payload `{value, changed, …}`)
+coexists as the richer sibling, not the successor. The two emit together
+on every settled change; consumers pick the shape they want. (`reverted`'s
+fate stays open — it is the only carrier of the discarded draft text;
+decide separately if it ever matters.)
+
+Open convergence note: iusta's temporal `savedModelChange` payloads are
+richer *details* objects (Luxon `DateSavedDetails`/`TimeSavedDetails`)
+while the sandbox emits the raw value — same DNA, different plumage.
+Whether the details shape upstreams into the sandbox (Luxon is already
+contained in `/temporal`) is an open Phase-6 question.
 
 ## Next up — editable-number & multi-page demo
 

@@ -210,6 +210,13 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     return this.internalRange().start === null ? this.placeholder() : '…';
   });
 
+  /**
+   * The UNIFORM adapter surface (every temporal control exposes it): the
+   * resolved placeholder text, so hosting containers never branch on the
+   * concrete control.
+   */
+  readonly placeholderText = computed(() => this.placeholder());
+
   /** Accessible base name; ranged fields append " start" / " end". */
   ariaLabel = input<string | undefined>(undefined);
 

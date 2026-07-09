@@ -541,6 +541,23 @@ describe('AngularInlineDate two-field range', () => {
     expect(h.host.sessions.at(-1)!.changed).toBe(true);
   });
 
+  it('Tab-advance settles the departing side BEFORE the landing session baselines — Escape never resurrects a pre-sort pair', async () => {
+    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.fixture.detectChanges();
+
+    type(h, h.end()!, '2026-05-08'); // live channel: inverted, not yet sorted
+    focusInput(h, h.start()); // what Tab does — the end settles NOW and sorts
+    h.fixture.detectChanges();
+
+    const sorted = { start: db('2026-05-08'), end: dbEnd('2026-05-12') };
+    expect(h.host.value()).toEqual(sorted);
+
+    // The start session's baseline is the POST-sort day — Escape is a no-op.
+    press(h, h.start(), 'Escape');
+    await settle(h);
+    expect(h.host.value()).toEqual(sorted);
+  });
+
   it('a start edit in the one-key { start } shape moves the single-day range whole', async () => {
     h.host.value.set({ start: db('2026-05-12') });
     h.fixture.detectChanges();
