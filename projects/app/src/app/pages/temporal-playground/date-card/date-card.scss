@@ -1,0 +1,7 @@
+@use '../../demo';
+@use '../model-table';
+
+// The card div stays the direct flex child of the page's .example-stack.
+:host {
+  display: contents;
+}

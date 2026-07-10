@@ -1,0 +1,73 @@
+<div
+  class="example-card"
+  id="mat-quartet-example"
+  dateTimeRangeGroup
+  #matStayGroup="dateTimeRangeGroup"
+  [formField]="matStayForm"
+  (savedModelChange)="logEmit('matStay.savedModelChange', $event)"
+>
+  <h3 class="example-card__title">The quartet in mat-form-fields (T4) — same controls, mat chrome</h3>
+  <p class="prose">
+    The SAME group and the SAME mat-ignorant leaves — each hosted by <code>&lt;mat-form-field&gt;</code> via
+    the <code>inlineMatFormField</code> adapter (<code>angular-inline-select/temporal-mat</code>). The adapter
+    derives <code>MatFormFieldControl</code> entirely from the controls' public signals — label float from
+    emptiness/focus, <code>errorState</code> from the field's own verdict — and the controls' underline rests
+    via the generic bare-chrome classes. Sessions, snap-back, the calendar panel, overflow hours and the
+    <code>+{{ matStayGroup.endDayOffset() }}</code> badge all work unchanged inside the mat box.
+  </p>
+
+  <div class="mat-quartet">
+    <mat-form-field appearance="outline">
+      <mat-label>Stay</mat-label>
+      <angular-inline-date
+        rangeDay
+        inlineMatFormField
+        [locale]="locale()"
+        placeholder=""
+        ariaLabel="Mat stay day"
+      />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Starts</mat-label>
+      <angular-inline-time
+        rangeStart
+        inlineMatFormField
+        [locale]="militaryLocale()"
+        placeholder=""
+        ariaLabel="Mat stay start in 24-hour time"
+      />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Ends</mat-label>
+      <angular-inline-time
+        rangeEnd
+        inlineMatFormField
+        [locale]="militaryLocale()"
+        placeholder=""
+        ariaLabel="Mat stay end in 24-hour time"
+      />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Length</mat-label>
+      <angular-inline-duration
+        rangeLength
+        inlineMatFormField
+        durationFormat="h:mm"
+        [step]="60"
+        placeholder=""
+        ariaLabel="Mat stay length"
+      />
+      <mat-hint>whole minutes</mat-hint>
+    </mat-form-field>
+  </div>
+
+  <p class="form-toggles__hint">
+    Model:
+    <code>{{ matStayModel()?.start ?? '∅' }}</code> →
+    <code>{{ matStayModel()?.end ?? '∅' }}</code> ·
+    <code>{{ matStayModel()?.duration ?? '∅' }}s</code>
+  </p>
+</div>

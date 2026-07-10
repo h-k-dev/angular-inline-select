@@ -1,0 +1,19 @@
+@use '../../demo';
+
+// The card div stays the direct flex child of the page's .example-stack.
+:host {
+  display: contents;
+}
+
+// Two labeled mat boxes in one row, wrapping on narrow screens.
+.mat-quartet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: baseline;
+
+  mat-form-field {
+    flex: 1 1 10rem;
+    min-width: 9rem;
+  }
+}

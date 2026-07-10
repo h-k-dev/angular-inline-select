@@ -1,0 +1,63 @@
+<div class="example-card" id="time-example">
+  <h3 class="example-card__title">Time &amp; time range — what the user sees vs the model</h3>
+  <p class="prose">
+    The SAME time control twice. <em>Starts at</em> is one <code>[formField]</code>: type “930”, “9”, “21:05” —
+    the local wall-clock display hides a FULL UTC instant that carries its own day. <em>Shift</em> binds
+    <code>{{ '{' }} start, end {{ '}' }}</code> — the shape-echo renders the TWO-FIELD pair (no group, no
+    leaves). The range house rules live INSIDE the control: a typed end is wall-clock intent anchored on the
+    START's day — at-or-before the start it rolls next-day (the overnight seed wears the intrinsic
+    <code>+{{ shiftTime.dayOffset() }}</code> badge), overflow hours like “25:15” type the over-count by hand,
+    and a pasted full ISO datetime stands as-is, never re-anchored. Tab commits the start and lands in the end;
+    Escape reverts the PAIR. The native-picker toggle below applies to BOTH fields.
+  </p>
+
+  <table class="model-table">
+    <thead>
+      <tr>
+        <th scope="col">Field</th>
+        <th scope="col">Display (local)</th>
+        <th scope="col">Model (UTC, SQL-friendly)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row">Starts at</th>
+        <td>
+          <angular-inline-time
+            [formField]="timeForm.starts"
+            [locale]="locale()"
+            [native]="nativeTimePicker()"
+            ariaLabel="Start time"
+            (savedModelChange)="logEmit('starts.savedModelChange', $event)"
+          />
+        </td>
+        <td><code>{{ timeModel().starts ?? '∅' }}</code></td>
+      </tr>
+      <tr>
+        <th scope="row">Shift</th>
+        <td>
+          <angular-inline-time
+            #shiftTime
+            [formField]="timeForm.shift"
+            [ranged]="true"
+            [native]="nativeTimePicker()"
+            [locale]="militaryLocale()"
+            ariaLabel="Shift in 24-hour time"
+            (savedModelChange)="logEmit('shift.savedModelChange', $event)"
+          />
+        </td>
+        <td>
+          <code>{{ timeModel().shift?.start ?? '∅' }}</code>
+          →
+          <code>{{ timeModel().shift?.end ?? '∅' }}</code>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="form-toggles" role="group" aria-label="Time picker mode">
+    <button mat-stroked-button (click)="nativeTimePicker.set(!nativeTimePicker())">
+      Native picker: {{ nativeTimePicker() ? 'on (click the fields)' : 'off (typing only)' }}
+    </button>
+  </div>
+</div>

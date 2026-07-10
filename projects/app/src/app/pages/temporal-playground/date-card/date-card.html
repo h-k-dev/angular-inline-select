@@ -1,0 +1,75 @@
+<div class="example-card" id="date-example">
+  <h3 class="example-card__title">Date &amp; date range — what the user sees vs the model</h3>
+  <p class="prose">
+    The SAME date control twice — the binding shape IS the mode. <em>Deadline</em> is one
+    <code>[formField]</code>: type “24.12.” (year auto-completes), an ISO date, or a month name — focus opens
+    the calendar panel without stealing the caret (ArrowDown enters the grid; yesterday/today/tomorrow chips
+    are the quick-picks, labels via <code>Intl</code>); the model is the UTC ISO DB entry of the local
+    <code>startOf('day')</code>. <em>Vacation</em> binds <code>{{ '{' }} start, end {{ '}' }}</code> — the
+    shape-echo renders the TWO-FIELD pair: <code>start</code> = local <code>startOf('day')</code>,
+    <code>end</code> = <code>endOf('day')</code>. Tab commits the start and lands in the end; each side owns
+    its clear (half-open ranges are real states). On the calendar: PRESS-HOLD-DRAG paints the range,
+    Ctrl/Cmd+click restarts it half-open. The toggles below apply to BOTH fields.
+  </p>
+
+  <table class="model-table">
+    <thead>
+      <tr>
+        <th scope="col">Field</th>
+        <th scope="col">Display (local)</th>
+        <th scope="col">Model (UTC, SQL-friendly)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row">Deadline</th>
+        <td>
+          <angular-inline-date
+            #due
+            [formField]="dateForm.due"
+            [locale]="locale()"
+            ariaLabel="Deadline date"
+            (savedModelChange)="logEmit('deadline.savedModelChange', $event)"
+          >
+            <span editable-error>
+              @if (due.parseFailed()) {
+                That doesn’t read as a date — try “24.12.2026”, “24.12.” or “2026-12-24”.
+              } @else if (dueMissing()) {
+                A deadline is required.
+              }
+            </span>
+          </angular-inline-date>
+        </td>
+        <td><code>{{ dateModel().due ?? '∅' }}</code></td>
+      </tr>
+      <tr>
+        <th scope="row">Vacation</th>
+        <td>
+          <angular-inline-date
+            [formField]="dateForm.vacation"
+            [ranged]="true"
+            [locale]="locale()"
+            ariaLabel="Vacation dates"
+            (savedModelChange)="logEmit('vacation.savedModelChange', $event)"
+          />
+        </td>
+        <td>
+          <code>{{ dateModel().vacation?.start ?? '∅' }}</code>
+          →
+          <code>{{ dateModel().vacation?.end ?? '∅' }}</code>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="form-toggles" role="group" aria-label="Date fields state">
+    <button mat-stroked-button (click)="fieldRequired.update((v) => !v)">
+      Required: {{ fieldRequired() ? 'on' : 'off' }}
+    </button>
+    <button mat-stroked-button (click)="locale.set(locale() === 'en' ? 'de' : 'en')">
+      Locale: {{ locale() }}
+    </button>
+    <button mat-stroked-button (click)="dateForm().markAsTouched()">Mark touched</button>
+    <button mat-stroked-button (click)="resetDateFields()">Reset fields</button>
+  </div>
+</div>

@@ -1,0 +1,15 @@
+@use '../../demo';
+
+// The card div stays the direct flex child of the page's .example-stack.
+:host {
+  display: contents;
+}
+
+.headless-table {
+  width: 100%;
+  background: transparent;
+
+  td.mat-mdc-cell {
+    white-space: nowrap;
+  }
+}

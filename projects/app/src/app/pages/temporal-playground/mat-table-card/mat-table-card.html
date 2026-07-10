@@ -1,0 +1,52 @@
+<div class="example-card" id="mat-table-example">
+  <h3 class="example-card__title">The HEADLESS group in a mat-table — the group lives on row data</h3>
+  <p class="prose">
+    A real <code>mat-table</code>: <code>matColumnDef</code> cells cannot inject a per-row group
+    directive, so each row's DATA carries its own <code>createTemporalRangeGroup()</code> and the
+    leaves connect <em>by reference</em> — <code>[rangeDay]="row.group"</code>,
+    <code>[rangeTimes]="row.group"</code>, <code>[rangeLength]="row.group"</code>. Same laws:
+    an end commit induces the length, a length commit moves the end, a day commit shifts the whole
+    row. <em>Night</em> is seeded overnight and wears the <code>+1</code> badge.
+  </p>
+
+  <table mat-table [dataSource]="rows" class="headless-table">
+    <ng-container matColumnDef="label">
+      <th mat-header-cell *matHeaderCellDef scope="col">Shift</th>
+      <td mat-cell *matCellDef="let row">{{ row.label }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="day">
+      <th mat-header-cell *matHeaderCellDef scope="col">Day</th>
+      <td mat-cell *matCellDef="let row">
+        <angular-inline-date [rangeDay]="row.group" [locale]="locale()" [ariaLabel]="row.label + ' day'" />
+      </td>
+    </ng-container>
+
+    <ng-container matColumnDef="times">
+      <th mat-header-cell *matHeaderCellDef scope="col">Time</th>
+      <td mat-cell *matCellDef="let row">
+        <angular-inline-time
+          [ranged]="true"
+          [rangeTimes]="row.group"
+          [locale]="militaryLocale()"
+          [ariaLabel]="row.label + ' time range in 24-hour time'"
+        />
+      </td>
+    </ng-container>
+
+    <ng-container matColumnDef="length">
+      <th mat-header-cell *matHeaderCellDef scope="col">Length</th>
+      <td mat-cell *matCellDef="let row">
+        <angular-inline-duration
+          [rangeLength]="row.group"
+          durationFormat="h:mm"
+          [step]="60"
+          [ariaLabel]="row.label + ' length'"
+        />
+      </td>
+    </ng-container>
+
+    <tr mat-header-row *matHeaderRowDef="columns"></tr>
+    <tr mat-row *matRowDef="let row; columns: columns"></tr>
+  </table>
+</div>

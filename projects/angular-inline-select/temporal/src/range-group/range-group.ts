@@ -1,5 +1,7 @@
 import {
   Directive,
+  InjectionToken,
+  Injector,
   computed,
   effect,
   inject,
@@ -9,6 +11,8 @@ import {
   output,
   signal,
   untracked,
+  type Signal,
+  type WritableSignal,
 } from '@angular/core';
 import { FormField, type ValidationError } from '@angular/forms/signals';
 
@@ -83,12 +87,98 @@ function sameTemporalValue(
 
 const NO_ERRORS = signal<readonly ValidationError.WithOptionalFieldTree[]>([]).asReadonly();
 
+// =============================================================================
+// The HEADLESS core — the laws as a plain factory (no directive, no OOP)
+// =============================================================================
+
 /**
- * T5's group core: links SEPARATE temporal controls — a date (`rangeDay`),
- * two times (`rangeStart`/`rangeEnd`) and a duration (`rangeLength`) — via
- * DI. Every value is a UTC ISO DB entry (iusta's `toDBEntry`), so the
- * datetimes are REAL and the invariants are plain arithmetic — the sandbox
- * mirror of iusta's `shiftFromDuration`/`induceFromTimeRange`:
+ * One commit propagation's outcome — handed to `onChanges` exactly once per
+ * settled leaf session that moved ANY composed value. Each `*Changed` flag
+ * says whether THAT stream moved; `composed` is the settled group value.
+ */
+export interface TemporalRangeChanges {
+  dateRange: ComposedDateRange | null;
+  dateRangeChanged: boolean;
+  timeRange: ComposedTimeRange | null;
+  timeRangeChanged: boolean;
+  duration: number | null;
+  durationChanged: boolean;
+  composed: TemporalRangeValue | null;
+}
+
+export interface TemporalRangeGroupOptions {
+  /**
+   * Bring your own value channel (the directive passes its `value` model);
+   * omitted, the group owns a fresh `signal(null)` — read/write it via
+   * `group.value`.
+   */
+  value?: WritableSignal<TemporalRangeValue | null>;
+  /** The display zone the day arithmetic runs in (a signal or thunk). */
+  zone?: () => string | undefined;
+  /**
+   * Form-BOUND mode: inbound `null` values push down (a bound field's null
+   * is a real clear). Unbound (the default), `null` is silence — per-leaf
+   * legacy setups stay untouched.
+   */
+  bound?: boolean;
+  /** Fired once per commit propagation that changed any composed value. */
+  onChanges?: (changes: TemporalRangeChanges) => void;
+  /**
+   * The factory registers `effect`s — call it in an injection context or
+   * pass the injector explicitly (row data built outside one, e.g. in a
+   * resource loader).
+   */
+  injector?: Injector;
+}
+
+/**
+ * The headless range group: `createTemporalRangeGroup()`'s return — the
+ * SAME laws as the `dateTimeRangeGroup` directive, detached from DI so it
+ * can live on ROW DATA. Leaves connect BY REFERENCE through the role
+ * attributes (`[rangeDay]="row.group"` …), which makes `matColumnDef`'s
+ * DI scoping irrelevant — the mat-table case the directive cannot serve.
+ */
+export interface TemporalRangeGroup {
+  /** The group's value channel (the composed `{ start, end, duration? }`). */
+  readonly value: WritableSignal<TemporalRangeValue | null>;
+
+  // Live readings off the attached leaves.
+  readonly day: Signal<string | null>;
+  readonly endDay: Signal<string | null>;
+  readonly start: Signal<DbDateTime | null>;
+  readonly end: Signal<DbDateTime | null>;
+  readonly length: Signal<number | null>;
+  readonly endDayOffset: Signal<number>;
+  readonly dateRange: Signal<ComposedDateRange | null>;
+  readonly timeRange: Signal<ComposedTimeRange | null>;
+  readonly composedValue: Signal<TemporalRangeValue | null>;
+  readonly orderingErrors: Signal<readonly ValidationError.WithOptionalFieldTree[]>;
+
+  // Attachment (the role directives call these; by reference, no DI).
+  attachDay(control: AngularInlineDate): void;
+  attachEndDay(control: AngularInlineDate): void;
+  attachStart(control: AngularInlineTime): void;
+  attachEnd(control: AngularInlineTime): void;
+  attachTimes(control: AngularInlineTime): void;
+  attachLength(control: AngularInlineDuration): void;
+
+  // The commit laws (dispatched from the leaves' `saved` sessions).
+  dayCommitted(): void;
+  startCommitted(): void;
+  endCommitted(dayOverflow?: number, explicitDay?: boolean): void;
+  endDayCommitted(): void;
+  lengthCommitted(): void;
+}
+
+/**
+ * The group core as a PLAIN FACTORY — signals + attach/commit functions,
+ * living wherever the caller puts it (typically on row data). Links
+ * SEPARATE temporal controls — a date (`rangeDay`), two times
+ * (`rangeStart`/`rangeEnd`) or ONE ranged pair (`rangeTimes`), and a
+ * duration (`rangeLength`). Every value is a UTC ISO DB entry (iusta's
+ * `toDBEntry`), so the datetimes are REAL and the invariants are plain
+ * arithmetic — the mirror of iusta's `shiftFromDuration`/
+ * `induceFromTimeRange`:
  *
  * - Committing a start or end induces the duration (`end − start`); an end
  *   instant at or before the start rolls forward by whole days until it
@@ -97,28 +187,495 @@ const NO_ERRORS = signal<readonly ValidationError.WithOptionalFieldTree[]>([]).a
  * - Committing the day shifts BOTH times onto it, preserving wall-clock
  *   times and the end's day over-count.
  * - The `+n` badge on the end field = the LOCAL calendar-day difference
- *   between the two instants — derived presentation, fed through
- *   `INLINE_TIME_DAY_OFFSET`, never state of its own.
- * - Propagation happens on COMMIT (`saved`), never on live keystrokes:
- *   writes through `value` don't emit `saved`, so no cascades or cycles.
- *
- * Deliberately still open here (see ROADMAP-DATETIME): Tab-advance
- * start → end, ISO-datetime paste decomposition, the calendar drag /
- * Ctrl+click gestures (need T2), and the maximal end-day field.
+ *   between the two instants — derived presentation, never state.
+ * - Propagation happens on COMMIT (the leaves' `saved` sessions carry the
+ *   intent — `dayOverflow`/`explicitDay` — that values alone don't), never
+ *   on live keystrokes: writes through `value` don't emit `saved`, so no
+ *   cascades or cycles.
+ */
+export function createTemporalRangeGroup(
+  options: TemporalRangeGroupOptions = {},
+): TemporalRangeGroup {
+  const injector = options.injector ?? inject(Injector);
+  const value = options.value ?? signal<TemporalRangeValue | null>(null);
+  const zone = options.zone ?? (() => undefined);
+  const bound = options.bound ?? false;
+
+  const dayCtl = signal<AngularInlineDate | null>(null);
+  const endDayCtl = signal<AngularInlineDate | null>(null);
+  const startCtl = signal<AngularInlineTime | null>(null);
+  const endCtl = signal<AngularInlineTime | null>(null);
+  /** ONE ranged time control carrying BOTH endpoints (the `rangeTimes` role). */
+  const timesCtl = signal<AngularInlineTime | null>(null);
+  const lengthCtl = signal<AngularInlineDuration | null>(null);
+
+  /**
+   * `duration` shape memory (the date control's `#lastShape` pattern):
+   * a non-null bound value declares whether the key participates; `null`
+   * remembers; cold start includes it (the `DomainResult['model']` shape).
+   */
+  const durationInShape = linkedSignal<TemporalRangeValue | null, boolean>({
+    source: value,
+    computation: (current, previous) =>
+      current === null ? (previous?.value ?? true) : 'duration' in current,
+  });
+
+  /** The stay's LOCAL calendar day, read off the date control. */
+  const day = computed<string | null>(() => {
+    const control = dayCtl();
+    if (!control) return null;
+
+    const start = toInternalRange(control.value()).start;
+    return start === null ? null : localDayOf(start, zone());
+  });
+
+  /** The END's LOCAL calendar day, read off the end-day control (the maximal form). */
+  const endDay = computed<string | null>(() => {
+    const control = endDayCtl();
+    if (!control) return null;
+
+    const start = toInternalRange(control.value()).start;
+    return start === null ? null : localDayOf(start, zone());
+  });
+
+  /**
+   * The endpoint instants and duration, read live off the controls. Two
+   * SINGLE-shape time leaves (`rangeStart`/`rangeEnd`) or ONE ranged pair
+   * (`rangeTimes`) — read through the internal model, like `rangeDay` does.
+   */
+  const start = computed<DbDateTime | null>(
+    () => startCtl()?.internalRange().start ?? timesCtl()?.internalRange().start ?? null,
+  );
+  const end = computed<DbDateTime | null>(
+    () => endCtl()?.internalRange().start ?? timesCtl()?.internalRange().end ?? null,
+  );
+  const length = computed<number | null>(() => lengthCtl()?.value() ?? null);
+
+  /** The composed domain value read live off the leaves, in the echoed shape. */
+  const composedValue = computed<TemporalRangeValue | null>(() => {
+    const startValue = start();
+    const endValue = end();
+    const duration = length();
+    if (startValue === null && endValue === null && duration === null) return null;
+
+    return durationInShape()
+      ? { start: startValue, end: endValue, duration }
+      : { start: startValue, end: endValue };
+  });
+
+  /**
+   * `end >= start` over the COMPOSED instants — REAL now that the end-day
+   * field (and explicit ISO pastes) can produce violations; typed TIMES
+   * still roll forward and can't. Routed to the END leaves, revealed by
+   * their own touched machinery.
+   */
+  const orderingErrors = computed<readonly ValidationError.WithOptionalFieldTree[]>(() => {
+    const startValue = start();
+    const endValue = end();
+    // DB entries are fixed-width UTC ISO strings — lexicographic order IS
+    // instant order.
+    if (startValue !== null && endValue !== null && endValue < startValue) {
+      return [{ kind: 'temporal-order', message: 'The end lies before the start.' }];
+    }
+
+    return [];
+  });
+
+  /**
+   * The end field's `+n` badge: LOCAL calendar days between the two
+   * instants — intrinsic to the values now that they carry their days.
+   */
+  const endDayOffset = computed(() => {
+    const startValue = start();
+    if (startValue === null) return 0;
+
+    const endValue = end();
+    if (endValue !== null) {
+      return Math.max(0, localDayDiff(startValue, endValue, zone()) ?? 0);
+    }
+
+    const duration = length();
+    if (duration !== null) {
+      return Math.max(
+        0,
+        localDayDiff(startValue, shiftDbEntry(startValue, duration), zone()) ?? 0,
+      );
+    }
+
+    return 0;
+  });
+
+  /** The composed DATE value: day boundaries as DB entries, over-count applied. */
+  const dateRange = computed<ComposedDateRange | null>(() => {
+    const startDay = day() ?? (start() !== null ? localDayOf(start(), zone()) : null);
+    if (startDay === null) return null;
+
+    return {
+      start: dayToDbEntry(startDay, zone()),
+      end: dayEndToDbEntry(addLocalDays(startDay, endDayOffset()), zone()),
+    };
+  });
+
+  /** The composed TIME value: both endpoint instants, or `null` while incomplete. */
+  const timeRange = computed<ComposedTimeRange | null>(() => {
+    const startValue = start();
+    const endValue = end();
+    return startValue !== null && endValue !== null
+      ? { start: startValue, end: endValue }
+      : null;
+  });
+
+  // -- Write helpers -----------------------------------------------------------
+
+  function writeStart(next: DbDateTime) {
+    const control = startCtl();
+    if (control && control.value() !== next) control.value.set(next);
+
+    const times = timesCtl();
+    if (times && times.internalRange().start !== next) {
+      times.value.set({ start: next, end: times.internalRange().end });
+    }
+  }
+
+  function writeEnd(next: DbDateTime) {
+    const control = endCtl();
+    if (control && control.value() !== next) control.value.set(next);
+
+    const times = timesCtl();
+    if (times && times.internalRange().end !== next) {
+      times.value.set({ start: times.internalRange().start, end: next });
+    }
+  }
+
+  function writeLength(next: number | null) {
+    const control = lengthCtl();
+    if (control && control.value() !== next) control.value.set(next);
+  }
+
+  /** Writes the bound value onto the leaf surfaces (no-ops on equal values). */
+  function pushDown(next: TemporalRangeValue | null) {
+    const startValue = next?.start ?? null;
+    const endValue = next?.end ?? null;
+    const duration =
+      next === null
+        ? null
+        : next.duration !== undefined
+          ? next.duration
+          : startValue !== null && endValue !== null
+            ? diffDbEntrySeconds(startValue, endValue)
+            : null;
+
+    startCtl()?.value.set(startValue);
+    endCtl()?.value.set(endValue);
+    // The ranged pair speaks the object shape — both endpoints in one value.
+    timesCtl()?.value.set(
+      startValue === null && endValue === null ? null : { start: startValue, end: endValue },
+    );
+    lengthCtl()?.value.set(duration);
+    dayCtl()?.value.set(
+      startValue === null ? null : dayToDbEntry(localDayOf(startValue, zone())!, zone()),
+    );
+    endDayCtl()?.value.set(
+      endValue === null ? null : dayToDbEntry(localDayOf(endValue, zone())!, zone()),
+    );
+  }
+
+  /**
+   * The day leaves are RENDERINGS of the instants' date parts — after any
+   * propagation that may have moved an instant's day (an ISO paste, a
+   * multi-day duration, an end-day commit), they re-mirror. Writes go
+   * through `value` (no `saved`), equality-guarded: no cascades.
+   */
+  function syncDayLeaves() {
+    const startValue = start();
+    const dayControl = dayCtl();
+    if (dayControl && startValue !== null) {
+      const next = dayToDbEntry(localDayOf(startValue, zone())!, zone());
+      if (!Object.is(dayControl.value(), next)) dayControl.value.set(next);
+    }
+
+    const endValue = end();
+    const endDayControl = endDayCtl();
+    if (endDayControl && endValue !== null) {
+      const next = dayToDbEntry(localDayOf(endValue, zone())!, zone());
+      if (!Object.is(endDayControl.value(), next)) endDayControl.value.set(next);
+    }
+  }
+
+  // `undefined` = baseline not captured yet (never emitted-against).
+  let lastDate: ComposedDateRange | null | undefined = undefined;
+  let lastTime: ComposedTimeRange | null | undefined = undefined;
+  let lastLength: number | null | undefined = undefined;
+
+  function emitChanges() {
+    syncDayLeaves();
+
+    const date = dateRange();
+    const dateChanged = lastDate === undefined || !sameRange(date, lastDate);
+    lastDate = date;
+
+    const time = timeRange();
+    const timeChanged = lastTime === undefined || !sameRange(time, lastTime);
+    lastTime = time;
+
+    const duration = length();
+    const durationChanged = lastLength === undefined || duration !== lastLength;
+    lastLength = duration;
+
+    if (!dateChanged && !timeChanged && !durationChanged) return;
+
+    // The composite commit: value settles synchronously (the outbound
+    // mirror then finds it equal), one `onChanges` for the range.
+    const composed = composedValue();
+    if (!sameTemporalValue(composed, value())) value.set(composed);
+    options.onChanges?.({
+      dateRange: date,
+      dateRangeChanged: dateChanged,
+      timeRange: time,
+      timeRangeChanged: timeChanged,
+      duration,
+      durationChanged,
+      composed,
+    });
+  }
+
+  // -- Commit laws ---------------------------------------------------------------
+
+  /** Rolls `end` forward by whole LOCAL days until it strictly follows `start`, then induces. */
+  function induceFrom(startValue: DbDateTime, endValue: DbDateTime) {
+    endValue = rollDbEntryForward(startValue, endValue, zone());
+
+    writeEnd(endValue);
+    writeLength(diffDbEntrySeconds(startValue, endValue)!);
+  }
+
+  /**
+   * The start settled — `induceFromTimeRange`: duration follows from the
+   * instants as they stand (multi-day ends survive); with no end but a
+   * duration, the end is filled from `start + duration`.
+   */
+  function startCommitted() {
+    const startValue = start();
+
+    if (startValue !== null) {
+      const endValue = end();
+
+      if (endValue !== null) {
+        induceFrom(startValue, endValue);
+      } else {
+        const duration = length();
+        if (duration !== null) writeEnd(shiftDbEntry(startValue, duration));
+      }
+    }
+
+    emitChanges();
+  }
+
+  /**
+   * The end settled: a typed end time is WALL-CLOCK intent — re-anchor it
+   * onto the start's own day first, then roll forward while it does not
+   * follow the start (`23:30` lands the same evening, `06:00` the next
+   * morning), then induce the duration. A typed OVERFLOW (`'24:30'` → +1,
+   * `'240:30'` → +10) is an explicit over-count: it anchors on the start's
+   * day directly.
+   */
+  function endCommitted(dayOverflow = 0, explicitDay = false) {
+    const startValue = start();
+    const endValue = end();
+
+    if (startValue !== null && endValue !== null) {
+      if (explicitDay) {
+        // A pasted full instant IS the end — no re-anchor, no roll. An end
+        // before the start stands as the ORDERING ERROR; the duration is
+        // then underivable.
+        const diff = diffDbEntrySeconds(startValue, endValue)!;
+        writeLength(diff > 0 ? diff : null);
+      } else {
+        const anchoredDay = addLocalDays(localDayOf(startValue, zone())!, dayOverflow);
+        induceFrom(startValue, composeDbEntry(anchoredDay, localTimeOf(endValue, zone())!, zone()));
+      }
+    }
+
+    emitChanges();
+  }
+
+  /**
+   * The END-DAY settled (the maximal five-field form): the end instant
+   * moves onto the typed day preserving its wall-clock time — deliberately
+   * WITHOUT rolling forward. An end before the start is a legitimate ERROR
+   * state now (the ordering error on the end leaves), and the duration is
+   * underivable (`null` — never a stale one).
+   */
+  function endDayCommitted() {
+    const typedDay = endDay();
+    const endValue = end();
+
+    if (typedDay !== null && endValue !== null) {
+      writeEnd(composeDbEntry(typedDay, localTimeOf(endValue, zone())!, zone()));
+
+      const startValue = start();
+      if (startValue !== null) {
+        const diff = diffDbEntrySeconds(startValue, end()!)!;
+        writeLength(diff > 0 ? diff : null);
+      }
+    }
+
+    emitChanges();
+  }
+
+  /** A duration settled — `shiftFromDuration`: the end MOVES (`start + duration`). */
+  function lengthCommitted() {
+    const startValue = start();
+    const duration = length();
+    if (startValue !== null && duration !== null) writeEnd(shiftDbEntry(startValue, duration));
+
+    emitChanges();
+  }
+
+  /**
+   * The day settled: shift BOTH instants onto it — wall-clock times and
+   * the end's day over-count are preserved.
+   */
+  function dayCommitted() {
+    const typedDay = day();
+
+    if (typedDay !== null) {
+      const startValue = start();
+      const endValue = end();
+      const offset =
+        startValue !== null && endValue !== null
+          ? Math.max(0, localDayDiff(startValue, endValue, zone()) ?? 0)
+          : 0;
+
+      if (startValue !== null) {
+        writeStart(composeDbEntry(typedDay, localTimeOf(startValue, zone())!, zone()));
+      }
+      if (endValue !== null) {
+        writeEnd(
+          composeDbEntry(
+            addLocalDays(typedDay, offset),
+            localTimeOf(endValue, zone())!,
+            zone(),
+          ),
+        );
+      }
+    }
+
+    emitChanges();
+  }
+
+  // -- Boundary effects ------------------------------------------------------------
+
+  // Baseline the composed values once the initial bindings have settled,
+  // so the first commit emits real deltas, not the seed state.
+  effect(
+    () => {
+      const date = dateRange();
+      const time = timeRange();
+      const duration = length();
+
+      if (lastDate === undefined) {
+        lastDate = date;
+        lastTime = time;
+        lastLength = duration;
+      }
+    },
+    { injector },
+  );
+
+  // The TWO boundary effects — both equality-guarded, both one-directional,
+  // converging in a single pass (a value write pushes down; the mirror reads
+  // back the same values and stops).
+
+  // INBOUND: the value channel → the leaf surfaces. Attachment is a
+  // dependency on purpose: by-reference leaves attach through an EFFECT
+  // (after the first inbound flush), so a late-attaching leaf must receive
+  // the current value — the directive's synchronous DI attach never needed
+  // this.
+  effect(
+    () => {
+      const next = value();
+      dayCtl();
+      endDayCtl();
+      startCtl();
+      endCtl();
+      timesCtl();
+      lengthCtl();
+      if (!bound && next === null) return;
+
+      untracked(() => pushDown(next));
+    },
+    { injector },
+  );
+
+  const anyAttached = computed(
+    () =>
+      dayCtl() !== null ||
+      endDayCtl() !== null ||
+      startCtl() !== null ||
+      endCtl() !== null ||
+      timesCtl() !== null ||
+      lengthCtl() !== null,
+  );
+
+  // OUTBOUND: the leaves' live values → the value channel (live mirror).
+  // Gated on attachment: with NO leaves yet (by-reference roles attach an
+  // effect-flush later), the composed reading is an empty null that must
+  // not clobber a seeded value.
+  effect(
+    () => {
+      if (!anyAttached()) return;
+
+      const composed = composedValue();
+      if (!sameTemporalValue(composed, untracked(value))) value.set(composed);
+    },
+    { injector },
+  );
+
+  return {
+    value,
+    day,
+    endDay,
+    start,
+    end,
+    length,
+    endDayOffset,
+    dateRange,
+    timeRange,
+    composedValue,
+    orderingErrors,
+    attachDay: (control) => dayCtl.set(control),
+    attachEndDay: (control) => endDayCtl.set(control),
+    attachStart: (control) => startCtl.set(control),
+    attachEnd: (control) => endCtl.set(control),
+    attachTimes: (control) => timesCtl.set(control),
+    attachLength: (control) => lengthCtl.set(control),
+    dayCommitted,
+    startCommitted,
+    endCommitted,
+    endDayCommitted,
+    lengthCommitted,
+  };
+}
+
+// =============================================================================
+// The DI directive — a thin shell over the factory (the form-bound face)
+// =============================================================================
+
+/**
+ * The group as a DIRECTIVE: `createTemporalRangeGroup`'s laws wearing the
+ * form contract — one `[formField]` binds the composed
+ * `{ start, end, duration? }`, contract state forwards to the leaves via
+ * the role-provided leaf state, and the composed streams ride outputs.
+ * Role attributes left BARE connect to this directive via DI; where DI
+ * cannot reach (mat-table's `matColumnDef`), bind the headless group by
+ * reference instead — `[rangeDay]="row.group"`.
  */
 @Directive({
   selector: '[dateTimeRangeGroup]',
   exportAs: 'dateTimeRangeGroup',
 })
 export class DateTimeRangeGroup {
-  #day = signal<AngularInlineDate | null>(null);
-  #endDay = signal<AngularInlineDate | null>(null);
-  #start = signal<AngularInlineTime | null>(null);
-  #end = signal<AngularInlineTime | null>(null);
-  /** ONE ranged time control carrying BOTH endpoints (the `rangeTimes` role). */
-  #times = signal<AngularInlineTime | null>(null);
-  #length = signal<AngularInlineDuration | null>(null);
-
   /** Present when the GROUP carries the `[formField]` — form-bound mode. */
   #ownField = inject(FormField, { optional: true, self: true });
 
@@ -157,113 +714,6 @@ export class DateTimeRangeGroup {
   savedModelChange = output<TemporalRangeValue | null>();
 
   /**
-   * `duration` shape memory (the date control's `#lastShape` pattern):
-   * a non-null bound value declares whether the key participates; `null`
-   * remembers; cold start includes it (the `DomainResult['model']` shape).
-   */
-  #durationInShape = linkedSignal<TemporalRangeValue | null, boolean>({
-    source: this.value,
-    computation: (value, previous) =>
-      value === null ? (previous?.value ?? true) : 'duration' in value,
-  });
-
-  /** The composed domain value read live off the leaves, in the echoed shape. */
-  readonly composedValue = computed<TemporalRangeValue | null>(() => {
-    const start = this.start();
-    const end = this.end();
-    const duration = this.length();
-    if (start === null && end === null && duration === null) return null;
-
-    return this.#durationInShape() ? { start, end, duration } : { start, end };
-  });
-
-
-  /** The stay's LOCAL calendar day, read off the date control. */
-  readonly day = computed<string | null>(() => {
-    const control = this.#day();
-    if (!control) return null;
-
-    const start = toInternalRange(control.value()).start;
-    return start === null ? null : localDayOf(start, this.effectiveZone());
-  });
-
-  /** The END's LOCAL calendar day, read off the end-day control (T5 maximal form). */
-  readonly endDay = computed<string | null>(() => {
-    const control = this.#endDay();
-    if (!control) return null;
-
-    const start = toInternalRange(control.value()).start;
-    return start === null ? null : localDayOf(start, this.effectiveZone());
-  });
-
-  /**
-   * `end >= start` over the COMPOSED instants — REAL now that the end-day
-   * field (and explicit ISO pastes) can produce violations; typed TIMES
-   * still roll forward and can't. Routed to the END leaves, revealed by
-   * their own touched machinery.
-   */
-  readonly orderingErrors = computed<readonly ValidationError.WithOptionalFieldTree[]>(() => {
-    const start = this.start();
-    const end = this.end();
-    // DB entries are fixed-width UTC ISO strings — lexicographic order IS
-    // instant order.
-    if (start !== null && end !== null && end < start) {
-      return [{ kind: 'temporal-order', message: 'The end lies before the start.' }];
-    }
-
-    return [];
-  });
-
-  /**
-   * The endpoint instants and duration, read live off the controls. Two
-   * SINGLE-shape time leaves (`rangeStart`/`rangeEnd`) or ONE ranged pair
-   * (`rangeTimes`) — read through the internal model, like `rangeDay` does.
-   */
-  readonly start = computed<DbDateTime | null>(
-    () => this.#start()?.internalRange().start ?? this.#times()?.internalRange().start ?? null,
-  );
-  readonly end = computed<DbDateTime | null>(
-    () => this.#end()?.internalRange().start ?? this.#times()?.internalRange().end ?? null,
-  );
-  readonly length = computed<number | null>(() => this.#length()?.value() ?? null);
-
-  /**
-   * The end field's `+n` badge: LOCAL calendar days between the two
-   * instants — intrinsic to the values now that they carry their days.
-   */
-  readonly endDayOffset = computed(() => {
-    const start = this.start();
-    if (start === null) return 0;
-
-    const end = this.end();
-    if (end !== null) return Math.max(0, localDayDiff(start, end, this.effectiveZone()) ?? 0);
-
-    const length = this.length();
-    if (length !== null) return Math.max(0, localDayDiff(start, shiftDbEntry(start, length), this.effectiveZone()) ?? 0);
-
-    return 0;
-  });
-
-  /** The composed DATE value: day boundaries as DB entries, over-count applied. */
-  readonly dateRange = computed<ComposedDateRange | null>(() => {
-    const zone = this.effectiveZone();
-    const startDay = this.day() ?? (this.start() !== null ? localDayOf(this.start(), zone) : null);
-    if (startDay === null) return null;
-
-    return {
-      start: dayToDbEntry(startDay, zone),
-      end: dayEndToDbEntry(addLocalDays(startDay, this.endDayOffset()), zone),
-    };
-  });
-
-  /** The composed TIME value: both endpoint instants, or `null` while incomplete. */
-  readonly timeRange = computed<ComposedTimeRange | null>(() => {
-    const start = this.start();
-    const end = this.end();
-    return start !== null && end !== null ? { start, end } : null;
-  });
-
-  /**
    * Composed emissions — the group speaks three values, each fired after
    * commit propagation whenever ITS composed value changed: the date range,
    * the time range (all UTC ISO DB entries), and the duration (seconds).
@@ -272,125 +722,32 @@ export class DateTimeRangeGroup {
   timeRangeChange = output<ComposedTimeRange | null>();
   durationChange = output<number | null>();
 
-  // `undefined` = baseline not captured yet (never emitted-against).
-  #lastDate: ComposedDateRange | null | undefined = undefined;
-  #lastTime: ComposedTimeRange | null | undefined = undefined;
-  #lastLength: number | null | undefined = undefined;
+  /** The headless core carrying the laws — the directive is its form-bound face. */
+  readonly core: TemporalRangeGroup = createTemporalRangeGroup({
+    value: this.value,
+    zone: this.effectiveZone,
+    bound: this.#ownField !== null,
+    onChanges: (changes) => {
+      if (changes.dateRangeChanged) this.dateRangeChange.emit(changes.dateRange);
+      if (changes.timeRangeChanged) this.timeRangeChange.emit(changes.timeRange);
+      if (changes.durationChanged) this.durationChange.emit(changes.duration);
+      this.savedModelChange.emit(changes.composed);
+    },
+  });
 
-  constructor() {
-    // Baseline the composed values once the initial bindings have settled,
-    // so the first commit emits real deltas, not the seed state.
-    effect(() => {
-      const date = this.dateRange();
-      const time = this.timeRange();
-      const length = this.length();
+  // The public readings, delegated (API-compatible with the pre-factory group).
+  readonly day = this.core.day;
+  readonly endDay = this.core.endDay;
+  readonly start = this.core.start;
+  readonly end = this.core.end;
+  readonly length = this.core.length;
+  readonly endDayOffset = this.core.endDayOffset;
+  readonly dateRange = this.core.dateRange;
+  readonly timeRange = this.core.timeRange;
+  readonly composedValue = this.core.composedValue;
+  readonly orderingErrors = this.core.orderingErrors;
 
-      if (this.#lastDate === undefined) {
-        this.#lastDate = date;
-        this.#lastTime = time;
-        this.#lastLength = length;
-      }
-    });
-
-    // The TWO boundary effects of form-bound mode — both equality-guarded,
-    // both one-directional, converging in a single pass (a group write
-    // pushes down; the mirror reads back the same values and stops).
-
-    // INBOUND: the form's value → the leaf surfaces.
-    effect(() => {
-      const value = this.value();
-      if (this.#ownField === null && value === null) return;
-
-      untracked(() => this.#pushDown(value));
-    });
-
-    // OUTBOUND: the leaves' live values → the group's value (live channel).
-    effect(() => {
-      const composed = this.composedValue();
-      if (!sameTemporalValue(composed, untracked(this.value))) this.value.set(composed);
-    });
-  }
-
-  /** Writes the bound value onto the leaf surfaces (no-ops on equal values). */
-  #pushDown(value: TemporalRangeValue | null) {
-    const start = value?.start ?? null;
-    const end = value?.end ?? null;
-    const duration =
-      value === null
-        ? null
-        : value.duration !== undefined
-          ? value.duration
-          : start !== null && end !== null
-            ? diffDbEntrySeconds(start, end)
-            : null;
-
-    this.#start()?.value.set(start);
-    this.#end()?.value.set(end);
-    // The ranged pair speaks the object shape — both endpoints in one value.
-    this.#times()?.value.set(start === null && end === null ? null : { start, end });
-    this.#length()?.value.set(duration);
-    this.#day()?.value.set(start === null ? null : dayToDbEntry(localDayOf(start, this.effectiveZone())!, this.effectiveZone()));
-    this.#endDay()?.value.set(end === null ? null : dayToDbEntry(localDayOf(end, this.effectiveZone())!, this.effectiveZone()));
-  }
-
-  /**
-   * The day leaves are RENDERINGS of the instants' date parts — after any
-   * propagation that may have moved an instant's day (an ISO paste, a
-   * multi-day duration, an end-day commit), they re-mirror. Writes go
-   * through `value` (no `saved`), equality-guarded: no cascades.
-   */
-  #syncDayLeaves() {
-    const start = this.start();
-    const dayControl = this.#day();
-    if (dayControl && start !== null) {
-      const day = dayToDbEntry(localDayOf(start, this.effectiveZone())!, this.effectiveZone());
-      if (!Object.is(dayControl.value(), day)) dayControl.value.set(day);
-    }
-
-    const end = this.end();
-    const endDayControl = this.#endDay();
-    if (endDayControl && end !== null) {
-      const day = dayToDbEntry(localDayOf(end, this.effectiveZone())!, this.effectiveZone());
-      if (!Object.is(endDayControl.value(), day)) endDayControl.value.set(day);
-    }
-  }
-
-  #emitChanges() {
-    this.#syncDayLeaves();
-
-    let changed = false;
-
-    const date = this.dateRange();
-    if (this.#lastDate === undefined || !sameRange(date, this.#lastDate)) {
-      this.#lastDate = date;
-      this.dateRangeChange.emit(date);
-      changed = true;
-    }
-
-    const time = this.timeRange();
-    if (this.#lastTime === undefined || !sameRange(time, this.#lastTime)) {
-      this.#lastTime = time;
-      this.timeRangeChange.emit(time);
-      changed = true;
-    }
-
-    const length = this.length();
-    if (this.#lastLength === undefined || length !== this.#lastLength) {
-      this.#lastLength = length;
-      this.durationChange.emit(length);
-      changed = true;
-    }
-
-    if (!changed) return;
-
-    // The composite commit: value settles synchronously (the outbound
-    // mirror then finds it equal), one savedModelChange for the range.
-    const composed = this.composedValue();
-    if (!sameTemporalValue(composed, this.value())) this.value.set(composed);
-    this.savedModelChange.emit(composed);
-  }
-
-  // -- Registration (the role directives call these) --------------------------
+  // -- Registration (the role directives call these in DI mode) ----------------
 
   /** Mixed mode is a bug: a field-bound leaf inside a field-bound group throws. */
   #registerBinding(leafBound: boolean, role: string) {
@@ -405,191 +762,90 @@ export class DateTimeRangeGroup {
 
   attachDay(control: AngularInlineDate, leafBound = false) {
     this.#registerBinding(leafBound, 'rangeDay');
-    this.#day.set(control);
+    this.core.attachDay(control);
   }
   attachEndDay(control: AngularInlineDate, leafBound = false) {
     this.#registerBinding(leafBound, 'rangeEndDay');
-    this.#endDay.set(control);
+    this.core.attachEndDay(control);
   }
   attachStart(control: AngularInlineTime, leafBound = false) {
     this.#registerBinding(leafBound, 'rangeStart');
-    this.#start.set(control);
+    this.core.attachStart(control);
   }
   attachEnd(control: AngularInlineTime, leafBound = false) {
     this.#registerBinding(leafBound, 'rangeEnd');
-    this.#end.set(control);
+    this.core.attachEnd(control);
   }
   attachTimes(control: AngularInlineTime, leafBound = false) {
     this.#registerBinding(leafBound, 'rangeTimes');
-    this.#times.set(control);
+    this.core.attachTimes(control);
   }
   attachLength(control: AngularInlineDuration, leafBound = false) {
     this.#registerBinding(leafBound, 'rangeLength');
-    this.#length.set(control);
+    this.core.attachLength(control);
   }
 
-  // -- Commit propagation ------------------------------------------------------
-
-  /** Rolls `end` forward by whole LOCAL days until it strictly follows `start`, then induces. */
-  #induceFrom(start: DbDateTime, end: DbDateTime) {
-    end = rollDbEntryForward(start, end, this.effectiveZone());
-
-    this.#writeEnd(end);
-    this.#writeLength(diffDbEntrySeconds(start, end)!);
-  }
-
-  /**
-   * The start settled — `induceFromTimeRange`: duration follows from the
-   * instants as they stand (multi-day ends survive); with no end but a
-   * duration, the end is filled from `start + duration`.
-   */
-  startCommitted() {
-    const start = this.start();
-
-    if (start !== null) {
-      const end = this.end();
-
-      if (end !== null) {
-        this.#induceFrom(start, end);
-      } else {
-        const length = this.length();
-        if (length !== null) this.#writeEnd(shiftDbEntry(start, length));
-      }
-    }
-
-    this.#emitChanges();
-  }
-
-  /**
-   * The end settled: a typed end time is WALL-CLOCK intent — re-anchor it
-   * onto the start's own day first, then roll forward while it does not
-   * follow the start (`23:30` lands the same evening, `06:00` the next
-   * morning), then induce the duration. A typed OVERFLOW (`'24:30'` → +1,
-   * `'240:30'` → +10) is an explicit over-count: it anchors on the start's
-   * day directly.
-   */
-  endCommitted(dayOverflow = 0, explicitDay = false) {
-    const start = this.start();
-    const end = this.end();
-
-    if (start !== null && end !== null) {
-      if (explicitDay) {
-        // A pasted full instant IS the end — no re-anchor, no roll. An end
-        // before the start stands as the ORDERING ERROR; the duration is
-        // then underivable.
-        const diff = diffDbEntrySeconds(start, end)!;
-        this.#writeLength(diff > 0 ? diff : null);
-      } else {
-        const day = addLocalDays(localDayOf(start, this.effectiveZone())!, dayOverflow);
-        this.#induceFrom(start, composeDbEntry(day, localTimeOf(end, this.effectiveZone())!, this.effectiveZone()));
-      }
-    }
-
-    this.#emitChanges();
-  }
-
-  /**
-   * The END-DAY settled (the maximal five-field form): the end instant
-   * moves onto the typed day preserving its wall-clock time — deliberately
-   * WITHOUT rolling forward. An end before the start is a legitimate ERROR
-   * state now (the ordering error on the end leaves), and the duration is
-   * underivable (`null` — never a stale one).
-   */
-  endDayCommitted() {
-    const day = this.endDay();
-    const end = this.end();
-
-    if (day !== null && end !== null) {
-      this.#writeEnd(composeDbEntry(day, localTimeOf(end, this.effectiveZone())!, this.effectiveZone()));
-
-      const start = this.start();
-      if (start !== null) {
-        const diff = diffDbEntrySeconds(start, this.end()!)!;
-        this.#writeLength(diff > 0 ? diff : null);
-      }
-    }
-
-    this.#emitChanges();
-  }
-
-  /** A duration settled — `shiftFromDuration`: the end MOVES (`start + duration`). */
-  lengthCommitted() {
-    const start = this.start();
-    const length = this.length();
-    if (start !== null && length !== null) this.#writeEnd(shiftDbEntry(start, length));
-
-    this.#emitChanges();
-  }
-
-  /**
-   * The day settled: shift BOTH instants onto it — wall-clock times and
-   * the end's day over-count are preserved.
-   */
+  // The commit laws, delegated (API compatibility).
   dayCommitted() {
-    const day = this.day();
-
-    if (day !== null) {
-      const start = this.start();
-      const end = this.end();
-      const offset = start !== null && end !== null ? Math.max(0, localDayDiff(start, end, this.effectiveZone()) ?? 0) : 0;
-
-      if (start !== null) {
-        this.#writeStart(composeDbEntry(day, localTimeOf(start, this.effectiveZone())!, this.effectiveZone()));
-      }
-      if (end !== null) {
-        this.#writeEnd(
-          composeDbEntry(addLocalDays(day, offset), localTimeOf(end, this.effectiveZone())!, this.effectiveZone()),
-        );
-      }
-    }
-
-    this.#emitChanges();
+    this.core.dayCommitted();
   }
-
-  #writeStart(value: DbDateTime) {
-    const control = this.#start();
-    if (control && control.value() !== value) control.value.set(value);
-
-    const times = this.#times();
-    if (times && times.internalRange().start !== value) {
-      times.value.set({ start: value, end: times.internalRange().end });
-    }
+  startCommitted() {
+    this.core.startCommitted();
   }
-
-  #writeEnd(value: DbDateTime) {
-    const control = this.#end();
-    if (control && control.value() !== value) control.value.set(value);
-
-    const times = this.#times();
-    if (times && times.internalRange().end !== value) {
-      times.value.set({ start: times.internalRange().start, end: value });
-    }
+  endCommitted(dayOverflow = 0, explicitDay = false) {
+    this.core.endCommitted(dayOverflow, explicitDay);
   }
-
-  #writeLength(value: number | null) {
-    const control = this.#length();
-    if (control && control.value() !== value) control.value.set(value);
+  endDayCommitted() {
+    this.core.endDayCommitted();
   }
+  lengthCommitted() {
+    this.core.lengthCommitted();
+  }
+}
+
+// =============================================================================
+// The role directives — DI mode (bare attribute) or by-reference mode
+// =============================================================================
+
+/**
+ * The role's RESOLVED core, as a per-element holder signal. An indirection
+ * on purpose: the leaf-state / day-offset providers run while the CONTROL
+ * constructs, so they must not inject the role directive (whose constructor
+ * injects the control — NG0200). They read this holder instead; the role's
+ * wiring fills it once resolution settles.
+ */
+const RANGE_ROLE_CORE = new InjectionToken<WritableSignal<TemporalRangeGroup | null>>(
+  'RANGE_ROLE_CORE',
+);
+
+function provideRoleCore() {
+  return { provide: RANGE_ROLE_CORE, useFactory: () => signal<TemporalRangeGroup | null>(null) };
 }
 
 /**
  * The role-provided leaf state (the day-offset pattern): the group's
  * contract inputs, pulled by the leaf via a per-element token — no
- * effects, no writes. Ordering/range errors route to the END leaf only.
+ * effects, no writes. Contract state exists only in DI (form-bound) mode;
+ * ordering/range errors come from the RESOLVED core, so they reach the
+ * END leaf in both modes.
  */
 function provideLeafState(withErrors: boolean) {
   return {
     provide: INLINE_TEMPORAL_LEAF_STATE,
     useFactory: (): TemporalLeafState => {
-      const group = inject(DateTimeRangeGroup);
+      const group = inject(DateTimeRangeGroup, { optional: true });
+      const core = inject(RANGE_ROLE_CORE, { self: true });
       return {
-        disabled: group.disabled,
-        readonly: group.readonly,
-        touched: group.touched,
-        invalid: group.invalid,
+        disabled: computed(() => group?.disabled() ?? false),
+        readonly: computed(() => group?.readonly() ?? false),
+        touched: computed(() => group?.touched() ?? false),
+        invalid: computed(() => group?.invalid() ?? false),
         // Consumer errors + the group's OWN ordering verdict, end leaves only.
         errors: withErrors
-          ? computed(() => [...group.errors(), ...group.orderingErrors()])
+          ? computed(() => [
+              ...(group?.errors() ?? []),
+              ...(core()?.orderingErrors() ?? []),
+            ])
           : NO_ERRORS,
       };
     },
@@ -600,80 +856,170 @@ function provideLeafState(withErrors: boolean) {
 const leafHasOwnField = () => inject(FormField, { optional: true, self: true }) !== null;
 
 /**
- * Marks the group's date control: `<angular-inline-date rangeDay />`. The
- * pair's inline-START leaf — its clear bubble opens outward (leftward) by
- * default via `INLINE_TEMPORAL_BUBBLE_SIDE`.
+ * The shared role wiring: resolves the group (the role attribute's bound
+ * reference wins over the DI directive), attaches the control to it as the
+ * reference (re)binds, and dispatches the leaf's settled sessions into the
+ * given commit law. DI mode attaches through the DIRECTIVE so the
+ * mixed-mode guard keeps throwing.
+ */
+function wireRole<TControl>(
+  reference: Signal<TemporalRangeGroup | '' | undefined>,
+  control: TControl,
+  attach: (core: TemporalRangeGroup) => void,
+  attachViaDirective: (group: DateTimeRangeGroup, leafBound: boolean) => void,
+): Signal<TemporalRangeGroup | null> {
+  const di = inject(DateTimeRangeGroup, { optional: true });
+  const holder = inject(RANGE_ROLE_CORE, { self: true });
+  const leafBound = leafHasOwnField();
+
+  const resolvedCore = computed<TemporalRangeGroup | null>(() => {
+    const ref = reference();
+    return typeof ref === 'object' && ref !== null ? ref : (di?.core ?? null);
+  });
+
+  // DI mode attaches SYNCHRONOUSLY (the mixed-mode guard must throw during
+  // construction, exactly as before the factory existed); a bound reference
+  // arrives with the first input flush and simply wins.
+  let attached: TemporalRangeGroup | null = null;
+  if (di !== null) {
+    attached = di.core;
+    holder.set(di.core);
+    attachViaDirective(di, leafBound);
+  }
+
+  effect(() => {
+    const core = resolvedCore();
+    holder.set(core);
+    if (core === null || core === attached) return;
+
+    attached = core;
+    if (di !== null && core === di.core) attachViaDirective(di, leafBound);
+    else attach(core);
+  });
+
+  return resolvedCore;
+}
+
+/**
+ * Marks the group's date control. Bare, it connects to the ancestor
+ * `dateTimeRangeGroup` directive via DI: `<angular-inline-date rangeDay />`;
+ * bound, it connects to a HEADLESS group by reference —
+ * `<angular-inline-date [rangeDay]="row.group" />` (the mat-table case,
+ * where `matColumnDef` blocks DI). The pair's inline-START leaf — its clear
+ * bubble opens outward (leftward) by default via
+ * `INLINE_TEMPORAL_BUBBLE_SIDE`.
  */
 @Directive({
   selector: 'angular-inline-date[rangeDay]',
-  providers: [provideLeafState(false), { provide: INLINE_TEMPORAL_BUBBLE_SIDE, useValue: 'start' }],
+  providers: [
+    provideRoleCore(),
+    provideLeafState(false),
+    { provide: INLINE_TEMPORAL_BUBBLE_SIDE, useValue: 'start' },
+  ],
 })
 export class RangeDay {
-  constructor() {
-    const group = inject(DateTimeRangeGroup);
-    const control = inject(AngularInlineDate);
+  rangeDay = input<TemporalRangeGroup | ''>('');
 
-    group.attachDay(control, leafHasOwnField());
-    control.touch.subscribe(() => group.touch.emit());
+  readonly resolvedCore: Signal<TemporalRangeGroup | null>;
+
+  constructor() {
+    const control = inject(AngularInlineDate);
+    this.resolvedCore = wireRole(
+      this.rangeDay,
+      control,
+      (core) => core.attachDay(control),
+      (group, leafBound) => group.attachDay(control, leafBound),
+    );
+
+    const di = inject(DateTimeRangeGroup, { optional: true });
+    control.touch.subscribe(() => di?.touch.emit());
     control.saved.subscribe((session) => {
-      if (session.changed) group.dayCommitted();
+      if (session.changed) this.resolvedCore()?.dayCommitted();
     });
   }
 }
 
 /**
- * Marks the group's start time: `<angular-inline-time rangeStart />`. An
- * inline-START leaf — its clear bubble opens outward (leftward) by default
- * via `INLINE_TEMPORAL_BUBBLE_SIDE`.
+ * Marks the group's start time (DI via the bare attribute, a headless
+ * group by reference — see `RangeDay`). An inline-START leaf — its clear
+ * bubble opens outward (leftward) by default.
  */
 @Directive({
   selector: 'angular-inline-time[rangeStart]',
-  providers: [provideLeafState(false), { provide: INLINE_TEMPORAL_BUBBLE_SIDE, useValue: 'start' }],
+  providers: [
+    provideRoleCore(),
+    provideLeafState(false),
+    { provide: INLINE_TEMPORAL_BUBBLE_SIDE, useValue: 'start' },
+  ],
 })
 export class RangeStart {
-  constructor() {
-    const group = inject(DateTimeRangeGroup);
-    const control = inject(AngularInlineTime);
+  rangeStart = input<TemporalRangeGroup | ''>('');
 
-    group.attachStart(control, leafHasOwnField());
-    control.touch.subscribe(() => group.touch.emit());
+  readonly resolvedCore: Signal<TemporalRangeGroup | null>;
+
+  constructor() {
+    const control = inject(AngularInlineTime);
+    this.resolvedCore = wireRole(
+      this.rangeStart,
+      control,
+      (core) => core.attachStart(control),
+      (group, leafBound) => group.attachStart(control, leafBound),
+    );
+
+    const di = inject(DateTimeRangeGroup, { optional: true });
+    control.touch.subscribe(() => di?.touch.emit());
     control.saved.subscribe((session) => {
-      if (session.changed) group.startCommitted();
+      if (session.changed) this.resolvedCore()?.startCommitted();
     });
   }
 }
 
 /**
- * Marks the group's end time: `<angular-inline-time rangeEnd />`. Also
- * feeds the control's `+n` day-overflow badge via `INLINE_TIME_DAY_OFFSET`
- * and receives the group's range errors.
+ * Marks the group's end time (DI via the bare attribute, a headless group
+ * by reference — see `RangeDay`). Also feeds the control's `+n`
+ * day-overflow badge via `INLINE_TIME_DAY_OFFSET` and receives the group's
+ * range errors.
  */
 @Directive({
   selector: 'angular-inline-time[rangeEnd]',
   providers: [
+    provideRoleCore(),
     provideLeafState(true),
     {
       provide: INLINE_TIME_DAY_OFFSET,
-      useFactory: () => inject(DateTimeRangeGroup).endDayOffset,
+      useFactory: () => {
+        const core = inject(RANGE_ROLE_CORE, { self: true });
+        return computed(() => core()?.endDayOffset() ?? 0);
+      },
     },
   ],
 })
 export class RangeEnd {
-  constructor() {
-    const group = inject(DateTimeRangeGroup);
-    const control = inject(AngularInlineTime);
+  rangeEnd = input<TemporalRangeGroup | ''>('');
 
-    group.attachEnd(control, leafHasOwnField());
-    control.touch.subscribe(() => group.touch.emit());
+  readonly resolvedCore: Signal<TemporalRangeGroup | null>;
+
+  constructor() {
+    const control = inject(AngularInlineTime);
+    this.resolvedCore = wireRole(
+      this.rangeEnd,
+      control,
+      (core) => core.attachEnd(control),
+      (group, leafBound) => group.attachEnd(control, leafBound),
+    );
+
+    const di = inject(DateTimeRangeGroup, { optional: true });
+    control.touch.subscribe(() => di?.touch.emit());
     control.saved.subscribe((session) => {
-      if (session.changed) group.endCommitted(session.dayOverflow, session.explicitDay);
+      if (session.changed) this.resolvedCore()?.endCommitted(session.dayOverflow, session.explicitDay);
     });
   }
 }
 
 /**
  * Marks ONE ranged time control carrying BOTH endpoints:
- * `<angular-inline-time [ranged]="true" rangeTimes />` — the pair replaces
+ * `<angular-inline-time [ranged]="true" rangeTimes />` (DI) or
+ * `[rangeTimes]="row.group"` (headless, by reference) — the pair replaces
  * the two single `rangeStart`/`rangeEnd` leaves (the add-dialog / table
  * TIME-column shape). Propagation stays per-endpoint: the control's
  * `saved.side` dispatches to the same start/end commit laws. The control
@@ -681,55 +1027,93 @@ export class RangeEnd {
  * idempotent over a settled pair (that is what `dayOverflow`/
  * `explicitDay` are carried FOR). Receives the group's range errors.
  */
-@Directive({ selector: 'angular-inline-time[rangeTimes]', providers: [provideLeafState(true)] })
+@Directive({
+  selector: 'angular-inline-time[rangeTimes]',
+  providers: [provideRoleCore(), provideLeafState(true)],
+})
 export class RangeTimes {
-  constructor() {
-    const group = inject(DateTimeRangeGroup);
-    const control = inject(AngularInlineTime);
+  rangeTimes = input<TemporalRangeGroup | ''>('');
 
-    group.attachTimes(control, leafHasOwnField());
-    control.touch.subscribe(() => group.touch.emit());
+  readonly resolvedCore: Signal<TemporalRangeGroup | null>;
+
+  constructor() {
+    const control = inject(AngularInlineTime);
+    this.resolvedCore = wireRole(
+      this.rangeTimes,
+      control,
+      (core) => core.attachTimes(control),
+      (group, leafBound) => group.attachTimes(control, leafBound),
+    );
+
+    const di = inject(DateTimeRangeGroup, { optional: true });
+    control.touch.subscribe(() => di?.touch.emit());
     control.saved.subscribe((session) => {
       if (!session.changed) return;
-      if (session.side === 'start') group.startCommitted();
-      else group.endCommitted(session.dayOverflow, session.explicitDay);
+      const core = this.resolvedCore();
+      if (core === null) return;
+      if (session.side === 'start') core.startCommitted();
+      else core.endCommitted(session.dayOverflow, session.explicitDay);
     });
   }
 }
 
 /**
- * Marks the group's END-DAY control (the maximal five-field form):
- * `<angular-inline-date rangeEndDay />`. Receives the ordering errors —
- * this leaf is where violations are made.
+ * Marks the group's END-DAY control (the maximal five-field form; DI via
+ * the bare attribute, a headless group by reference — see `RangeDay`).
+ * Receives the ordering errors — this leaf is where violations are made.
  */
-@Directive({ selector: 'angular-inline-date[rangeEndDay]', providers: [provideLeafState(true)] })
+@Directive({
+  selector: 'angular-inline-date[rangeEndDay]',
+  providers: [provideRoleCore(), provideLeafState(true)],
+})
 export class RangeEndDay {
-  constructor() {
-    const group = inject(DateTimeRangeGroup);
-    const control = inject(AngularInlineDate);
+  rangeEndDay = input<TemporalRangeGroup | ''>('');
 
-    group.attachEndDay(control, leafHasOwnField());
-    control.touch.subscribe(() => group.touch.emit());
+  readonly resolvedCore: Signal<TemporalRangeGroup | null>;
+
+  constructor() {
+    const control = inject(AngularInlineDate);
+    this.resolvedCore = wireRole(
+      this.rangeEndDay,
+      control,
+      (core) => core.attachEndDay(control),
+      (group, leafBound) => group.attachEndDay(control, leafBound),
+    );
+
+    const di = inject(DateTimeRangeGroup, { optional: true });
+    control.touch.subscribe(() => di?.touch.emit());
     control.saved.subscribe((session) => {
-      if (session.changed) group.endDayCommitted();
+      if (session.changed) this.resolvedCore()?.endDayCommitted();
     });
   }
 }
 
-/** Marks the group's duration: `<angular-inline-duration rangeLength />`. */
+/**
+ * Marks the group's duration (DI via the bare attribute, a headless group
+ * by reference — see `RangeDay`).
+ */
 @Directive({
   selector: 'angular-inline-duration[rangeLength]',
-  providers: [provideLeafState(false)],
+  providers: [provideRoleCore(), provideLeafState(false)],
 })
 export class RangeLength {
-  constructor() {
-    const group = inject(DateTimeRangeGroup);
-    const control = inject(AngularInlineDuration);
+  rangeLength = input<TemporalRangeGroup | ''>('');
 
-    group.attachLength(control, leafHasOwnField());
-    control.touch.subscribe(() => group.touch.emit());
+  readonly resolvedCore: Signal<TemporalRangeGroup | null>;
+
+  constructor() {
+    const control = inject(AngularInlineDuration);
+    this.resolvedCore = wireRole(
+      this.rangeLength,
+      control,
+      (core) => core.attachLength(control),
+      (group, leafBound) => group.attachLength(control, leafBound),
+    );
+
+    const di = inject(DateTimeRangeGroup, { optional: true });
+    control.touch.subscribe(() => di?.touch.emit());
     control.saved.subscribe((session) => {
-      if (session.changed) group.lengthCommitted();
+      if (session.changed) this.resolvedCore()?.lengthCommitted();
     });
   }
 }

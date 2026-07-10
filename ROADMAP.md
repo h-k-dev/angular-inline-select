@@ -558,6 +558,31 @@ implementation, date-v2 adopts the every-changed-settlement cadence
 (manual audit of the few ranged consumers — `updateAttribute(…, any)`
 hides null-hazards from the compiler).
 
+**THE HEADLESS GROUP SHIPPED (2026-07-10, suite at 214):**
+`createTemporalRangeGroup()` — the range-group laws as a PLAIN FACTORY
+(closures over signals; no directive, no OOP), living wherever the caller
+puts it (typically ROW DATA). `DateTimeRangeGroup` is now a THIN SHELL:
+it builds the core with its `value` model/zone/bound-ness and forwards
+`onChanges` deltas to its outputs — the laws exist ONCE. The role
+attributes went DUAL-MODE: bare = DI to the ancestor directive (exactly
+as before, synchronous attach so the mixed-mode guard still throws);
+BOUND = a headless group by reference (`[rangeDay]="row.group"`,
+`[rangeTimes]="row.group"` …) — which makes `matColumnDef`'s DI scoping
+irrelevant, THE mat-table case. Traps paid for: (1) leaf-state/day-offset
+providers must NOT inject the role directive (control constructs → token
+→ role → control = NG0200) — they read a per-element `RANGE_ROLE_CORE`
+holder signal the role's wiring fills; (2) by-reference attach happens an
+effect-flush AFTER the factory's first inbound push, so the inbound
+effect depends on the attachment signals (late leaf receives the current
+value) and the OUTBOUND mirror is gated on `anyAttached` (an empty
+composed reading must not clobber a seeded value). Factory requires an
+injection context (or `options.injector`). Playground: mat-table card
+(3 shifts incl. overnight) with per-row headless groups — iusta's
+time-entry-table constraint, live. 4 headless specs (per-row isolation,
+end→duration, duration→end, day shift). NEXT: mirror to iusta, then its
+table rows adopt row-data groups and `prepareTimeData`'s hand
+propagation dissolves.
+
 **The temporal program's upstream design record was ROADMAP-DATETIME.md
 (retired — recover via `git show 8063fb6:ROADMAP-DATETIME.md`); the LIVE
 absorption log is iusta's `EDITABLES-ABSORPTION-ROADMAP.md`. That record

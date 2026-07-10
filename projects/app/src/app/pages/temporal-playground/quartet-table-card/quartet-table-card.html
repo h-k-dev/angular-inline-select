@@ -1,0 +1,58 @@
+<div class="example-card" id="quartet-table-example">
+  <h3 class="example-card__title">The quartet in a table — each ROW is one control</h3>
+  <p class="prose">
+    Five shifts, one <code>dateTimeRangeGroup</code> per <code>&lt;tr&gt;</code>, its
+    <code>{{ '{' }} start, end, duration {{ '}' }}</code> value two-way bound per row — day, time range and
+    length are the group's leaves in the row's cells. <em>Night</em> is seeded overnight, so its end wears the
+    <code>+1</code> badge; <em>On-call</em> runs a day and a half. Type overflow hours (“25:15”) into any
+    <em>Ends</em> to roll its day by hand — a length commit moves the end, a day commit shifts the whole row.
+  </p>
+
+  <table class="model-table quartet-table">
+    <thead>
+      <tr>
+        <th scope="col">Shift</th>
+        <th scope="col">Day</th>
+        <th scope="col">Time</th>
+        <th scope="col">Length</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of stayRows; track row.label) {
+        <tr
+          dateTimeRangeGroup
+          [(value)]="row.value"
+          (savedModelChange)="logEmit('table.' + row.label + '.savedModelChange', $event)"
+        >
+          <th scope="row">{{ row.label }}</th>
+          <td>
+            <angular-inline-date rangeDay [locale]="locale()" [ariaLabel]="row.label + ' day'" />
+          </td>
+          <td>
+            <span class="time-range-pair">
+              <angular-inline-time
+                rangeStart
+                [locale]="militaryLocale()"
+                [ariaLabel]="row.label + ' start in 24-hour time'"
+              />
+              <span class="time-range-pair__separator" aria-hidden="true">–</span>
+              <angular-inline-time
+                rangeEnd
+                [locale]="militaryLocale()"
+                [ariaLabel]="row.label + ' end in 24-hour time'"
+              />
+            </span>
+          </td>
+          <td>
+            <angular-inline-duration
+              rangeLength
+              durationFormat="h:mm"
+              [step]="60"
+              [ariaLabel]="row.label + ' length'"
+            />
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>

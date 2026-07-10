@@ -14,8 +14,10 @@ import {
   RangeEnd,
   RangeTimes,
   RangeLength,
+  createTemporalRangeGroup,
   type ComposedDateRange,
   type ComposedTimeRange,
+  type TemporalRangeGroup,
   type TemporalRangeValue,
 } from './range-group';
 
@@ -621,6 +623,149 @@ describe('DateTimeRangeGroup with the rangeTimes pair (the trio)', () => {
       duration: 32_400,
     });
     expect(h.inputs().map((input) => input.value)).toEqual([
+      'Jul 24, 2026',
+      '21:00',
+      '06:00',
+      '09:00',
+    ]);
+  });
+});
+
+// =============================================================================
+// The HEADLESS group — by-reference roles, NO DI directive in the ancestry
+// (the mat-table case: matColumnDef scoping makes a per-row DI group
+// impossible; the group lives on ROW DATA instead)
+// =============================================================================
+
+interface HeadlessRow {
+  id: number;
+  group: TemporalRangeGroup;
+  commits: (TemporalRangeValue | null)[];
+}
+
+@Component({
+  imports: [
+    AngularInlineDate,
+    AngularInlineTime,
+    AngularInlineDuration,
+    RangeDay,
+    RangeTimes,
+    RangeLength,
+  ],
+  template: `
+    @for (row of rows; track row.id) {
+      <div class="headless-row">
+        <angular-inline-date [rangeDay]="row.group" locale="en" [now]="now" />
+        <angular-inline-time [ranged]="true" [rangeTimes]="row.group" locale="en-u-hc-h23" [now]="now" />
+        <angular-inline-duration [rangeLength]="row.group" />
+      </div>
+    }
+  `,
+})
+class HeadlessRowsHost {
+  now = () => NOW;
+
+  // Field initializer = injection context; the factory registers its effects.
+  rows: HeadlessRow[] = [1, 2].map((id) => {
+    const commits: (TemporalRangeValue | null)[] = [];
+    const group = createTemporalRangeGroup({
+      value: signal<TemporalRangeValue | null>({
+        start: at('2026-07-21', '21:00'),
+        end: at('2026-07-22', '06:00'),
+        duration: 32_400,
+      }),
+      onChanges: (changes) => commits.push(changes.composed),
+    });
+    return { id, group, commits };
+  });
+}
+
+describe('createTemporalRangeGroup (headless, by-reference roles)', () => {
+  // Per row: 0 day · 1 pair start · 2 pair end · 3 length.
+  function setupRows() {
+    const fixture = TestBed.createComponent(HeadlessRowsHost);
+    fixture.detectChanges();
+
+    return {
+      fixture,
+      host: fixture.componentInstance,
+      inputs: (row: number) =>
+        [
+          ...fixture.nativeElement
+            .querySelectorAll('.headless-row')
+            [row].querySelectorAll(LEAF_INPUTS),
+        ] as HTMLInputElement[],
+    };
+  }
+
+  it('each row group pushes its seed into ITS leaves — no DI, no cross-talk', async () => {
+    const h = setupRows();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    for (const row of [0, 1]) {
+      expect(h.inputs(row).map((input) => input.value)).toEqual([
+        'Jul 21, 2026',
+        '21:00',
+        '06:00',
+        '09:00',
+      ]);
+    }
+  });
+
+  it('a typed pair END commits into ITS row only — duration follows, the sibling stands', async () => {
+    const h = setupRows();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    await commitIntoBound(h.fixture, () => h.inputs(0), 2, '23:30');
+
+    expect(h.host.rows[0].group.value()).toEqual({
+      start: at('2026-07-21', '21:00'),
+      end: at('2026-07-21', '23:30'),
+      duration: 2.5 * 3600,
+    });
+    expect(h.host.rows[0].commits).toEqual([
+      { start: at('2026-07-21', '21:00'), end: at('2026-07-21', '23:30'), duration: 2.5 * 3600 },
+    ]);
+
+    // The sibling row is untouched — the groups are per-row state.
+    expect(h.host.rows[1].group.value()).toEqual({
+      start: at('2026-07-21', '21:00'),
+      end: at('2026-07-22', '06:00'),
+      duration: 32_400,
+    });
+    expect(h.host.rows[1].commits).toEqual([]);
+  });
+
+  it('a duration commit MOVES the pair end (the law, headless)', async () => {
+    const h = setupRows();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    await commitIntoBound(h.fixture, () => h.inputs(1), 3, '2:00');
+
+    expect(h.host.rows[1].group.value()).toEqual({
+      start: at('2026-07-21', '21:00'),
+      end: at('2026-07-21', '23:00'),
+      duration: 2 * 3600,
+    });
+    expect(h.inputs(1)[2].value).toBe('23:00');
+  });
+
+  it('a day commit shifts BOTH pair instants, wall clocks preserved', async () => {
+    const h = setupRows();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    await commitIntoBound(h.fixture, () => h.inputs(0), 0, '24.7.2026');
+
+    expect(h.host.rows[0].group.value()).toEqual({
+      start: at('2026-07-24', '21:00'),
+      end: at('2026-07-25', '06:00'),
+      duration: 32_400,
+    });
+    expect(h.inputs(0).map((input) => input.value)).toEqual([
       'Jul 24, 2026',
       '21:00',
       '06:00',

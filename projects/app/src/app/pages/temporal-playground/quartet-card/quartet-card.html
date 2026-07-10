@@ -1,0 +1,87 @@
+<div
+  class="example-card"
+  id="quartet-example"
+  dateTimeRangeGroup
+  #stayGroup="dateTimeRangeGroup"
+  [formField]="stayForm"
+  (savedModelChange)="logEmit('stay.savedModelChange', $event)"
+>
+  <h3 class="example-card__title">The quartet — ONE form field, the group is the control (T5b)</h3>
+  <p class="prose">
+    One <code>[formField]</code> on the group, model = the domain shape
+    <code>{{ '{' }} start, end, duration {{ '}' }}</code> (UTC ISO DB entries + seconds). The four leaves are
+    UNBOUND surfaces the group feeds — <em>Stay</em> is a rendering of <code>start</code>'s date part:
+  </p>
+
+  <table class="model-table">
+    <thead>
+      <tr>
+        <th scope="col">Field</th>
+        <th scope="col">Display (local)</th>
+        <th scope="col">Model (UTC, SQL-friendly)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row">Stay</th>
+        <td>
+          <angular-inline-date rangeDay [locale]="locale()" ariaLabel="Stay day" />
+        </td>
+        <td><code>— derived from start —</code></td>
+      </tr>
+      <tr>
+        <th scope="row">Starts</th>
+        <td>
+          <angular-inline-time
+            rangeStart
+            [native]="true"
+            [locale]="militaryLocale()"
+            ariaLabel="Stay start in 24-hour time"
+          />
+        </td>
+        <td><code>{{ stayModel()?.start ?? '∅' }}</code></td>
+      </tr>
+      <tr>
+        <th scope="row">Ends</th>
+        <td>
+          <angular-inline-time
+            rangeEnd
+            [native]="true"
+            [locale]="militaryLocale()"
+            ariaLabel="Stay end in 24-hour time"
+          />
+        </td>
+        <td><code>{{ stayModel()?.end ?? '∅' }}</code></td>
+      </tr>
+      <tr>
+        <th scope="row">End day</th>
+        <td>
+          <angular-inline-date rangeEndDay [locale]="locale()" ariaLabel="Stay end day" />
+        </td>
+        <td><code>— derived from end —</code></td>
+      </tr>
+      <tr>
+        <th scope="row">Length</th>
+        <td>
+          <angular-inline-duration
+            rangeLength
+            durationFormat="h:mm"
+            [step]="60"
+            ariaLabel="Stay length"
+          />
+        </td>
+        <td><code>{{ stayModel()?.duration ?? '∅' }}s</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="form-toggles__hint">
+    The group owns the invariants: a typed end is wall-clock intent (at-or-before the start rolls to the next
+    day — the <code>+{{ stayGroup.endDayOffset() }}</code> badge; overflow hours like “240:30” type the
+    over-count by hand); a length commit moves the end; a day commit shifts both instants. The END DAY (T5's
+    maximal form) moves the end WITHOUT rolling — an end before the start finally IS an error (ordering error
+    on the end leaves, duration underivable). Paste a full ISO datetime into Starts or Ends and it decomposes
+    across the group. Each settled commit writes ONE composed model and emits ONE
+    <code>savedModelChange</code> — see the log.
+  </p>
+</div>
