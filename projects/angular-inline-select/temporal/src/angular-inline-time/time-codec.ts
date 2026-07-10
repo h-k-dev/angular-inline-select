@@ -142,11 +142,13 @@ function dayPeriods(locale: string | string[] | undefined) {
  * `undefined` (raises the parse gate).
  *
  * Accepted shapes: `'9'` → 09:00, `'21'` → 21:00, `'930'`/`'0930'` → 09:30,
- * `'2105'` → 21:05, `'9:30'`, `'09.30'` — OVERFLOW hours declaring the day
- * over-count by hand (`'24:30'`/`'2430'` → next day 00:30, `'240:30'` →
- * +10 days 00:30; bare 1–2 digit hours stay strict, `'99'` is a typo) —
- * and, per the round-trip law, the display's own day-period formats:
- * `'9:30 AM'`, `'12:00 AM'` → 00:00, `'9 PM'` → 21:00.
+ * `'2105'` → 21:05, `'9:30'`, `'09.30'` — an optional `:ss` tail
+ * (`'21:30:15'`, meridiem-free — the seconds format's own display parses
+ * back) — OVERFLOW hours declaring the day over-count by hand
+ * (`'24:30'`/`'2430'` → next day 00:30, `'240:30'` → +10 days 00:30; bare
+ * 1–2 digit hours stay strict, `'99'` is a typo) — and, per the round-trip
+ * law, the display's own day-period formats: `'9:30 AM'`, `'12:00 AM'` →
+ * 00:00, `'9 PM'` → 21:00.
  */
 export function parseTimeDraft(
   raw: string,
@@ -171,16 +173,24 @@ export function parseTimeDraft(
     if (draft === undefined || meridiem === undefined) return draft;
     if (draft.days > 0) return undefined; // overflow + AM/PM is nonsense
 
-    const [hours, minutes] = draft.time.split(':').map(Number);
+    const [hours] = draft.time.split(':').map(Number);
     if (hours > 12 || hours === 0) return undefined;
 
     const shifted = meridiem === 'pm' ? (hours % 12) + 12 : hours % 12;
     return { time: `${String(shifted).padStart(2, '0')}:${draft.time.slice(-2)}`, days: 0 };
   };
 
-  // Separated: H:mm / H.mm — hours may overflow into days (up to 3 digits).
-  let match = /^(\d{1,3})[:.](\d{2})$/.exec(trimmed);
-  if (match) return applyMeridiem(draftIfValid(Number(match[1]), Number(match[2])));
+  // Separated: H:mm / H.mm — hours may overflow into days (up to 3 digits) —
+  // plus an optional `:ss` tail (the seconds format's own display must parse
+  // back) — carried in the time string, meridiem-free.
+  const match = /^(\d{1,3})[:.](\d{2})(?::(\d{2}))?$/.exec(trimmed);
+  if (match) {
+    const draft = applyMeridiem(draftIfValid(Number(match[1]), Number(match[2])));
+    if (draft === undefined || match[3] === undefined) return draft;
+    if (meridiem !== undefined || Number(match[3]) > 59) return undefined;
+
+    return { time: `${draft.time}:${match[3]}`, days: draft.days };
+  }
 
   // Compact digits: H / HH / Hmm / HHmm
   if (/^\d{1,4}$/.test(trimmed)) {

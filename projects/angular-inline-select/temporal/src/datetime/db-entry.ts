@@ -19,7 +19,7 @@ import { DateTime } from 'luxon';
  * `INLINE_TEMPORAL_ZONE`). Instant math (shift/diff) is zone-free.
  *
  * Luxon itself is CONTAINED here (and consumed via the
- * `toDateTime`/`fromDateTime` bridge) — values stay plain strings, and the
+ * `toDateTime`/`toDBEntry` bridge) — values stay plain strings, and the
  * engine ships only with the temporal entry point, exactly like
  * libphonenumber ships only with `/phone`.
  */
@@ -38,8 +38,8 @@ export function toDateTime(value: DbDateTime | null, zone?: ZoneId): DateTime | 
   return parsed.isValid ? parsed : null;
 }
 
-/** The Luxon bridge, outbound: iusta's `toDBEntry`, verbatim. */
-export function fromDateTime(dateTime: DateTime): DbDateTime {
+/** The Luxon bridge, outbound — THE house function (iusta naming wins for utils). */
+export function toDBEntry(dateTime: DateTime): DbDateTime {
   return dateTime.toUTC().toISO()!;
 }
 
@@ -49,8 +49,8 @@ export function parseDbEntry(value: DbDateTime | null): Date | null {
 }
 
 /** The wire format from a JS `Date` — `toDBEntry(DateTime.fromJSDate(date))`. */
-export function toDbEntry(date: Date): DbDateTime {
-  return fromDateTime(DateTime.fromJSDate(date));
+export function dateToDbEntry(date: Date): DbDateTime {
+  return toDBEntry(DateTime.fromJSDate(date));
 }
 
 /**
@@ -66,7 +66,7 @@ export function parseDbEntryDraft(raw: string, zone?: ZoneId): DbDateTime | unde
 
   const iso = trimmed.replace(' ', 'T');
   const parsed = zone ? DateTime.fromISO(iso, { zone }) : DateTime.fromISO(iso);
-  return parsed.isValid ? fromDateTime(parsed) : undefined;
+  return parsed.isValid ? toDBEntry(parsed) : undefined;
 }
 
 /** The display-zone calendar day of a DB entry: `'yyyy-MM-dd'`. */
@@ -85,12 +85,12 @@ function dayIn(day: string, zone?: ZoneId): DateTime {
 
 /** Display-zone midnight of a `'yyyy-MM-dd'` day, as a DB entry (`startOf('day')`). */
 export function dayToDbEntry(day: string, zone?: ZoneId): DbDateTime {
-  return fromDateTime(dayIn(day, zone).startOf('day'));
+  return toDBEntry(dayIn(day, zone).startOf('day'));
 }
 
 /** Display-zone end-of-day of a `'yyyy-MM-dd'` day, as a DB entry (`endOf('day')`). */
 export function dayEndToDbEntry(day: string, zone?: ZoneId): DbDateTime {
-  return fromDateTime(dayIn(day, zone).endOf('day'));
+  return toDBEntry(dayIn(day, zone).endOf('day'));
 }
 
 /**
@@ -102,13 +102,13 @@ export function composeDbEntry(day: string, time: string, zone?: ZoneId): DbDate
   // `'HH:mm:ss'` composes with its seconds (iusta's HOUR_MINUTE_SECOND
   // format); bare `'HH:mm'` stays second-less.
   const [hour, minute, second = 0] = time.split(':').map(Number);
-  return fromDateTime(dayIn(day, zone).set({ hour, minute, second, millisecond: 0 }));
+  return toDBEntry(dayIn(day, zone).set({ hour, minute, second, millisecond: 0 }));
 }
 
 /** Shifts a DB entry by whole seconds (`shiftFromDuration`'s primitive) — zone-free. */
 export function shiftDbEntry(value: DbDateTime, seconds: number): DbDateTime {
   const dateTime = toDateTime(value);
-  return dateTime === null ? value : fromDateTime(dateTime.plus({ seconds }));
+  return dateTime === null ? value : toDBEntry(dateTime.plus({ seconds }));
 }
 
 /** Whole seconds between two DB entries (`induceFromTimeRange`'s primitive) — zone-free. */
@@ -140,7 +140,7 @@ export function rollDbEntryForward(start: DbDateTime, end: DbDateTime, zone?: Zo
   if (dayGap > 0) to = to.plus({ days: dayGap });
   while (to <= from) to = to.plus({ days: 1 });
 
-  return fromDateTime(to);
+  return toDBEntry(to);
 }
 
 /**

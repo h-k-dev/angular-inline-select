@@ -12,6 +12,7 @@ import {
   RangeEndDay,
   RangeStart,
   RangeEnd,
+  RangeTimes,
   RangeLength,
   type ComposedDateRange,
   type ComposedTimeRange,
@@ -522,5 +523,108 @@ describe('DateTimeRangeGroup as FormValueControl (T5b)', () => {
       const fixture = TestBed.createComponent(MixedModeHost);
       fixture.detectChanges();
     }).toThrowError(/bind EITHER the group/);
+  });
+});
+
+// =============================================================================
+// The TRIO — date · ONE ranged time pair · duration (the add-dialog shape)
+// =============================================================================
+
+@Component({
+  imports: [
+    AngularInlineDate,
+    AngularInlineTime,
+    AngularInlineDuration,
+    DateTimeRangeGroup,
+    RangeDay,
+    RangeTimes,
+    RangeLength,
+    FormField,
+  ],
+  template: `
+    <div dateTimeRangeGroup [formField]="field" (savedModelChange)="commits.push($event)">
+      <angular-inline-date rangeDay locale="en" [now]="now" />
+      <angular-inline-time [ranged]="true" rangeTimes locale="en-u-hc-h23" [now]="now" />
+      <angular-inline-duration rangeLength />
+    </div>
+  `,
+})
+class TrioHost {
+  group = viewChild.required(DateTimeRangeGroup);
+
+  model = signal<TemporalRangeValue | null>({
+    start: at('2026-07-21', '21:00'),
+    end: at('2026-07-22', '06:00'),
+    duration: 32_400,
+  });
+  field = form(this.model);
+
+  commits: (TemporalRangeValue | null)[] = [];
+
+  now = () => NOW;
+}
+
+describe('DateTimeRangeGroup with the rangeTimes pair (the trio)', () => {
+  // Trio input order: 0 day · 1 pair start · 2 pair end · 3 length.
+  it('the bound value flows DOWN into the pair', async () => {
+    const h = boundSetup(TrioHost);
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(h.inputs().map((input) => input.value)).toEqual([
+      'Jul 21, 2026',
+      '21:00',
+      '06:00',
+      '09:00',
+    ]);
+  });
+
+  it('a typed pair END commits ONE composed model — duration follows', async () => {
+    const h = boundSetup(TrioHost);
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    await commitIntoBound(h.fixture, h.inputs, 2, '23:30');
+
+    expect(h.host.model()).toEqual({
+      start: at('2026-07-21', '21:00'),
+      end: at('2026-07-21', '23:30'),
+      duration: 2.5 * 3600,
+    });
+  });
+
+  it('a duration commit MOVES the pair end', async () => {
+    const h = boundSetup(TrioHost);
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    await commitIntoBound(h.fixture, h.inputs, 3, '2:00');
+
+    expect(h.host.model()).toEqual({
+      start: at('2026-07-21', '21:00'),
+      end: at('2026-07-21', '23:00'),
+      duration: 2 * 3600,
+    });
+    expect(h.inputs()[2].value).toBe('23:00'); // the pair's end re-rendered
+  });
+
+  it('a day commit shifts BOTH pair instants, wall clocks preserved', async () => {
+    const h = boundSetup(TrioHost);
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    await commitIntoBound(h.fixture, h.inputs, 0, '24.7.2026');
+
+    expect(h.host.model()).toEqual({
+      start: at('2026-07-24', '21:00'),
+      end: at('2026-07-25', '06:00'),
+      duration: 32_400,
+    });
+    expect(h.inputs().map((input) => input.value)).toEqual([
+      'Jul 24, 2026',
+      '21:00',
+      '06:00',
+      '09:00',
+    ]);
   });
 });

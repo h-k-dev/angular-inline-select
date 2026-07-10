@@ -519,7 +519,24 @@ typed event console. 93/93 sandbox tests.
 `<input type="time">` + `showPicker()` with a focus fallback; idle picks
 commit immediately, in-session picks replace the draft).
 
-**The temporal program continues in [ROADMAP-DATETIME.md](ROADMAP-DATETIME.md):**
+**Upstream re-sync batch 2 (2026-07-10, suite at 210):** the range group
+gained the **`rangeTimes` role** mirrored back from iusta — ONE ranged time
+control carrying both endpoints (`<angular-inline-time [ranged]="true"
+rangeTimes />`), replacing the two single `rangeStart`/`rangeEnd` leaves;
+propagation stays per-endpoint (dispatches on `saved.side`; the pair's own
+roll is idempotent under the group's — what `dayOverflow`/`explicitDay` are
+carried for). Trio spec block ported. And the **time seconds story**: the
+codec's optional `:ss` parse tail (meridiem-free — seconds and day-periods
+stay apart) + a `format` input (`'HH:mm' | 'HH:mm:ss'`) — the seconds
+format displays the RAW format string (24 h; its own display must parse
+back), the default keeps the Intl-localized display; `composeDbEntry`
+already composed seconds. Still open with iusta: the details-payload
+`savedModelChange` convergence question.
+
+**The temporal program's upstream design record was ROADMAP-DATETIME.md
+(retired — recover via `git show 8063fb6:ROADMAP-DATETIME.md`); the LIVE
+absorption log is iusta's `EDITABLES-ABSORPTION-ROADMAP.md`. That record
+covered:**
 calendar overlay picker on `@angular/aria` Grid + `DateAdapter` (required),
 mat-form-field hosting for all three controls (via iusta's
 `MatFormFieldAdapterContract` pattern), the two-field date range with

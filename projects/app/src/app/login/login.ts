@@ -30,7 +30,7 @@ import {
   AngularInlineDuration,
   composeDbEntry,
   localDayOf,
-  toDbEntry,
+  dateToDbEntry,
 } from 'angular-inline-select/temporal';
 
 const phoneCodec = createLibphonenumberCodec(metadata, examples);
@@ -95,7 +95,7 @@ export class Login {
     telephone: '+49301234567',
     mobile: null,
     dateOfBirth: null,
-    dayStart: composeDbEntry(localDayOf(toDbEntry(new Date()))!, '06:30'),
+    dayStart: composeDbEntry(localDayOf(dateToDbEntry(new Date()))!, '06:30'),
     focusTime: null,
   });
 

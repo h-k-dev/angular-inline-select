@@ -15,7 +15,6 @@ import { FormField, type ValidationError } from '@angular/forms/signals';
 import { AngularInlineDate } from '../angular-inline-date/angular-inline-date';
 import { toInternalRange } from '../angular-inline-date/date-codec';
 import { AngularInlineTime } from '../angular-inline-time/angular-inline-time';
-import { toInternalTimeRange } from '../angular-inline-time/time-codec';
 import { INLINE_TIME_DAY_OFFSET } from '../angular-inline-time/day-offset';
 import { AngularInlineDuration } from '../angular-inline-duration/angular-inline-duration';
 import {
@@ -116,6 +115,8 @@ export class DateTimeRangeGroup {
   #endDay = signal<AngularInlineDate | null>(null);
   #start = signal<AngularInlineTime | null>(null);
   #end = signal<AngularInlineTime | null>(null);
+  /** ONE ranged time control carrying BOTH endpoints (the `rangeTimes` role). */
+  #times = signal<AngularInlineTime | null>(null);
   #length = signal<AngularInlineDuration | null>(null);
 
   /** Present when the GROUP carries the `[formField]` — form-bound mode. */
@@ -214,18 +215,16 @@ export class DateTimeRangeGroup {
   });
 
   /**
-   * The endpoint instants and duration, read live off the controls. The
-   * time leaves are SINGLE-shape here (the group composes the range from
-   * two of them) — read through the internal model, like `rangeDay` does.
+   * The endpoint instants and duration, read live off the controls. Two
+   * SINGLE-shape time leaves (`rangeStart`/`rangeEnd`) or ONE ranged pair
+   * (`rangeTimes`) — read through the internal model, like `rangeDay` does.
    */
-  readonly start = computed<DbDateTime | null>(() => {
-    const control = this.#start();
-    return control ? toInternalTimeRange(control.value()).start : null;
-  });
-  readonly end = computed<DbDateTime | null>(() => {
-    const control = this.#end();
-    return control ? toInternalTimeRange(control.value()).start : null;
-  });
+  readonly start = computed<DbDateTime | null>(
+    () => this.#start()?.internalRange().start ?? this.#times()?.internalRange().start ?? null,
+  );
+  readonly end = computed<DbDateTime | null>(
+    () => this.#end()?.internalRange().start ?? this.#times()?.internalRange().end ?? null,
+  );
   readonly length = computed<number | null>(() => this.#length()?.value() ?? null);
 
   /**
@@ -327,6 +326,8 @@ export class DateTimeRangeGroup {
 
     this.#start()?.value.set(start);
     this.#end()?.value.set(end);
+    // The ranged pair speaks the object shape — both endpoints in one value.
+    this.#times()?.value.set(start === null && end === null ? null : { start, end });
     this.#length()?.value.set(duration);
     this.#day()?.value.set(start === null ? null : dayToDbEntry(localDayOf(start, this.effectiveZone())!, this.effectiveZone()));
     this.#endDay()?.value.set(end === null ? null : dayToDbEntry(localDayOf(end, this.effectiveZone())!, this.effectiveZone()));
@@ -417,6 +418,10 @@ export class DateTimeRangeGroup {
   attachEnd(control: AngularInlineTime, leafBound = false) {
     this.#registerBinding(leafBound, 'rangeEnd');
     this.#end.set(control);
+  }
+  attachTimes(control: AngularInlineTime, leafBound = false) {
+    this.#registerBinding(leafBound, 'rangeTimes');
+    this.#times.set(control);
   }
   attachLength(control: AngularInlineDuration, leafBound = false) {
     this.#registerBinding(leafBound, 'rangeLength');
@@ -544,11 +549,21 @@ export class DateTimeRangeGroup {
   #writeStart(value: DbDateTime) {
     const control = this.#start();
     if (control && control.value() !== value) control.value.set(value);
+
+    const times = this.#times();
+    if (times && times.internalRange().start !== value) {
+      times.value.set({ start: value, end: times.internalRange().end });
+    }
   }
 
   #writeEnd(value: DbDateTime) {
     const control = this.#end();
     if (control && control.value() !== value) control.value.set(value);
+
+    const times = this.#times();
+    if (times && times.internalRange().end !== value) {
+      times.value.set({ start: times.internalRange().start, end: value });
+    }
   }
 
   #writeLength(value: number | null) {
@@ -652,6 +667,32 @@ export class RangeEnd {
     control.touch.subscribe(() => group.touch.emit());
     control.saved.subscribe((session) => {
       if (session.changed) group.endCommitted(session.dayOverflow, session.explicitDay);
+    });
+  }
+}
+
+/**
+ * Marks ONE ranged time control carrying BOTH endpoints:
+ * `<angular-inline-time [ranged]="true" rangeTimes />` — the pair replaces
+ * the two single `rangeStart`/`rangeEnd` leaves (the add-dialog / table
+ * TIME-column shape). Propagation stays per-endpoint: the control's
+ * `saved.side` dispatches to the same start/end commit laws. The control
+ * rolls and badges internally already — the group's re-anchor/roll is
+ * idempotent over a settled pair (that is what `dayOverflow`/
+ * `explicitDay` are carried FOR). Receives the group's range errors.
+ */
+@Directive({ selector: 'angular-inline-time[rangeTimes]', providers: [provideLeafState(true)] })
+export class RangeTimes {
+  constructor() {
+    const group = inject(DateTimeRangeGroup);
+    const control = inject(AngularInlineTime);
+
+    group.attachTimes(control, leafHasOwnField());
+    control.touch.subscribe(() => group.touch.emit());
+    control.saved.subscribe((session) => {
+      if (!session.changed) return;
+      if (session.side === 'start') group.startCommitted();
+      else group.endCommitted(session.dayOverflow, session.explicitDay);
     });
   }
 }

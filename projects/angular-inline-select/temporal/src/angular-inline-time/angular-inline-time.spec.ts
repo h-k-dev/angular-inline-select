@@ -78,6 +78,12 @@ describe('time codec', () => {
     expect(formatWallClock('21:05', 'de')).toBe('21:05');
     expect(formatWallClock(null)).toBe('');
   });
+
+  it("an optional :ss tail parses (the 'HH:mm:ss' format round-trip)", () => {
+    expect(parseTimeDraft('21:30:15')).toEqual({ time: '21:30:15', days: 0 });
+    expect(parseTimeDraft('21:30:75')).toBeUndefined(); // bad seconds gate
+    expect(parseTimeDraft('9:30:00 PM', 'en')).toBeUndefined(); // seconds + meridiem stay apart
+  });
 });
 
 // =============================================================================
@@ -752,5 +758,68 @@ describe('AngularInlineTime two-field range', () => {
 
     expect(r.host.value()).toEqual({ start: null });
     expect(r.inputs().length).toBe(2);
+  });
+});
+
+// =============================================================================
+// The seconds format ('HH:mm:ss') — displays, parses and composes seconds
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineTime],
+  template: `<angular-inline-time [(value)]="value" format="HH:mm:ss" locale="en" />`,
+})
+class SecondsHost {
+  value = signal<InlineTimeValue>(composeDbEntry(DAY, '21:30:15'));
+}
+
+describe('AngularInlineTime with the seconds format', () => {
+  function setupSeconds() {
+    const fixture = TestBed.createComponent(SecondsHost);
+    fixture.detectChanges();
+
+    return {
+      fixture,
+      host: fixture.componentInstance,
+      input: () => fixture.nativeElement.querySelector('.inline-time__input') as HTMLInputElement,
+    };
+  }
+
+  it('displays the RAW format string — meridiem-free even under an Intl 12 h locale', () => {
+    const s = setupSeconds();
+    expect(s.input().value).toBe('21:30:15');
+  });
+
+  it('a typed :ss tail commits seconds into the DB entry; plain HH:mm reads back :00', async () => {
+    const s = setupSeconds();
+    const input = s.input();
+    input.focus();
+    s.fixture.detectChanges();
+
+    input.value = '9:05:30';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    s.fixture.detectChanges();
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    );
+    s.fixture.detectChanges();
+
+    expect(s.host.value()).toBe(composeDbEntry(DAY, '09:05:30'));
+    expect(input.value).toBe('09:05:30');
+
+    input.value = '9:30';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    s.fixture.detectChanges();
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    );
+    s.fixture.detectChanges();
+
+    expect(s.host.value()).toBe(composeDbEntry(DAY, '09:30'));
+    expect(input.value).toBe('09:30:00');
+
+    input.blur();
+    await new Promise((resolve) => setTimeout(resolve));
+    s.fixture.detectChanges();
   });
 });

@@ -61,6 +61,7 @@ import {
   localTimeOf,
   parseDbEntryDraft,
   rollDbEntryForward,
+  toDateTime,
   todayIn,
   type DbDateTime,
 } from '../datetime/db-entry';
@@ -186,6 +187,15 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
 
   /** Reference clock — anchors the day of a time typed into an EMPTY field. */
   now = input<() => Date>(() => new Date());
+
+  /**
+   * Wall-clock format: `'HH:mm:ss'` displays, parses and composes SECONDS —
+   * rendered as the RAW format string (24 h, meridiem-free), because the
+   * format's own display must parse back and the codec keeps seconds and
+   * day-periods apart. The default `'HH:mm'` keeps the Intl-localized
+   * display.
+   */
+  format = input<'HH:mm' | 'HH:mm:ss'>('HH:mm');
 
   /** Form Value Contract. */
   errors = input<readonly ValidationError.WithOptionalFieldTree[]>([]);
@@ -362,6 +372,20 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     if (!timeValuesEqual(echoed, this.value())) this.value.set(echoed);
   }
 
+  /**
+   * A side's wall-clock display. The default format is Intl-localized;
+   * `'HH:mm:ss'` renders the RAW format string (meridiem-free — the
+   * format's own display must parse back).
+   */
+  #wallClockOf(instant: DbDateTime | null): string {
+    if (this.format() === 'HH:mm:ss') {
+      const dateTime = toDateTime(instant, this.effectiveZone());
+      return dateTime === null ? '' : dateTime.toFormat(this.format());
+    }
+
+    return formatWallClock(localTimeOf(instant, this.effectiveZone()), this.locale());
+  }
+
   // -- The two sides -----------------------------------------------------------
 
   readonly #startSide = this.#makeSide('start');
@@ -373,9 +397,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
 
   #makeSide(key: SideKey): TimeSide {
     const committed = computed(() => this.internalRange()[key]);
-    const display = computed(() =>
-      formatWallClock(localTimeOf(committed(), this.effectiveZone()), this.locale()),
-    );
+    const display = computed(() => this.#wallClockOf(committed()));
     const core = makeSideCore(key, committed, display);
 
     return {
