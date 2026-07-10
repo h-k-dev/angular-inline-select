@@ -14,6 +14,7 @@ import {
   echoDateShape,
   dateValuesEqual,
   localeDatePlaceholder,
+  type DateSavedDetails,
   type InlineDateValue,
 } from './date-codec';
 import { dayToDbEntry, dayEndToDbEntry, localDayOf } from '../datetime/db-entry';
@@ -22,6 +23,10 @@ import { dayToDbEntry, dayEndToDbEntry, localDayOf } from '../datetime/db-entry'
 // localized calendar days in front. Expectations compose through the same
 // helpers, so specs are TZ-independent.
 const db = dayToDbEntry;
+
+/** The commit payloads' start sides, back as local days (spec convenience). */
+const savedStartDays = (details: DateSavedDetails[]) =>
+  details.map((d) => d.start?.toFormat('yyyy-MM-dd') ?? null);
 const dbEnd = dayEndToDbEntry;
 
 // A fixed "now" so the specs are deterministic: Tuesday, 12 May 2026.
@@ -193,7 +198,7 @@ class DateFormHost {
   field = form(this.model);
   now = () => NOW;
 
-  saved: InlineDateValue[] = [];
+  saved: DateSavedDetails[] = [];
   sessions: InlineDateSaved[] = [];
 }
 
@@ -217,7 +222,7 @@ class DateShapeHost {
   placeholder = signal<string | undefined>(undefined);
   now = () => NOW;
 
-  saved: InlineDateValue[] = [];
+  saved: DateSavedDetails[] = [];
   sessions: InlineDateSaved[] = [];
 }
 
@@ -319,7 +324,7 @@ describe('AngularInlineDate (input rehost)', () => {
 
     press(h, h.start(), 'Enter');
 
-    expect(h.host.saved).toEqual([db('2026-12-24')]);
+    expect(savedStartDays(h.host.saved)).toEqual(['2026-12-24']);
     expect(h.host.sessions).toEqual([{ value: db('2026-12-24'), changed: true }]);
     expect(h.start().value).toBe('Dec 24, 2026');
     expect(h.panel()).toBeNull();
@@ -356,7 +361,7 @@ describe('AngularInlineDate (input rehost)', () => {
     type(h, h.start(), '24.12.2026');
     await blurAway(h);
 
-    expect(h.host.saved).toEqual([db('2026-12-24')]);
+    expect(savedStartDays(h.host.saved)).toEqual(['2026-12-24']);
     expect(h.host.sessions).toEqual([{ value: db('2026-12-24'), changed: true }]);
   });
 
@@ -375,7 +380,7 @@ describe('AngularInlineDate (input rehost)', () => {
     press(h, h.start(), 'Enter');
 
     expect(h.host.field().value()).toBeNull();
-    expect(h.host.saved).toEqual([null]);
+    expect(savedStartDays(h.host.saved)).toEqual([null]);
   });
 
   it('ArrowDown hands focus to the grid; a pick COMMITS; grid Escape hands it back', async () => {
@@ -395,7 +400,7 @@ describe('AngularInlineDate (input rehost)', () => {
     cell.click();
     await settle(h);
 
-    expect(h.host.saved).toEqual([db('2026-05-20')]);
+    expect(savedStartDays(h.host.saved)).toEqual(['2026-05-20']);
     expect(h.start().value).toBe('May 20, 2026');
     expect(h.panel()).toBeNull();
     expect(document.activeElement).toBe(h.start());
@@ -410,7 +415,7 @@ describe('AngularInlineDate (input rehost)', () => {
     (chips[2] as HTMLElement).click(); // tomorrow
     await settle(h);
 
-    expect(h.host.saved).toEqual([db('2026-05-13')]);
+    expect(savedStartDays(h.host.saved)).toEqual(['2026-05-13']);
   });
 });
 

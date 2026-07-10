@@ -23,6 +23,18 @@ export interface IsoDateRange {
  */
 export type InlineDateValue = IsoDate | IsoDateRange | null;
 
+/**
+ * The `savedModelChange` payload — the date MODEL (iusta's house shape,
+ * sides widened to nullable: the change-gated cadence reports EVERY model
+ * change, so half-open and cleared states carry `null` sides). Single mode
+ * always carries `end: null`. The value channel stays plain strings — this
+ * event is the Luxon rendering.
+ */
+export interface DateSavedDetails {
+  start: DateTime | null;
+  end: DateTime | null;
+}
+
 /** The shape a non-null value declares; `null` declares nothing (shape-ambiguous). */
 export type DateValueShape = 'single' | 'start-only' | 'range';
 

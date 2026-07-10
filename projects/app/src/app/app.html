@@ -3,7 +3,7 @@
     class="app-title"
     [isSingleLine]="true"
     [value]="title()"
-    (savedModelChange)="title.set($event)"
+    (savedModelChange)="title.set($event.value)"
     placeholder="Untitled"
     [normalizeValue]="true"
   />

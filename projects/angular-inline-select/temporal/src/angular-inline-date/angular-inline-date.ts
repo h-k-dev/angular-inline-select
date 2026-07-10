@@ -47,13 +47,14 @@ import {
   dateValuesEqual,
   localeDatePlaceholder,
   type DateCommand,
+  type DateSavedDetails,
   type IsoDate,
   type InlineDateValue,
   type DateValueShape,
   type InternalDateRange,
 } from './date-codec';
 import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
-import { dayToDbEntry, dayEndToDbEntry, localDayOf } from '../datetime/db-entry';
+import { dayToDbEntry, dayEndToDbEntry, localDayOf, toDateTime } from '../datetime/db-entry';
 import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
 import {
   makeSideSessionChrome,
@@ -286,10 +287,19 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   /** Form Value Contract: touch — emitted whenever a session settles. */
   touch = output<void>();
 
-  /** Hard commit event: fires once per changed settlement, in the bound shape. */
-  savedModelChange = output<InlineDateValue>();
+  /**
+   * THE consumer commit event — the family DNA: fires once per changed
+   * settlement (accept-timed, change-gated) with the date MODEL as Luxon
+   * details (`DateSavedDetails`; single mode always carries `end: null`).
+   * App code binds this; the raw bound value still flows through `value`.
+   */
+  savedModelChange = output<DateSavedDetails>();
 
-  /** Emitted exactly once per settled session (commit, snap-back, Escape, clear). */
+  /**
+   * The MACHINERY channel: exactly one emission per settled session (commit,
+   * snap-back, Escape, clear — changed or not). Range groups and hosting
+   * adapters bind this; app consumers should bind `savedModelChange`.
+   */
   saved = output<InlineDateSaved>();
 
   /** Whether an edit session is open (= focus is within). Two-way bindable. */
@@ -651,8 +661,21 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     this.touch.emit();
 
     const value = this.value();
-    if (changed) this.savedModelChange.emit(value);
+    if (changed) this.#emitSavedModel();
     this.saved.emit({ value, changed });
+  }
+
+  /**
+   * The commit payload — the date MODEL as Luxon days (iusta's house
+   * derivation; local midnights). Single mode always carries `end: null`;
+   * the start-only shape reports its single-day range `[start, start]`.
+   */
+  #emitSavedModel() {
+    const { start, end } = this.internalRange();
+    this.savedModelChange.emit({
+      start: toDateTime(start),
+      end: this.twoFields() ? toDateTime(end) : null,
+    });
   }
 
   // -- Keyboard -------------------------------------------------------------------
@@ -756,7 +779,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const changed = !dateValuesEqual(value, before);
     this.#selfTouched.set(true);
     this.touch.emit();
-    if (changed) this.savedModelChange.emit(value);
+    if (changed) this.#emitSavedModel();
     this.saved.emit({ value, changed });
   }
 
@@ -873,7 +896,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
     const value = this.value();
     const changed = !dateValuesEqual(value, before);
-    if (changed) this.savedModelChange.emit(value);
+    if (changed) this.#emitSavedModel();
     this.saved.emit({ value, changed });
   }
 

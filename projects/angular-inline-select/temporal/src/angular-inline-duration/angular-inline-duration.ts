@@ -30,7 +30,13 @@ import {
   BubbleMenu,
   EditableClearButton,
 } from 'angular-inline-select';
-import { parseDuration, formatDuration, type DurationFormat } from './duration-codec';
+import {
+  parseDuration,
+  formatDuration,
+  timeDetailsFromSeconds,
+  type DurationFormat,
+  type DurationSavedDetails,
+} from './duration-codec';
 import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
@@ -145,10 +151,20 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   /** Form Value Contract: touch — emitted whenever a session settles. */
   touch = output<void>();
 
-  /** Hard commit event: fires once per changed settlement — seconds or `null`. */
-  savedModelChange = output<number | null>();
+  /**
+   * THE consumer commit event — the family DNA: fires once per changed
+   * settlement (accept-timed, change-gated) with the duration MODEL as a
+   * details object (`DurationSavedDetails` — consumers read `.duration`;
+   * empty/cleared reports zero, iusta's house law). The raw seconds still
+   * flow through `value`.
+   */
+  savedModelChange = output<DurationSavedDetails>();
 
-  /** Emitted exactly once per settled session (commit, snap-back, Escape, clear). */
+  /**
+   * The MACHINERY channel: exactly one emission per settled session (commit,
+   * snap-back, Escape, clear — changed or not). Range groups and hosting
+   * adapters bind this; app consumers should bind `savedModelChange`.
+   */
   saved = output<InlineDurationSaved>();
 
   /** Whether an edit session is open (= focus is within). Two-way bindable. */
@@ -369,8 +385,14 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
     this.#selfTouched.set(true);
     this.touch.emit();
 
-    if (changed) this.savedModelChange.emit(value);
+    if (changed) this.#emitSavedModel();
     this.saved.emit({ value, changed });
+  }
+
+  /** The commit payload — total seconds + clock decomposition (empty IS zero). */
+  #emitSavedModel() {
+    const seconds = this.value() ?? 0;
+    this.savedModelChange.emit({ ...timeDetailsFromSeconds(seconds), duration: seconds });
   }
 
   #announceRevert(value: number | null) {
@@ -446,7 +468,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
 
     this.#selfTouched.set(true);
     this.touch.emit();
-    this.savedModelChange.emit(null);
+    this.#emitSavedModel();
     this.saved.emit({ value: null, changed: true });
   }
 

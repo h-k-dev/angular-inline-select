@@ -33,7 +33,7 @@ class ValueBindingHost {
   touched = signal(false);
   disabled = signal(false);
 
-  saved: string[] = [];
+  saved: { value: string }[] = [];
   revertedDrafts: string[] = [];
   sessions: InlineTextSaved[] = [];
   touchCount = 0;
@@ -273,7 +273,7 @@ describe('AngularInlineText — [(value)] binding', () => {
 
     // Edges trimmed, interior spacing and line breaks preserved
     expect(h.host.value()).toBe('new   value \n here');
-    expect(h.host.saved).toEqual(['new   value \n here']);
+    expect(h.host.saved).toEqual([{ value: 'new   value \n here' }]);
     expect(h.editable().editing()).toBe(false);
   });
 
@@ -362,7 +362,7 @@ describe('AngularInlineText — [(value)] binding', () => {
     h.fixture.detectChanges();
 
     expect(h.host.value()).toBe('');
-    expect(h.host.saved).toEqual(['']);
+    expect(h.host.saved).toEqual([{ value: '' }]);
     expect(h.host.sessions).toEqual([{ value: '', changed: true }]);
     expect(h.host.touchCount).toBe(1);
   });

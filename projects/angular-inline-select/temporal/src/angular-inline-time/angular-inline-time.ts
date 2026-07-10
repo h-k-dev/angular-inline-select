@@ -37,6 +37,7 @@ import {
   timeValuesEqual,
   type InlineTimeValue,
   type TimeDraft,
+  type TimeSavedDetails,
   type TimeValueShape,
   type InternalTimeRange,
 } from './time-codec';
@@ -56,6 +57,7 @@ import {
 import {
   addLocalDays,
   composeDbEntry,
+  diffDbEntrySeconds,
   localDayDiff,
   localDayOf,
   localTimeOf,
@@ -340,10 +342,21 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   /** Form Value Contract: touch — emitted whenever a session settles. */
   touch = output<void>();
 
-  /** Hard commit event: fires once per changed settlement, in the bound shape. */
-  savedModelChange = output<InlineTimeValue>();
+  /**
+   * THE consumer commit event — the family DNA: fires once per changed
+   * settlement (accept-timed, change-gated) with the time MODEL as Luxon
+   * details (`TimeSavedDetails`). App code binds this; the raw bound value
+   * still flows through `value`.
+   */
+  savedModelChange = output<TimeSavedDetails>();
 
-  /** Emitted exactly once per settled session (commit, snap-back, Escape, clear). */
+  /**
+   * The MACHINERY channel: exactly one emission per settled session (commit,
+   * snap-back, Escape, clear — changed or not), carrying the session's
+   * commit intent (`side`, `dayOverflow`, `explicitDay`). Range groups and
+   * hosting adapters bind this; app consumers should bind
+   * `savedModelChange`.
+   */
   saved = output<InlineTimeSaved>();
 
   /** Whether an edit session is open (= focus is within). Two-way bindable. */
@@ -709,8 +722,19 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     this.touch.emit();
 
     const value = this.value();
-    if (changed) this.savedModelChange.emit(value);
+    if (changed) this.#emitSavedModel();
     this.saved.emit({ value, changed, dayOverflow, explicitDay, side: key });
+  }
+
+  /** The commit payload — Luxon instants + the settled duration (iusta's house derivation). */
+  #emitSavedModel() {
+    const { start, end } = this.internalRange();
+    const diff = start !== null && end !== null ? (diffDbEntrySeconds(start, end) ?? 0) : 0;
+    this.savedModelChange.emit({
+      start: toDateTime(start),
+      end: toDateTime(end),
+      duration: Math.max(0, diff),
+    });
   }
 
   // -- Keyboard -----------------------------------------------------------------------
@@ -827,9 +851,14 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     const before = this.value();
     this.#reconcile(key, instant, false);
     if (!timeValuesEqual(this.value(), before)) {
-      const value = this.value();
-      this.savedModelChange.emit(value);
-      this.saved.emit({ value, changed: true, dayOverflow: 0, explicitDay: false, side: key });
+      this.#emitSavedModel();
+      this.saved.emit({
+        value: this.value(),
+        changed: true,
+        dayOverflow: 0,
+        explicitDay: false,
+        side: key,
+      });
     }
   }
 
@@ -877,7 +906,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
 
     const value = this.value();
     const changed = !timeValuesEqual(value, before);
-    if (changed) this.savedModelChange.emit(value);
+    if (changed) this.#emitSavedModel();
     this.saved.emit({ value, changed, dayOverflow: 0, explicitDay: false, side: key });
   }
 

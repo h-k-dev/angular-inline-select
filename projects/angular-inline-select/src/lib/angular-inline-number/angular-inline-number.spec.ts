@@ -29,7 +29,7 @@ import { EditableSuffix } from '../angular-inline-text/editable-affix';
 class NumberValueHost {
   value = signal<number | string | null>(42);
 
-  saved: (number | null)[] = [];
+  saved: { value: number | null }[] = [];
   sessions: InlineNumberSaved[] = [];
   touchCount = 0;
 }
@@ -178,7 +178,7 @@ describe('AngularInlineNumber — [(value)] binding', () => {
     accept(h);
 
     expect(h.host.value()).toBeNull();
-    expect(h.host.saved).toEqual([null]);
+    expect(h.host.saved).toEqual([{ value: null }]);
     expect(h.host.sessions).toEqual([{ value: null, changed: true }]);
   });
 
@@ -187,7 +187,7 @@ describe('AngularInlineNumber — [(value)] binding', () => {
     accept(h);
 
     expect(h.host.value()).toBe(12.5);
-    expect(h.host.saved).toEqual([12.5]);
+    expect(h.host.saved).toEqual([{ value: 12.5 }]);
     // The display shows the canonical formatting, not the raw draft
     expect(h.display().textContent).toBe('12.5');
   });

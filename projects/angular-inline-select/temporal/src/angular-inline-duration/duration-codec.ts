@@ -4,8 +4,43 @@
  * (empty), unparseable → `undefined` (raises the parse gate).
  */
 
+import { Duration } from 'luxon';
+
 /** How colon notation reads and how values render. */
 export type DurationFormat = 'h:mm' | 'h:mm:ss' | 'mm:ss';
+
+/**
+ * The `savedModelChange` payload — the duration MODEL (iusta's house shape):
+ * total seconds plus the clock decomposition, numeric and zero-padded.
+ * Consumers read `.duration`. An empty/cleared field reports zero.
+ */
+export interface DurationSavedDetails {
+  duration: number;
+  hour: number;
+  minute: number;
+  second: number;
+  hourString: string;
+  minuteString: string;
+  secondString: string;
+}
+
+/** The clock decomposition of a second count (iusta's house helper, verbatim). */
+export function timeDetailsFromSeconds(durationInSeconds: number) {
+  const duration = Duration.fromObject({ seconds: durationInSeconds }).shiftTo(
+    'hours',
+    'minutes',
+    'seconds',
+  );
+
+  return {
+    hour: duration.hours,
+    minute: duration.minutes,
+    second: duration.seconds,
+    hourString: duration.hours.toString().padStart(2, '0'),
+    minuteString: duration.minutes.toString().padStart(2, '0'),
+    secondString: duration.seconds.toString().padStart(2, '0'),
+  };
+}
 
 const UNIT_SECONDS: Record<string, number> = {
   h: 3600,

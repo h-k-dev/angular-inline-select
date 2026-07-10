@@ -206,17 +206,19 @@ export class AngularInlineText implements FormValueControl<string> {
   reverted = output<string>();
 
   /**
-   * Hard commit event: fires once per accepted edit session.
-   *
-   * Roadmap Phase 3: superseded by `saved` — kept during the transition.
+   * THE consumer commit event — the family DNA: fires once per changed
+   * settlement (accept-timed, change-gated) with the MODEL. Scalar controls
+   * emit `{ value }` — the uniform object payload every editable's
+   * `savedModelChange` speaks (temporal siblings emit their details models).
    */
-  savedModelChange = output<string>();
+  savedModelChange = output<{ value: string }>();
 
   /**
-   * Emitted exactly once per settled edit session — Save, Discard, and clear
-   * alike. `changed` says whether the settled value differs from the session
-   * baseline, so consumers persist iff `changed`. Emitted after
-   * `savedModelChange`/`reverted`.
+   * The MACHINERY channel: exactly one emission per settled edit session —
+   * Save, Discard, and clear alike, changed or not (`changed` says whether
+   * the settled value differs from the baseline). Wrapping controls and
+   * hosting adapters bind this; app consumers should bind
+   * `savedModelChange`. Emitted after `savedModelChange`/`reverted`.
    */
   saved = output<InlineTextSaved>();
 
@@ -696,7 +698,7 @@ export class AngularInlineText implements FormValueControl<string> {
     // baseline follows on close — `previous` unfreezes with the session.
     this.value.set(value);
 
-    this.savedModelChange.emit(value);
+    this.savedModelChange.emit({ value });
     this.saved.emit({ value, changed: true });
     this.close();
   }
@@ -999,7 +1001,7 @@ export class AngularInlineText implements FormValueControl<string> {
     if (this.editing()) return;
 
     this.value.set('');
-    this.savedModelChange.emit('');
+    this.savedModelChange.emit({ value: '' });
     this.saved.emit({ value: '', changed: true });
 
     this.#selfTouched.set(true);

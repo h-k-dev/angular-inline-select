@@ -3,7 +3,17 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineTime, type InlineTimeSaved } from './angular-inline-time';
-import { parseTime, parseTimeDraft, formatWallClock, type InlineTimeValue } from './time-codec';
+import {
+  parseTime,
+  parseTimeDraft,
+  formatWallClock,
+  type InlineTimeValue,
+  type TimeSavedDetails,
+} from './time-codec';
+
+/** The commit payloads' start instants, back as DB entries (spec convenience). */
+const savedStarts = (details: TimeSavedDetails[]) =>
+  details.map((d) => d.start?.toUTC().toISO() ?? null);
 import {
   composeDbEntry,
   dayToDbEntry,
@@ -201,7 +211,7 @@ class TimeFormHost {
   field = form(this.model);
   native = signal(false);
 
-  saved: InlineTimeValue[] = [];
+  saved: TimeSavedDetails[] = [];
   sessions: InlineTimeSaved[] = [];
 }
 
@@ -271,7 +281,10 @@ describe('AngularInlineTime (input rehost)', () => {
     type(h, '2105');
     press(h, 'Enter');
 
-    expect(h.host.saved).toEqual([at('21:05')]);
+    expect(savedStarts(h.host.saved)).toEqual([at('21:05')]);
+    // Single mode pins the details shape: Luxon start, no end, zero duration.
+    expect(h.host.saved[0].end).toBeNull();
+    expect(h.host.saved[0].duration).toBe(0);
     expect(h.host.sessions).toEqual([
       { value: at('21:05'), changed: true, dayOverflow: 0, explicitDay: false, side: 'start' },
     ]);
@@ -306,7 +319,7 @@ describe('AngularInlineTime (input rehost)', () => {
     type(h, '2105');
     await blurAway(h);
 
-    expect(h.host.saved).toEqual([at('21:05')]);
+    expect(savedStarts(h.host.saved)).toEqual([at('21:05')]);
     expect(h.host.sessions).toEqual([
       { value: at('21:05'), changed: true, dayOverflow: 0, explicitDay: false, side: 'start' },
     ]);
@@ -358,7 +371,7 @@ describe('AngularInlineTime (input rehost)', () => {
     h.fixture.detectChanges();
 
     expect(h.host.model()).toBe(at('14:45'));
-    expect(h.host.saved).toEqual([at('14:45')]);
+    expect(savedStarts(h.host.saved)).toEqual([at('14:45')]);
     expect(h.host.sessions).toEqual([
       { value: at('14:45'), changed: true, dayOverflow: 0, explicitDay: false, side: 'start' },
     ]);
@@ -379,7 +392,7 @@ describe('AngularInlineTime (input rehost)', () => {
     expect(h.host.field().value()).toBe(at('10:15')); // live channel
 
     press(h, 'Enter');
-    expect(h.host.saved).toEqual([at('10:15')]);
+    expect(savedStarts(h.host.saved)).toEqual([at('10:15')]);
   });
 
   it('an overflow draft commits onto the anchor day + n', () => {
@@ -470,7 +483,7 @@ class TimeShapeHost {
   ranged = signal(false);
   native = signal(false);
 
-  saved: InlineTimeValue[] = [];
+  saved: TimeSavedDetails[] = [];
   sessions: InlineTimeSaved[] = [];
 }
 

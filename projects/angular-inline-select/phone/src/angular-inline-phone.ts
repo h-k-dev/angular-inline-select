@@ -197,14 +197,16 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
   touch = output<void>();
 
   /**
-   * Hard commit event: fires once per accepted edit session — always E.164
-   * or `null`, never raw input.
-   *
-   * Roadmap Phase 3: superseded by `saved` — kept during the transition.
+   * THE consumer commit event — fires once per changed settlement with the
+   * MODEL: `{ value }`, always E.164 or `null` inside, never raw input.
    */
-  savedModelChange = output<string | null>();
+  savedModelChange = output<{ value: string | null }>();
 
-  /** Emitted exactly once per settled edit session (Save, Discard, clear). */
+  /**
+   * The MACHINERY channel: exactly one emission per settled edit session
+   * (Save, Discard, clear — changed or not). Adapters/wrappers bind this;
+   * app consumers should bind `savedModelChange`.
+   */
   saved = output<InlinePhoneSaved>();
 
   /** The canonical (E.164) reading of the model. */
@@ -331,7 +333,7 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
 
     if (session.changed) {
       this.value.set(value);
-      this.savedModelChange.emit(value);
+      this.savedModelChange.emit({ value });
     }
 
     this.saved.emit({ value, changed: session.changed });
@@ -501,7 +503,7 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
       const e164 = `+${option.dialCode}${nsn}`;
       if (e164 !== base) {
         this.value.set(e164);
-        this.savedModelChange.emit(e164);
+        this.savedModelChange.emit({ value: e164 });
         this.saved.emit({ value: e164, changed: true });
       }
     } else {

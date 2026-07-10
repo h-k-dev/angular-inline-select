@@ -33,7 +33,7 @@ class PhoneValueHost {
   codec = codec;
   value = signal<string | null>('+491712345678');
 
-  saved: (string | null)[] = [];
+  saved: { value: string | null }[] = [];
   sessions: InlinePhoneSaved[] = [];
   touchCount = 0;
 }
@@ -140,7 +140,7 @@ describe('AngularInlinePhone — [(value)] binding', () => {
     accept(h);
 
     expect(h.host.value()).toBe('+491709876543');
-    expect(h.host.saved).toEqual(['+491709876543']);
+    expect(h.host.saved).toEqual([{ value: '+491709876543' }]);
     expect(h.display().textContent).toBe('+49 170 9876543');
   });
 
@@ -162,7 +162,7 @@ describe('AngularInlinePhone — [(value)] binding', () => {
     accept(h);
 
     expect(h.inner().editing()).toBe(false);
-    expect(h.host.saved).toEqual(['+49017']);
+    expect(h.host.saved).toEqual([{ value: '+49017' }]);
     expect(h.host.sessions).toEqual([{ value: '+49017', changed: true }]);
   });
 
@@ -227,7 +227,7 @@ describe('AngularInlinePhone — [(value)] binding', () => {
 
     // National number kept, calling code swapped, committed immediately
     expect(h.host.value()).toBe('+433049781234');
-    expect(h.host.saved).toEqual(['+433049781234']);
+    expect(h.host.saved).toEqual([{ value: '+433049781234' }]);
     expect(h.host.sessions).toEqual([{ value: '+433049781234', changed: true }]);
   });
 

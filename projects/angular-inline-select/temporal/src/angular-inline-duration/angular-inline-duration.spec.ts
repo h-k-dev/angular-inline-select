@@ -3,7 +3,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineDuration, type InlineDurationSaved } from './angular-inline-duration';
-import { parseDuration, formatDuration, describeDuration } from './duration-codec';
+import {
+  parseDuration,
+  formatDuration,
+  describeDuration,
+  type DurationSavedDetails,
+} from './duration-codec';
 
 // =============================================================================
 // Codec
@@ -63,7 +68,7 @@ class DurationFormHost {
   model = signal<number | null>(5400);
   field = form(this.model);
 
-  saved: (number | null)[] = [];
+  saved: DurationSavedDetails[] = [];
   sessions: InlineDurationSaved[] = [];
 }
 
@@ -130,7 +135,11 @@ describe('AngularInlineDuration (input rehost)', () => {
     type(h, '2h 15m');
     press(h, 'Enter');
 
-    expect(h.host.saved).toEqual([8100]);
+    expect(h.host.saved.map((d) => d.duration)).toEqual([8100]);
+    // The details decomposition rides along (2 h 15 min, zero-padded).
+    expect(h.host.saved[0]).toEqual(
+      expect.objectContaining({ hour: 2, minute: 15, second: 0, hourString: '02' }),
+    );
     expect(h.host.sessions).toEqual([{ value: 8100, changed: true }]);
     expect(h.input().value).toBe('02:15'); // commits round-trip the codec
   });

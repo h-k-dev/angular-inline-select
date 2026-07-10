@@ -119,14 +119,16 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
   touch = output<void>();
 
   /**
-   * Hard commit event: fires once per accepted edit session — always
-   * `number | null`, never a string.
-   *
-   * Roadmap Phase 3: superseded by `saved` — kept during the transition.
+   * THE consumer commit event — fires once per changed settlement with the
+   * MODEL: `{ value }`, always `number | null` inside, never a string.
    */
-  savedModelChange = output<number | null>();
+  savedModelChange = output<{ value: number | null }>();
 
-  /** Emitted exactly once per settled edit session (Save, Discard, clear). */
+  /**
+   * The MACHINERY channel: exactly one emission per settled edit session
+   * (Save, Discard, clear — changed or not). Adapters/wrappers bind this;
+   * app consumers should bind `savedModelChange`.
+   */
   saved = output<InlineNumberSaved>();
 
   /** The numeric reading of the (possibly string-typed) model. */
@@ -192,7 +194,7 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
 
     if (session.changed) {
       this.value.set(value);
-      this.savedModelChange.emit(value);
+      this.savedModelChange.emit({ value });
     }
 
     this.saved.emit({ value, changed: session.changed });

@@ -8,10 +8,24 @@
  * codec's `InlineDateValue` machinery.
  */
 
+import type { DateTime } from 'luxon';
+
 import type { DbDateTime } from '../datetime/db-entry';
 
 /** `'HH:mm'`. */
 export type WallClockTime = string;
+
+/**
+ * The `savedModelChange` payload — the time MODEL (iusta's house shape):
+ * Luxon instants plus the settled duration in seconds. Single mode carries
+ * `end: null, duration: 0`; a cleared side is `null`. The value channel
+ * stays plain DB-entry strings — this event is the Luxon rendering.
+ */
+export interface TimeSavedDetails {
+  start: DateTime | null;
+  end: DateTime | null;
+  duration: number;
+}
 
 /** The object shapes of `InlineTimeValue`: a missing `end` key is a HALF-OPEN range. */
 export interface DbTimeRange {

@@ -533,6 +533,31 @@ back), the default keeps the Intl-localized display; `composeDbEntry`
 already composed seconds. Still open with iusta: the details-payload
 `savedModelChange` convergence question.
 
+**THE savedModelChange STANDARD (user decisions 2026-07-10, sandbox
+reference implementation shipped same day — 210 lib + 2 app specs, both
+builds clean, Luxon still lazy-chunk-only):** `savedModelChange` is the
+consumer DNA — it emits THE MODEL as an OBJECT, accept-timed and
+change-gated, on EVERY changed settlement (the sandbox cadence won:
+half-open range states are real commits; iusta's only-when-complete
+date cadence was a per-control accident, migrated at its next sweep).
+Scalar controls emit `{ value: T }` (text `{value: string}`, number
+`{value: number|null}`, phone `{value: E.164|null}`); temporal controls
+emit the iusta details models VERBATIM — `TimeSavedDetails`
+`{start, end, duration}` and `DateSavedDetails` `{start, end}` (Luxon,
+sides nullable — widened for the cadence), `DurationSavedDetails`
+(`.duration` + clock decomposition, empty IS zero) — types live beside
+their codecs, derived in `#emitSavedModel()` per control. The value
+channel stays plain strings (form-serializable); the event is the Luxon
+rendering. **`saved` is the MACHINERY channel** — one emission per
+settled session, changed or not, carrying commit intent
+(`side`/`dayOverflow`/`explicitDay`); range groups and hosting adapters
+bind it, app consumers bind `savedModelChange`. NEXT (iusta): the
+consumer migration — ~98 scalar sites `$event` → `$event.value`
+(compiler-guided), temporal `#emitLegacyDetails` unmarks into the shared
+implementation, date-v2 adopts the every-changed-settlement cadence
+(manual audit of the few ranged consumers — `updateAttribute(…, any)`
+hides null-hazards from the compiler).
+
 **The temporal program's upstream design record was ROADMAP-DATETIME.md
 (retired — recover via `git show 8063fb6:ROADMAP-DATETIME.md`); the LIVE
 absorption log is iusta's `EDITABLES-ABSORPTION-ROADMAP.md`. That record
