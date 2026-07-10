@@ -120,6 +120,15 @@
 
 .inline-time__sr {
   position: absolute;
+  // Pinned to the containing block's origin ON PURPOSE: an absolutely
+  // positioned box with NO offsets keeps its static (in-flow) position and
+  // contributes scrollable overflow to its CONTAINING BLOCK — which may sit
+  // far up the tree (nothing in a table cell is positioned). Hundreds of
+  // rows of these 1px spans inflated the scroller's scrollHeight by
+  // thousands of px (the flex-table phantom-scroll bug). With offsets the
+  // box adds ZERO overflow; aria-live announcements don't care where it is.
+  top: 0;
+  left: 0;
   width: 1px;
   height: 1px;
   overflow: hidden;

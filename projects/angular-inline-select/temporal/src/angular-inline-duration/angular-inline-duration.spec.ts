@@ -180,3 +180,21 @@ describe('AngularInlineDuration (input rehost)', () => {
     expect(h.host.sessions).toEqual([{ value: null, changed: true }]);
   });
 });
+
+
+// =============================================================================
+// Visually-hidden safety — the phantom-scroll regression guard
+// =============================================================================
+
+describe('the aria-live announcer (visually hidden)', () => {
+  it('is PINNED to its containing block — an offset-less absolute box keeps its static position and inflates a far-away scroller (the flex-table phantom-scroll bug)', () => {
+    const h = setup();
+    const sr = h.fixture.nativeElement.querySelector('.inline-duration__sr') as HTMLElement;
+    expect(sr).not.toBeNull();
+
+    const style = getComputedStyle(sr);
+    expect(style.position).toBe('absolute');
+    expect(style.top).toBe('0px');
+    expect(style.left).toBe('0px');
+  });
+});

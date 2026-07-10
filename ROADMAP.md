@@ -593,6 +593,18 @@ mat-form-field hosting for all three controls (via iusta's
 drag/Ctrl+click gestures and the linked `DateTimeRangeGroup`
 (day/start/end/duration speaking to each other), and datetime+timezones.
 
+### THE PHANTOM-SCROLL TRAP (fixed + guarded 2026-07-10)
+
+A visually-hidden `position: absolute` element with NO offsets keeps its
+STATIC position and contributes scrollable overflow to its CONTAINING
+BLOCK — which can resolve far up the tree (nothing in a table cell is
+positioned). Hundreds of rows of the temporal controls' 1px aria-live
+`__sr` spans inflated a host app's scroller by thousands of px. Every
+visually-hidden absolute box now carries `top: 0; left: 0` (documented in
+each scss rule), and each temporal control's spec GUARDS it via
+`getComputedStyle(sr).top === '0px'` — the guard verifiably fails without
+the fix. Apply the same pin to any future visually-hidden element.
+
 ### Manual QA — Safari / iOS pass
 
 The `plaintext-only` probe falls back to `contenteditable="true"` + manual
