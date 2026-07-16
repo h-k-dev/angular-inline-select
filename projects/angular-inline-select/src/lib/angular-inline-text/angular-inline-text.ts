@@ -512,18 +512,16 @@ export class AngularInlineText implements FormValueControl<string> {
     this.#panelPadding.set(Number.isFinite(px) && px >= 0 ? px : PANEL_PADDING_FALLBACK);
   }
 
-  protected panelOverlayConfig = computed(
-    (): CdkConnectedOverlayConfig => ({
-      origin: this.display(),
-      positions: panelPositions(this.#panelPadding()),
-      hasBackdrop: true,
-      backdropClass: 'editable-scrim',
-      viewportMargin: 16,
-      push: true,
-      disableClose: true, // Escape is handled by the panel (revert semantics)
-      disposeOnNavigation: true,
-    }),
-  );
+  protected panelOverlayConfig = computed((): CdkConnectedOverlayConfig => ({
+    origin: this.display(),
+    positions: panelPositions(this.#panelPadding()),
+    hasBackdrop: true,
+    backdropClass: 'editable-scrim',
+    viewportMargin: 16,
+    push: true,
+    disableClose: true, // Escape is handled by the panel (revert semantics)
+    disposeOnNavigation: true,
+  }));
 
   // ---------------------------------------------------------------------------
   // Elevation: pristine display → floating editor

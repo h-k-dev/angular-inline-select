@@ -1,0 +1,92 @@
+<article class="doc">
+  <header class="doc__header">
+    <h1>{{ docs().title }} · API</h1>
+    <p>Two-way models, inputs, and outputs of every component in this section.</p>
+  </header>
+
+  @for (component of docs().components; track component.name) {
+    <section class="doc__section">
+      <h2 class="doc__selector">
+        <code>{{ component.selector }}</code>
+        <span class="doc__class">{{ component.name }}</span>
+      </h2>
+      <p class="doc__summary">{{ component.summary }}</p>
+
+      @if (component.models.length > 0) {
+        <h3>Models (two-way)</h3>
+        <div class="doc__table-scroll">
+          <table class="doc__table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Default</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (member of component.models; track member.name) {
+                <tr>
+                  <td><code>{{ member.name }}</code></td>
+                  <td><code>{{ member.type }}</code></td>
+                  <td><code>{{ member.default }}</code></td>
+                  <td>{{ member.description }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (component.inputs.length > 0) {
+        <h3>Inputs</h3>
+        <div class="doc__table-scroll">
+          <table class="doc__table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Default</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (member of component.inputs; track member.name) {
+                <tr>
+                  <td><code>{{ member.name }}</code></td>
+                  <td><code>{{ member.type }}</code></td>
+                  <td><code>{{ member.default }}</code></td>
+                  <td>{{ member.description }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (component.outputs.length > 0) {
+        <h3>Outputs (events)</h3>
+        <div class="doc__table-scroll">
+          <table class="doc__table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Payload</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (member of component.outputs; track member.name) {
+                <tr>
+                  <td><code>{{ member.name }}</code></td>
+                  <td><code>{{ member.type }}</code></td>
+                  <td>{{ member.description }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+</article>

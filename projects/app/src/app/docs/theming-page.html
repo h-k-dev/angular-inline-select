@@ -1,0 +1,41 @@
+<article class="doc">
+  <header class="doc__header">
+    <h1>{{ docs().title }} · Theming</h1>
+    <p>
+      Every visual property resolves through the token chain
+      <code>var(--editable-&lt;token&gt;, var(--mat-sys-&lt;token&gt;, &lt;fallback&gt;))</code> — set the
+      <code>--editable-*</code> custom property on any ancestor to override; leave it unset and the
+      Material system token (or its hardcoded fallback) applies.
+    </p>
+  </header>
+
+  @for (group of docs().tokenGroups; track group.title) {
+    <section class="doc__section">
+      <h2>{{ group.title }}</h2>
+      @if (group.description) {
+        <p class="doc__summary">{{ group.description }}</p>
+      }
+
+      <div class="doc__table-scroll">
+        <table class="doc__table">
+          <thead>
+            <tr>
+              <th>Token</th>
+              <th>Fallback</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (token of group.tokens; track token.token) {
+              <tr>
+                <td><code>{{ token.token }}</code></td>
+                <td><code>{{ token.fallback }}</code></td>
+                <td>{{ token.description }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</article>

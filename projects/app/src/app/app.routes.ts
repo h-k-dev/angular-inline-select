@@ -1,25 +1,69 @@
 import { Routes } from '@angular/router';
 
+/**
+ * Every section carries the same documentation children: the playground at
+ * the root, plus the registry-driven API and Theming pages. The generic doc
+ * pages read `data.section` to pick their content from the DOCS registry.
+ */
+const docChildren = (section: string): Routes => [
+  {
+    path: 'api',
+    loadComponent: () => import('./docs/api-page').then((m) => m.ApiPage),
+    data: { section },
+  },
+  {
+    path: 'theming',
+    loadComponent: () => import('./docs/theming-page').then((m) => m.ThemingPage),
+    data: { section },
+  },
+];
+
 export const routes: Routes = [
   {
     path: 'text',
-    loadComponent: () =>
-      import('./pages/text-playground/text-playground').then((m) => m.TextPlayground),
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./pages/text-playground/text-playground').then((m) => m.TextPlayground),
+      },
+      ...docChildren('text'),
+    ],
   },
   {
     path: 'number',
-    loadComponent: () =>
-      import('./pages/number-playground/number-playground').then((m) => m.NumberPlayground),
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./pages/number-playground/number-playground').then((m) => m.NumberPlayground),
+      },
+      ...docChildren('number'),
+    ],
   },
   {
     path: 'phone',
-    loadComponent: () =>
-      import('./pages/phone-playground/phone-playground').then((m) => m.PhonePlayground),
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./pages/phone-playground/phone-playground').then((m) => m.PhonePlayground),
+      },
+      ...docChildren('phone'),
+    ],
   },
   {
     path: 'temporal',
-    loadComponent: () =>
-      import('./pages/temporal-playground/temporal-playground').then((m) => m.TemporalPlayground),
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./pages/temporal-playground/temporal-playground').then(
+            (m) => m.TemporalPlayground,
+          ),
+      },
+      ...docChildren('temporal'),
+    ],
   },
   { path: '', pathMatch: 'full', redirectTo: 'text' },
 ];

@@ -1,4 +1,8 @@
 <mat-toolbar class="toolbar">
+  <button mat-icon-button (click)="toggleSidenav()" aria-label="Toggle page navigation">
+    <mat-icon>menu</mat-icon>
+  </button>
+
   <angular-inline-text
     class="app-title"
     [isSingleLine]="true"
@@ -7,15 +11,6 @@
     placeholder="Untitled"
     [normalizeValue]="true"
   />
-
-  <nav class="toolbar-nav" aria-label="Pages">
-    <a mat-button routerLink="/text" routerLinkActive="toolbar-nav__active" ariaCurrentWhenActive="page">Text</a>
-    <a mat-button routerLink="/number" routerLinkActive="toolbar-nav__active" ariaCurrentWhenActive="page">Number</a>
-    <a mat-button routerLink="/phone" routerLinkActive="toolbar-nav__active" ariaCurrentWhenActive="page">Phone</a>
-    <a mat-button routerLink="/temporal" routerLinkActive="toolbar-nav__active" ariaCurrentWhenActive="page"
-      >Temporal</a
-    >
-  </nav>
 
   <div class="spacer"></div>
 
@@ -31,4 +26,74 @@
   </div>
 </mat-toolbar>
 
-<router-outlet />
+<mat-sidenav-container class="shell">
+  <mat-sidenav
+    class="shell__nav"
+    [mode]="sidenavMode()"
+    [opened]="sidenavOpened()"
+    (openedChange)="sidenavOpened.set($event)"
+  >
+    <mat-nav-list aria-label="Playground pages">
+      @for (page of pages; track page.path) {
+        <a
+          mat-list-item
+          [routerLink]="['/', page.path]"
+          routerLinkActive
+          #rla="routerLinkActive"
+          [activated]="rla.isActive"
+          ariaCurrentWhenActive="page"
+          (click)="handleSidenavNavigation()"
+          >{{ page.label }}</a
+        >
+      }
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="shell__content">
+    <!--
+      The section's views (Playground / API / Theming) as tabbed navigation —
+      its own strip so it never competes with the toolbar for width, and
+      mat-tab-nav-bar paginates instead of bleeding when it overflows.
+    -->
+    <nav
+      mat-tab-nav-bar
+      class="section-tabs"
+      [tabPanel]="tabPanel"
+      [mat-stretch-tabs]="false"
+      aria-label="Section views"
+    >
+      <a
+        mat-tab-link
+        [routerLink]="['/', section()]"
+        routerLinkActive
+        #playgroundLink="routerLinkActive"
+        [routerLinkActiveOptions]="{ exact: true }"
+        [active]="playgroundLink.isActive"
+        ariaCurrentWhenActive="page"
+        >Playground</a
+      >
+      <a
+        mat-tab-link
+        [routerLink]="['/', section(), 'api']"
+        routerLinkActive
+        #apiLink="routerLinkActive"
+        [active]="apiLink.isActive"
+        ariaCurrentWhenActive="page"
+        >API</a
+      >
+      <a
+        mat-tab-link
+        [routerLink]="['/', section(), 'theming']"
+        routerLinkActive
+        #themingLink="routerLinkActive"
+        [active]="themingLink.isActive"
+        ariaCurrentWhenActive="page"
+        >Theming</a
+      >
+    </nav>
+
+    <mat-tab-nav-panel #tabPanel class="section-panel">
+      <router-outlet />
+    </mat-tab-nav-panel>
+  </mat-sidenav-content>
+</mat-sidenav-container>
