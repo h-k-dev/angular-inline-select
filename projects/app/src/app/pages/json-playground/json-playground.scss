@@ -1,1 +1,32 @@
 @use '../demo';
+@use '../temporal-playground/model-table'; // shared plain-table styling (.model-table)
+
+// --- Material table example: fixed columns so editing never reshapes them ---
+.table-scroll {
+  overflow: auto;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 0.75rem;
+  background: var(--mat-sys-surface-bright);
+}
+
+.demo-table {
+  width: 100%;
+
+  // Fixed layout: column widths never re-derive from content, so a JSON
+  // preview growing/shrinking in a cell can't push the columns around.
+  table-layout: fixed;
+
+  .mat-column-position {
+    width: 3rem;
+  }
+
+  .mat-column-name {
+    width: 8rem;
+  }
+
+  // Room for the field's focus ring inside cells
+  td {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+}
