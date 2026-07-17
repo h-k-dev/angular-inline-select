@@ -1,0 +1,55 @@
+<div class="editable-json__session" (keydown.control.enter)="save()">
+  <div class="editable-panel__line">
+    @if (data.prefixTemplate(); as prefix) {
+      <span class="editable-text__affix editable-text__affix--prefix" aria-hidden="true">
+        <ng-container *ngTemplateOutlet="prefix" />
+      </span>
+    }
+    <div #editorContainer class="editable-json__editor"></div>
+    @if (data.suffixTemplate(); as suffix) {
+      <span class="editable-text__affix editable-text__affix--suffix" aria-hidden="true">
+        <ng-container *ngTemplateOutlet="suffix" />
+      </span>
+    }
+  </div>
+
+  <div class="editable-panel__footer">
+    @if (data.errorsVisible()) {
+      @if (data.errorTemplate(); as errorTpl) {
+        <div class="editable-panel__message editable-panel__message--error">
+          <ng-container *ngTemplateOutlet="errorTpl" />
+        </div>
+      } @else {
+        @for (message of data.errorMessages(); track $index) {
+          <div class="editable-panel__message editable-panel__message--error">{{ message }}</div>
+        }
+      }
+    }
+
+    @if (data.isDirty() && !data.errorsVisible()) {
+      <div class="editable-panel__message editable-panel__message--hint">Unsaved changes</div>
+    }
+
+    <div class="editable-panel__actions">
+      <button
+        type="button"
+        class="editable-action editable-action-reset"
+        (mousedown)="$event.preventDefault(); $event.stopPropagation()"
+        (click)="discard()"
+        aria-label="Discard"
+      >
+        Discard
+      </button>
+
+      <button
+        type="button"
+        class="editable-action editable-action-save"
+        (mousedown)="$event.preventDefault(); $event.stopPropagation()"
+        (click)="save()"
+        aria-label="Save"
+      >
+        Save
+      </button>
+    </div>
+  </div>
+</div>

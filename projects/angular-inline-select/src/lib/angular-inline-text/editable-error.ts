@@ -1,4 +1,4 @@
-import { Directive } from '@angular/core';
+import { Directive, TemplateRef, inject } from '@angular/core';
 
 /**
  * Marker for parent-provided error content — the mat-error analogue.
@@ -23,3 +23,22 @@ import { Directive } from '@angular/core';
   selector: '[editable-error]',
 })
 export class EditableError {}
+
+/**
+ * TEMPLATE variant of {@link EditableError} — for controls whose session UI
+ * renders in a PORTALED component (the JSON control's modal dialog) where
+ * `<ng-content>` projection cannot reach. Same ownership split: the consumer
+ * decides what the error says, the control decides when it shows.
+ *
+ * ```html
+ * <angular-inline-json [formField]="form.metadata">
+ *   <ng-template editableError>Metadata is required.</ng-template>
+ * </angular-inline-json>
+ * ```
+ */
+@Directive({
+  selector: 'ng-template[editableError]',
+})
+export class EditableErrorTemplate {
+  readonly templateRef = inject<TemplateRef<unknown>>(TemplateRef);
+}

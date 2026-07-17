@@ -1,0 +1,50 @@
+<!--
+  In-flow field: affixes + the bounded, glance-readable JSON preview. Unlike
+  the plain-text field, the preview is NOT itself editable — it may already be
+  a lossy, truncated summary of a huge value, so there is no caret position to
+  type into. Click, Enter, or Space elevates into the real editor below.
+-->
+<span #fieldArea class="editable-json__field">
+  @if (prefixTpl(); as prefix) {
+    <span class="editable-text__affix editable-text__affix--prefix" aria-hidden="true">
+      <ng-container *ngTemplateOutlet="prefix" />
+    </span>
+  }
+
+  <span
+    #display
+    class="editable-json__display"
+    [tabindex]="disabled() ? -1 : 0"
+    role="button"
+    [attr.aria-label]="ariaLabel() ?? 'Edit JSON'"
+    [attr.aria-disabled]="disabled() || readonly() || null"
+    [attr.aria-expanded]="editing()"
+    (click)="handleActivateClick()"
+    (keydown.enter)="handleActivateKey($event)"
+    (keydown.space)="handleActivateKey($event)"
+  >
+    @if (isEmpty()) {
+      <span class="editable-json__placeholder">{{ placeholder() }}</span>
+    } @else {
+      <span class="editable-json__preview">{{ displayedPreview() }}</span>
+    }
+  </span>
+
+  @if (suffixTpl(); as suffix) {
+    <span class="editable-text__affix editable-text__affix--suffix" aria-hidden="true">
+      <ng-container *ngTemplateOutlet="suffix" />
+    </span>
+  }
+</span>
+
+<!--
+  The editing session (json-session.ts) renders in a modal editable-dialog,
+  opened lazily by the component class — nothing of it lives in this
+  template. Consumer error content arrives through the errorTemplate channel
+  (ng-template[editableError]) since projection cannot reach a portal.
+-->
+
+<!-- Floating clear affordance — anchored to the in-flow field area. -->
+<bubble-menu [origin]="fieldArea" [canShow]="bubbleMenuCanShow()">
+  <button editableClearButton aria-label="Clear value" (clear)="clearValue($event)"></button>
+</bubble-menu>

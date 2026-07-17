@@ -97,6 +97,7 @@
             "include": [
               "**/*.spec.ts",
               "../phone/src/**/*.spec.ts",
+              "../json/src/**/*.spec.ts",
               "../temporal/src/**/*.spec.ts",
               "../temporal-mat/src/**/*.spec.ts"
             ]

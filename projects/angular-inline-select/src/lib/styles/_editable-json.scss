@@ -1,0 +1,214 @@
+// =============================================================================
+// editable-json-* — the inline JSON component: the bounded preview and the
+// elevated CodeMirror editing surface.
+//
+// Design contract — SAME as the text field: at rest the preview looks and
+// flows exactly like the inline-text control (per-line dashed underline,
+// inherited typography, no box) — the value IS a JSON-stringified string, so
+// it presents as text. The visual property block below mirrors
+// _editable-text.scss's `.editable-text__display` on purpose; keep them in
+// sync when the text affordance changes.
+//
+// Shared concerns resolve the SAME --editable-text-*/--editable-panel-*
+// tokens as every other control — one theme customization covers all.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// HOST: <angular-inline-json>
+// -----------------------------------------------------------------------------
+.editable-json {
+  display: inline;
+}
+
+.editable-json__field {
+  display: inline;
+
+  transition: opacity 0.15s var(--editable-ease-standard, cubic-bezier(0.4, 0, 0.2, 1));
+
+  .editable-json--editing & {
+    opacity: var(--editable-text-dim-opacity, 0.35);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// ELEMENT: the bounded preview — visually the inline-text display (mirrors
+// _editable-text.scss). Multi-line pre-wrap text with a per-line dashed
+// underline; activation (click/Enter/Space) elevates instead of typing.
+// -----------------------------------------------------------------------------
+.editable-json__display {
+  display: inline;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+  outline: none;
+
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--editable-text-color, inherit);
+
+  // Per-line dashed underline that stops where the text stops — identical to
+  // the text field, same opt-out token, same focus/error re-assertions.
+  text-decoration-line: var(--editable-text-underline, underline);
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.0625rem;
+  text-underline-offset: 0.4em;
+  text-decoration-color: var(--editable-text-underline-color, var(--mat-sys-primary, #428bca));
+
+  transition: opacity 0.15s var(--editable-ease-standard, cubic-bezier(0.4, 0, 0.2, 1));
+
+  &:focus-visible {
+    text-decoration-line: underline;
+    text-decoration-style: solid;
+    text-decoration-thickness: 0.125rem;
+  }
+
+  &[aria-disabled='true'] {
+    cursor: default;
+  }
+
+  .editable-json--invalid & {
+    text-decoration-line: underline;
+    text-decoration-color: var(--editable-text-error-color, var(--mat-sys-error, #dc3545));
+  }
+
+  // The dashed affordance rests while the elevated editor is open — the
+  // whole field area dims via `.editable-json__field`.
+  .editable-json--editing & {
+    text-decoration-line: none;
+  }
+}
+
+.editable-json__placeholder {
+  font-style: italic;
+  opacity: var(--editable-text-placeholder-opacity, 0.3875);
+}
+
+// -----------------------------------------------------------------------------
+// ELEMENT: editing session content (inside the editable-dialog)
+// -----------------------------------------------------------------------------
+
+// Transparent wrapper (carries the ctrl+enter listener): its children — the
+// editor line and the footer — lay out as direct flex children of the dialog.
+.editable-json__session {
+  display: contents;
+}
+
+// COMPONENT-owned spacing (never the generic dialog's): the action row keeps
+// clear of every edge — the shadcn/MatDialog lesson learned the hard way.
+.editable-json__session .editable-panel__footer {
+  padding: var(--mat-sys-inner-spacing, 16px);
+}
+
+.editable-json__editor {
+  flex: 1 1 auto;
+  min-width: 0;
+
+  // This file already renders unencapsulated (loaded once, globally) so these
+  // target CodeMirror's own classes directly. The scroll recipe is CM6's
+  // documented one: bound the editor's height, let .cm-scroller overflow.
+  // Type story is GitHub's: their monospace stack, 1.5 line height; the
+  // Primer syntax colors live in json-editor.ts (--editable-json-syntax-*).
+  .cm-editor {
+    min-height: 4em;
+    max-height: 60vh;
+    font-family:
+      ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    font-size: 0.875em;
+    line-height: 1.5;
+    color: var(--editable-text-editor-color, var(--mat-sys-on-surface, inherit));
+  }
+
+  .cm-editor.cm-focused {
+    outline: none; // the panel itself is the focus affordance
+  }
+
+  .cm-scroller {
+    overflow: auto;
+    font-family: inherit;
+    line-height: inherit;
+  }
+
+  // The code BODY breathes — especially the top, where CM's default 4px
+  // leaves the first line glued to the edge.
+  .cm-content {
+    padding-block: var(--mat-sys-inner-spacing, 16px);
+    padding-inline: calc(var(--mat-sys-inner-spacing, 16px) * 0.5)
+      var(--mat-sys-inner-spacing, 16px);
+  }
+
+  // GitHub-style gutter: quiet numbers, no chrome of its own. light-dark()
+  // follows the app's color-scheme like the syntax palette does.
+  .cm-gutters {
+    background: transparent;
+    border: none;
+    color: var(--editable-json-gutter-color, light-dark(#8c959f, #6e7681));
+  }
+
+  // Numbers ride the same block padding as the code body they label.
+  .cm-gutter {
+    padding-block: var(--mat-sys-inner-spacing, 16px);
+  }
+
+  .cm-lineNumbers .cm-gutterElement {
+    padding-inline: var(--mat-sys-inner-spacing, 16px) calc(var(--mat-sys-inner-spacing, 16px) * 0.25);
+    min-width: 3ch;
+  }
+
+  // CodeMirror uses the NATIVE caret (no drawSelection extension). The dark
+  // base theme (json-editor.ts passes the scheme at mount) already keeps it
+  // visible; this pins it to the family caret token on top.
+  .cm-editor .cm-scroller .cm-content {
+    caret-color: var(--editable-text-caret-color, var(--mat-sys-primary, #428bca));
+  }
+
+  // Lint/hover tooltips (the inline error message) ride the panel surface
+  // tokens — readable in BOTH schemes instead of CM's light-only defaults.
+  .cm-tooltip {
+    background: var(
+      --editable-panel-background,
+      var(--mat-sys-surface-container, light-dark(#fff, #1c2020))
+    );
+    color: var(--mat-sys-on-surface, light-dark(#1f1f1f, #e3e3e3));
+    border: 1px solid
+      var(
+        --editable-panel-border-color,
+        color-mix(
+          in oklch,
+          var(--mat-sys-on-surface, #000) 20%,
+          var(--mat-sys-surface-container, #fff)
+        )
+      );
+    border-radius: var(--mat-sys-corner-small, 0.4rem);
+  }
+
+  .cm-diagnostic-error {
+    border-inline-start-color: var(--editable-text-error-color, var(--mat-sys-error, #dc3545));
+  }
+}
+
+// Full-screen dialog mode (same query as _editable-dialog.scss): the editor
+// fills the stretched line instead of capping at 60vh — the line's flex
+// height bounds it and .cm-scroller absorbs the overflow, keeping the
+// footer's actions on screen.
+@media (max-width: 599.98px), (pointer: coarse) {
+  .editable-json__editor {
+    display: flex;
+    flex-direction: column;
+
+    .cm-editor {
+      flex: 1 1 auto;
+      max-height: none;
+      min-height: 0;
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Reduced motion
+// -----------------------------------------------------------------------------
+@media (prefers-reduced-motion: reduce) {
+  .editable-json__field,
+  .editable-json__display {
+    transition: none;
+  }
+}

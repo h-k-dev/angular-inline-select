@@ -1,0 +1,118 @@
+// =============================================================================
+// editable-dialog — the reusable modal editing surface (see editable-dialog.ts).
+//
+// All placement lives HERE, not in a position strategy: the pane is a fixed
+// full-viewport flex container that centers the card on pointer-precise
+// viewports and goes FULL-SCREEN on touch/narrow ones. The pane itself is
+// click-transparent (pointer-events: none) so outside clicks land on the
+// CDK backdrop (.editable-scrim) and scrim-click semantics keep working.
+// =============================================================================
+
+// Doubled class beats CDK's own `.cdk-overlay-pane { pointer-events: auto }`.
+.editable-dialog-pane.editable-dialog-pane {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--mat-sys-inner-spacing, 16px);
+
+  pointer-events: none;
+}
+
+.editable-dialog {
+  pointer-events: auto;
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--mat-sys-form-field-gap, calc(var(--mat-sys-spacing, 0.25rem) * 2));
+
+  // Readable measure: 600px whenever the viewport affords it plus the pane's
+  // inline padding, else the full pane width.
+  width: var(--editable-dialog-width, min(632px, 100%));
+
+  // Height may use the WHOLE small viewport (svh, not vh/dvh): 100vh on
+  // mobile extends under the browser chrome and swallows the action row —
+  // the classic MatDialog failure. svh is the height that is ALWAYS visible.
+  max-height: min(calc(100svh - 2 * var(--mat-sys-inner-spacing, 16px)), 100%);
+  overflow: hidden; // content (e.g. an editor) scrolls internally
+
+  background: var(--editable-panel-background, var(--mat-sys-surface-container, #fff));
+  border: 1px solid
+    var(
+      --editable-panel-border-color,
+      color-mix(
+        in oklch,
+        var(--mat-sys-on-surface, #000) 20%,
+        var(--mat-sys-surface-container, #fff)
+      )
+    );
+  border-radius: var(--editable-panel-radius, var(--mat-sys-corner-large, var(--radius, 0.625rem)));
+
+  box-shadow: var(
+    --editable-panel-shadow,
+    0.5px 0.5px 1px hsl(0deg 0% 0% / 0.05),
+    1px 1px 2px hsl(0deg 0% 0% / 0.05),
+    2px 2px 4px hsl(0deg 0% 0% / 0.05),
+    4px 4px 6px hsl(0deg 0% 0% / 0.04)
+  );
+}
+
+// Touch or narrow viewports: the dialog IS the screen — no card chrome.
+// Height is svh + safe-area so the footer's buttons are ALWAYS on screen,
+// above the browser chrome and the home indicator.
+@media (max-width: 599.98px), (pointer: coarse) {
+  .editable-dialog-pane.editable-dialog-pane {
+    padding: 0;
+  }
+
+  .editable-dialog {
+    width: 100%;
+    height: 100svh;
+    max-height: 100svh;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+
+    padding-block-end: calc(
+      var(--mat-sys-inner-spacing, 16px) * 0.75 + env(safe-area-inset-bottom, 0px)
+    );
+  }
+
+  // The content line stretches to fill the screen; its internal scroller
+  // (e.g. CodeMirror) absorbs the overflow, so the footer stays put at the
+  // bottom instead of being pushed off.
+  .editable-dialog .editable-panel__line {
+    flex: 1 1 auto;
+    min-height: 0;
+    align-items: stretch;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// ANIMATION: dialog enter
+// -----------------------------------------------------------------------------
+@keyframes editable-dialog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.editable-dialog-enter {
+  animation: editable-dialog-enter 0.15s var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editable-dialog-enter {
+    animation: none;
+  }
+}

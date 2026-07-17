@@ -65,5 +65,16 @@ export const routes: Routes = [
       ...docChildren('temporal'),
     ],
   },
+  {
+    path: 'json',
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./pages/json-playground/json-playground').then((m) => m.JsonPlayground),
+      },
+      ...docChildren('json'),
+    ],
+  },
   { path: '', pathMatch: 'full', redirectTo: 'text' },
 ];

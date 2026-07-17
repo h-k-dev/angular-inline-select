@@ -6,8 +6,17 @@
 //
 //   @use '<path-to-lib>/src/lib/styles';
 //
-// - editable       → reusable chrome (panel, scrim, bubble), --editable-* tokens
-// - editable-text  → the text component surfaces, --editable-text-* tokens
+// - editable        → reusable chrome (panel, scrim, bubble), --editable-* tokens
+// - editable-text   → the text component surfaces, --editable-text-* tokens
+// - editable-dialog → the reusable modal editing surface (centered card /
+//                      full-screen on touch)
+// - editable-scrollbar → opt-in quiet scrollbar for scroll containers
+//                      (`.editable-scrollbar`), --editable-scrollbar-* tokens
+// - editable-json   → the JSON component surfaces (secondary entry point;
+//                      safe to include even if the app never imports it)
 // =============================================================================
 @use './editable';
 @use './editable-text';
+@use './editable-dialog';
+@use './editable-scrollbar';
+@use './editable-json';

@@ -51,6 +51,7 @@ export const PAGES = [
   { path: 'number', label: 'Number' },
   { path: 'phone', label: 'Phone' },
   { path: 'temporal', label: 'Temporal' },
+  { path: 'json', label: 'JSON' },
 ] as const;
 
 // -----------------------------------------------------------------------------
@@ -303,6 +304,17 @@ const CHROME_TOKENS: TokenGroup = {
       description: 'Easing for panel lift, message and bubble enter animations.',
     },
     {
+      token: '--editable-scrollbar-thumb',
+      fallback: 'var(--mat-sys-outline, #9aa0a6)',
+      description:
+        'Thumb color of the quiet scrollbar (50% translucent at rest, opaque on hover). Applied to the library’s scroll containers (slash-menu, JSON editor) and to any consumer element carrying the `editable-scrollbar` class.',
+    },
+    {
+      token: '--editable-scrollbar-focus',
+      fallback: 'var(--mat-sys-primary, #6750a4)',
+      description: 'Thumb tint while keyboard focus is on — or inside — the scroll container.',
+    },
+    {
       token: '--editable-bubble-pad',
       fallback: 'calc(var(--mat-sys-inner-spacing, 16px) * 0.75)',
       description: 'Transparent pad around the floating bubble — the visual gap and the forgiving hit halo.',
@@ -385,6 +397,90 @@ const TEMPORAL_TOKENS: TokenGroup = {
       token: '--editable-panel-container-color',
       fallback: 'var(--mat-sys-surface-container, #fff)',
       description: 'Background of the temporal picker containers (calendar, time list).',
+    },
+  ],
+};
+
+const JSON_SURFACE_TOKENS: TokenGroup = {
+  title: 'JSON preview + editor surfaces',
+  description:
+    'The idle preview looks and themes EXACTLY like the inline-text display — same per-line dashed underline, same token names, same focus/error re-assertions — so a theme written for the text field carries over unchanged. The elevated CodeMirror editor reuses the editor/caret/panel tokens.',
+  tokens: [
+    {
+      token: '--editable-text-underline',
+      fallback: 'underline',
+      description:
+        'The resting dashed underline’s text-decoration-line. Set to `none` to hide the affordance; keyboard focus and the idle error state re-assert their underlines.',
+    },
+    {
+      token: '--editable-text-underline-color',
+      fallback: 'var(--mat-sys-primary, #428bca)',
+      description: 'Color of the dashed affordance underline (and the solid focus underline).',
+    },
+    {
+      token: '--editable-text-color',
+      fallback: 'inherit',
+      description: 'Text color of a filled (non-empty) preview.',
+    },
+    {
+      token: '--editable-text-error-color',
+      fallback: 'var(--mat-sys-error, #dc3545)',
+      description: 'Underline color while the field is invalid and errors are visible.',
+    },
+    {
+      token: '--editable-text-placeholder-opacity',
+      fallback: '0.3875',
+      description: 'Opacity of the empty-field placeholder.',
+    },
+    {
+      token: '--editable-text-dim-opacity',
+      fallback: '0.35',
+      description: 'Opacity of the in-flow field while its elevated editor is open.',
+    },
+    {
+      token: '--editable-text-editor-color',
+      fallback: 'var(--mat-sys-on-surface, inherit)',
+      description: 'Text color inside the elevated CodeMirror editor.',
+    },
+    {
+      token: '--editable-text-caret-color',
+      fallback: 'var(--mat-sys-primary, #428bca)',
+      description: 'Caret color inside the elevated editor.',
+    },
+    {
+      token: '--editable-dialog-width',
+      fallback: 'min(600px, 100%)',
+      description: 'Width of the editing dialog card (the readable default; full-screen on touch/narrow viewports).',
+    },
+    {
+      token: '--editable-json-syntax-property',
+      fallback: 'light-dark(#0550ae, #79c0ff) — GitHub Primer',
+      description: 'Editor syntax color: object keys. Every syntax fallback follows the app color-scheme via light-dark().',
+    },
+    {
+      token: '--editable-json-syntax-string',
+      fallback: 'light-dark(#0a3069, #a5d6ff) — GitHub Primer',
+      description: 'Editor syntax color: string values.',
+    },
+    {
+      token: '--editable-json-syntax-number',
+      fallback: 'light-dark(#0550ae, #79c0ff) — GitHub Primer',
+      description: 'Editor syntax color: numbers.',
+    },
+    {
+      token: '--editable-json-syntax-keyword',
+      fallback: 'light-dark(#0550ae, #79c0ff) — GitHub Primer',
+      description: 'Editor syntax color: true/false/null (GitHub renders JSON constants in the same accent as keys).',
+    },
+    {
+      token: '--editable-json-syntax-invalid',
+      fallback: 'light-dark(#82071e, #ffa198) — GitHub Primer',
+      description: 'Editor syntax color: invalid tokens.',
+    },
+    {
+      token: '--editable-json-gutter-color',
+      fallback: 'light-dark(#8c959f, #6e7681) — GitHub Primer',
+      description: 'Line-number gutter color.',
     },
   ],
 };
@@ -934,5 +1030,68 @@ export const DOCS: Record<string, SectionDocs> = {
       },
     ],
     tokenGroups: [TEMPORAL_TOKENS, CHROME_TOKENS],
+  },
+
+  json: {
+    title: 'Inline JSON',
+    components: [
+      {
+        name: 'AngularInlineJson',
+        selector: 'angular-inline-json',
+        summary:
+          'The committed JSON flows in the page as ordinary paragraph text (styled identically to the inline-text display), middle-ellipsing at a measured visual-line budget, and elevates into a real CodeMirror editor: syntax highlighting, bracket matching, auto-indent, live lint. In the EDITOR, identifier keys may be typed without quotes (role: not "role":) — the one leniency, cutting the most common hand-typing errors; everything else stays strict (a trailing comma is still an error). Commit canonicalizes to strict, compact, double-quoted JSON.stringify — the MySQL/Postgres-friendly text the model carries, with primitives keeping their real types.',
+        models: [
+          {
+            name: 'value',
+            type: 'string',
+            default: "''",
+            description:
+              'The committed value channel: canonical strict JSON text (compact, double-quoted — JSON.stringify of the parsed draft). Opening a session reformats the editor into the editing form (pretty-printed, bare identifier keys); the semantic dirty check means a reformat alone never counts as a change.',
+          },
+          EDITING_MODEL,
+        ],
+        inputs: [
+          ...FORM_CONTRACT_INPUTS,
+          {
+            name: 'placeholder',
+            type: 'string',
+            default: "'null'",
+            description: 'Placeholder shown while empty.',
+          },
+          ARIA_LABEL_INPUT,
+          {
+            name: 'maxPreviewLines',
+            type: 'number',
+            default: '5',
+            description:
+              'Hard cap on the idle preview’s rendered VISUAL lines. The preview flows inline like paragraph text and, when the compact value would exceed the budget at the current width, middle-ellipses with real head and real tail content — measured against the actual layout (font, container width, mid-paragraph first-line start) via @chenglou/pretext, re-measured on resize. The skipped middle is never materialized, so cost is bounded regardless of value size.',
+          },
+          {
+            name: 'errorTemplate',
+            type: 'TemplateRef<unknown> | undefined',
+            default: 'undefined',
+            description:
+              'Consumer error content (the mat-error analogue) as a TEMPLATE — the session UI renders in a portaled dialog component where element projection cannot reach. Content sugar: `ng-template[editableError]`. Takes over the error slot entirely; without it the control renders message-carrying errors itself.',
+          },
+          ...AFFIX_INPUTS,
+        ],
+        outputs: [
+          {
+            name: 'savedModelChange',
+            type: '{ value: string }',
+            description:
+              'THE consumer commit event: fires once per changed settlement (accept-timed, change-gated) with the raw JSON text model.',
+          },
+          {
+            name: 'saved',
+            type: 'InlineJsonSaved — { value: string; changed: boolean }',
+            description:
+              'The machinery channel: exactly one emission per settled edit session — Save, Discard, and clear alike. For wrapping controls; app consumers bind savedModelChange.',
+          },
+          TOUCH_OUTPUT,
+        ],
+      },
+    ],
+    tokenGroups: [JSON_SURFACE_TOKENS, CHROME_TOKENS],
   },
 };

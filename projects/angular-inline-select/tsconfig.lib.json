@@ -11,6 +11,7 @@
   "include": [
     "src/**/*.ts",
     "phone/src/**/*.ts",
+    "json/src/**/*.ts",
     "temporal/src/**/*.ts",
     "temporal-mat/src/**/*.ts"
   ],

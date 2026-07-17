@@ -11,6 +11,8 @@
     "src/**/*.spec.ts",
     "phone/src/**/*.d.ts",
     "phone/src/**/*.spec.ts",
+    "json/src/**/*.d.ts",
+    "json/src/**/*.spec.ts",
     "temporal/src/**/*.d.ts",
     "temporal/src/**/*.spec.ts",
     "temporal-mat/src/**/*.d.ts",

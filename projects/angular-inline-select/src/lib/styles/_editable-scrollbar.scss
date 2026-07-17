@@ -1,0 +1,98 @@
+// =============================================================================
+// editable-scrollbar — quiet, token-driven scrollbar for scroll containers.
+//
+// Opt-in: put `editable-scrollbar` on any scroll container. The library's own
+// scrollers (slash-menu, the JSON editor's CodeMirror scroller) are included
+// below. Tokens:
+//   --editable-scrollbar-thumb  (default --mat-sys-outline)
+//   --editable-scrollbar-focus  (default --mat-sys-primary)
+//
+// Behavior: translucent pill thumb in an inset gutter; more opaque while the
+// container is hovered, full strength on the thumb itself; tinted while
+// keyboard focus is on (or inside) the container.
+// =============================================================================
+
+@mixin editable-scrollbar {
+  // Resolve the chain ONCE per container; states below read the private var.
+  --_scrollbar-thumb: var(--editable-scrollbar-thumb, var(--mat-sys-outline, #9aa0a6));
+  --_scrollbar-focus: var(--editable-scrollbar-focus, var(--mat-sys-primary, #6750a4));
+
+  &::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Inset gutter without knowing the background: transparent border, paint
+     clipped inside it. States below must override background-COLOR only —
+     the `background` shorthand would reset the clip and fill the border. */
+  &::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--_scrollbar-thumb), transparent 50%);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: 1e3px;
+  }
+
+  @media (hover) {
+    &:hover::-webkit-scrollbar-thumb {
+      background-color: color-mix(in srgb, var(--_scrollbar-thumb), transparent 25%);
+    }
+
+    &::-webkit-scrollbar-thumb:hover,
+    &::-webkit-scrollbar-thumb:active {
+      background-color: var(--_scrollbar-thumb);
+    }
+  }
+
+  /* Keyboard focus on the container or anywhere inside it tints the thumb.
+     Last so it wins the equal-specificity tie against the hover states. */
+  &:is(:focus-visible, :has(:focus-visible))::-webkit-scrollbar-thumb {
+    background-color: var(--_scrollbar-focus);
+  }
+
+  /* Firefox has no scrollbar pseudo-elements — the standard properties carry
+     the same color story (thin; no pill radius, platform limit). Scoped to
+     Firefox because in Chromium any non-auto standard value would switch OFF
+     the richer ::-webkit painting above. */
+  @supports (-moz-appearance: none) {
+    & {
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--_scrollbar-thumb), transparent 50%) transparent;
+      transition: scrollbar-color 0.3s ease;
+    }
+
+    @media (hover) {
+      &:hover {
+        scrollbar-color: var(--_scrollbar-thumb) transparent;
+      }
+    }
+
+    &:is(:focus-visible, :has(:focus-visible)) {
+      scrollbar-color: var(--_scrollbar-focus) transparent;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      & {
+        transition: none;
+      }
+    }
+  }
+}
+
+// The consumer-facing opt-in.
+.editable-scrollbar {
+  @include editable-scrollbar;
+}
+
+// The library's own scroll containers.
+.editable-menu {
+  @include editable-scrollbar;
+}
+
+.editable-json__editor .cm-scroller {
+  @include editable-scrollbar;
+}

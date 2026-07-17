@@ -6,6 +6,7 @@
     "paths": {
       "angular-inline-select": ["./projects/angular-inline-select/src/public-api.ts"],
       "angular-inline-select/phone": ["./projects/angular-inline-select/phone/src/public-api.ts"],
+      "angular-inline-select/json": ["./projects/angular-inline-select/json/src/public-api.ts"],
       "angular-inline-select/temporal": ["./projects/angular-inline-select/temporal/src/public-api.ts"],
       "angular-inline-select/temporal-mat": [
         "./projects/angular-inline-select/temporal-mat/src/public-api.ts"

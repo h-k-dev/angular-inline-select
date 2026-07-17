@@ -1,0 +1,85 @@
+<main>
+  <section class="example" id="json-example">
+    <header class="example__header">
+      <h2>Inline JSON</h2>
+      <p>
+        <code>angular-inline-json</code> elevates a bounded, glance-readable preview — styled exactly like the
+        inline-text control — into a real CodeMirror JSON editor. While editing, keys don't need quotes
+        (<code>role:</code> instead of <code>"role":</code>); everything else stays strict — a trailing comma is
+        rejected exactly as anywhere else. Commit serializes to strict, compact, double-quoted JSON — a plain string,
+        MySQL/Postgres-friendly, with primitives keeping their real types.
+      </p>
+    </header>
+
+    <div class="example__body example-stack">
+      <div class="example-card">
+        <h3 class="example-card__title">Standalone [(value)]</h3>
+        <p class="prose">
+          Click the preview to open the editor:
+          <angular-inline-json [(value)]="profile" ariaLabel="User profile JSON" />
+        </p>
+        <p class="prose">Raw model text: <code>{{ profile() }}</code></p>
+      </div>
+
+      <div class="example-card" id="truncated-example">
+        <h3 class="example-card__title">Flows like text — middle-ellipses at 5 rendered lines</h3>
+        <p class="prose">
+          This value has 5,000 keys, and it runs right here in the paragraph as ordinary text —
+          <angular-inline-json [(value)]="largeConfig" ariaLabel="Large config JSON" />
+          — wrapping at whatever width the container has (resize the window: the cut recomputes against the
+          rendered layout, measured with pretext, not against pre-formatted lines). Real head, real tail, never
+          more than five visual lines, and the middle is never even materialized.
+        </p>
+      </div>
+
+      <div class="example-card" id="json-form-example">
+        <h3 class="example-card__title">Signal form + required validation</h3>
+        <p class="prose">
+          Record metadata:
+          <angular-inline-json
+            #metadata
+            [formField]="metadataForm.metadata"
+            ariaLabel="Record metadata"
+            (savedModelChange)="logEmit('savedModelChange', $event)"
+            (saved)="logEmit('saved', $event)"
+          >
+            <ng-template editableError>
+              @if (metadataMissing()) {
+                Metadata is required.
+              }
+            </ng-template>
+          </angular-inline-json>
+        </p>
+
+        <div class="form-toggles" role="group" aria-label="Field state">
+          <button mat-stroked-button (click)="fieldRequired.update((v) => !v)">
+            Required: {{ fieldRequired() ? 'on' : 'off' }}
+          </button>
+          <button mat-stroked-button (click)="fieldReadonly.update((v) => !v)">
+            Readonly: {{ fieldReadonly() ? 'on' : 'off' }}
+          </button>
+          <button mat-stroked-button (click)="fieldDisabled.update((v) => !v)">
+            Disabled: {{ fieldDisabled() ? 'on' : 'off' }}
+          </button>
+          <button mat-stroked-button (click)="metadataForm().markAsTouched()">Mark touched</button>
+          <button mat-stroked-button (click)="metadataForm.metadata().reset()">Reset field</button>
+        </div>
+
+        <p class="form-toggles__hint">
+          Keys don't need quotes while editing — <code>{{ '{tags: ["a"]}' }}</code> commits as
+          <code>{{ '{"tags":["a"]}' }}</code> (strict, double-quoted, database-friendly). A trailing comma
+          (<code>{{ '{"a":1,}' }}</code>) still blocks Save and the lint gutter flags it live while you type.
+          Clearing while optional and toggling Required back on shows the idle error underline.
+        </p>
+
+        @if (emittedEvents().length > 0) {
+          <div class="event-log" role="log" aria-label="Emitted events">
+            @for (entry of emittedEvents(); track $index) {
+              <code class="event-log__entry">{{ entry }}</code>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+</main>
