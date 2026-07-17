@@ -38,6 +38,25 @@ export interface InlinePreviewGeometry {
 const ORIGIN: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 };
 
 /**
+ * The measuring twin of CSS `line-break: anywhere` on the preview: interleave
+ * ZERO-WIDTH SPACES so every position is a break opportunity (pretext's
+ * segmenter treats ZWSP as `zero-width-break`). ZWSP has no advance width, so
+ * line WIDTHS are exactly the original text's — only the break points
+ * multiply. Without this, pretext breaks at UAX-14 points (after hyphens,
+ * etc.) while the browser fills lines completely, and the cut under-fills
+ * the budget.
+ */
+const ZERO_WIDTH_BREAK = '​';
+
+function makeBreakableEverywhere(text: string): string {
+  return Array.from(text).join(ZERO_WIDTH_BREAK);
+}
+
+function stripBreaks(text: string): string {
+  return text.replaceAll(ZERO_WIDTH_BREAK, '');
+}
+
+/**
  * How many rendered lines `prepared` occupies with a distinct first-line
  * width, stopping early once the count exceeds `limit` (never walks a huge
  * text past the budget).
@@ -85,6 +104,21 @@ export function truncateToVisualLines(
   const options = { whiteSpace: 'pre-wrap' as const, letterSpacing: geometry.letterSpacing };
   const budget = Math.max(maxLines, 2);
 
+  // The preview renders with `line-break: anywhere` — measure the same way
+  // (ZWSP-interleaved copies, see makeBreakableEverywhere). If the SOURCE
+  // already contains ZWSP (it would survive stripBreaks corrupted), measure
+  // it as-is: slightly conservative wrapping, never wrong content.
+  const breakable = !text.includes(ZERO_WIDTH_BREAK);
+  const prepare = (slice: string) =>
+    prepareWithSegments(breakable ? makeBreakableEverywhere(slice) : slice, geometry.font, options);
+  const materialize = (
+    prepared: ReturnType<typeof prepareWithSegments>,
+    range: NonNullable<ReturnType<typeof layoutNextLineRange>>,
+  ) => {
+    const line = materializeLineRange(prepared, range).text;
+    return breakable ? stripBreaks(line) : line;
+  };
+
   // Probe the font: average character width over a JSON-typical sample.
   const probeText = '{"abcdefgh": 12345, "x": true},';
   const probe = prepareWithSegments(probeText, geometry.font, options);
@@ -95,8 +129,7 @@ export function truncateToVisualLines(
   // is ever fully measured.
   const fitBudgetChars = charsPerLine * (budget + 1) * 2;
   if (text.length <= fitBudgetChars) {
-    const whole = prepareWithSegments(text, geometry.font, options);
-    if (countLines(whole, geometry, budget) <= budget) return text;
+    if (countLines(prepare(text), geometry, budget) <= budget) return text;
   }
 
   const headLines = Math.ceil(budget / 2);
@@ -107,7 +140,7 @@ export function truncateToVisualLines(
 
   // HEAD — walk exactly headLines ranges with per-line widths.
   const headSlice = text.slice(0, charsPerLine * (headLines + 1) * 2);
-  const headPrepared = prepareWithSegments(headSlice, geometry.font, options);
+  const headPrepared = prepare(headSlice);
 
   let head = '';
   let cursor = ORIGIN;
@@ -122,13 +155,13 @@ export function truncateToVisualLines(
     const range = layoutNextLineRange(headPrepared, cursor, width);
     if (range === null) break;
 
-    head += materializeLineRange(headPrepared, range).text;
+    head += materialize(headPrepared, range);
     cursor = range.end;
   }
 
   // TAIL — the last tailLines rendered lines of the value at full width.
   const tailSlice = text.slice(-(charsPerLine * (tailLines + 1) * 2));
-  const tailPrepared = prepareWithSegments(tailSlice, geometry.font, options);
+  const tailPrepared = prepare(tailSlice);
 
   const tailLineTexts: string[] = [];
   let tailCursor = ORIGIN;
@@ -136,7 +169,7 @@ export function truncateToVisualLines(
     const range = layoutNextLineRange(tailPrepared, tailCursor, geometry.lineWidth);
     if (range === null) break;
 
-    tailLineTexts.push(materializeLineRange(tailPrepared, range).text);
+    tailLineTexts.push(materialize(tailPrepared, range));
     tailCursor = range.end;
   }
 

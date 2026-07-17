@@ -38,7 +38,14 @@
 .editable-json__display {
   display: inline;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  overflow-wrap: anywhere; // fallback where line-break: anywhere is unsupported
+
+  // Every character is an EQUAL break opportunity, so lines fill the full
+  // width. Without this the browser prefers standard break points (after
+  // hyphens — think UUIDs in values) and leaves ragged right edges. The
+  // pretext measurement mirrors this via ZWSP interleaving (json-preview.ts).
+  line-break: anywhere;
+
   cursor: text;
   outline: none;
 
