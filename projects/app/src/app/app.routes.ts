@@ -76,5 +76,13 @@ export const routes: Routes = [
       ...docChildren('json'),
     ],
   },
+
+  // Benchmark section — not a documented component, so no api/theming children.
+  {
+    path: 'benchmark/guess',
+    loadComponent: () =>
+      import('./pages/guess-the-editable/guess-the-editable').then((m) => m.GuessTheEditable),
+  },
+
   { path: '', pathMatch: 'full', redirectTo: 'text' },
 ];

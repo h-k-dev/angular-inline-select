@@ -33,18 +33,21 @@
     [opened]="sidenavOpened()"
     (openedChange)="sidenavOpened.set($event)"
   >
-    <mat-nav-list aria-label="Playground pages">
-      @for (page of pages; track page.path) {
-        <a
-          mat-list-item
-          [routerLink]="['/', page.path]"
-          routerLinkActive
-          #rla="routerLinkActive"
-          [activated]="rla.isActive"
-          ariaCurrentWhenActive="page"
-          (click)="handleSidenavNavigation()"
-          >{{ page.label }}</a
-        >
+    <mat-nav-list aria-label="Sections">
+      @for (sect of navSections; track sect.heading) {
+        <h3 matSubheader>{{ sect.heading }}</h3>
+        @for (item of sect.items; track item.link) {
+          <a
+            mat-list-item
+            [routerLink]="item.link"
+            routerLinkActive
+            #rla="routerLinkActive"
+            [activated]="rla.isActive"
+            ariaCurrentWhenActive="page"
+            (click)="handleSidenavNavigation()"
+            >{{ item.label }}</a
+          >
+        }
       }
     </mat-nav-list>
   </mat-sidenav>
@@ -53,44 +56,47 @@
     <!--
       The section's views (Playground / API / Theming) as tabbed navigation —
       its own strip so it never competes with the toolbar for width, and
-      mat-tab-nav-bar paginates instead of bleeding when it overflows.
+      mat-tab-nav-bar paginates instead of bleeding when it overflows. Hidden
+      for non-component sections (benchmark) that have no such views.
     -->
-    <nav
-      mat-tab-nav-bar
-      class="section-tabs"
-      [tabPanel]="tabPanel"
-      [mat-stretch-tabs]="false"
-      aria-label="Section views"
-    >
-      <a
-        mat-tab-link
-        [routerLink]="['/', section()]"
-        routerLinkActive
-        #playgroundLink="routerLinkActive"
-        [routerLinkActiveOptions]="{ exact: true }"
-        [active]="playgroundLink.isActive"
-        ariaCurrentWhenActive="page"
-        >Playground</a
+    @if (showSectionTabs()) {
+      <nav
+        mat-tab-nav-bar
+        class="section-tabs"
+        [tabPanel]="tabPanel"
+        [mat-stretch-tabs]="false"
+        aria-label="Section views"
       >
-      <a
-        mat-tab-link
-        [routerLink]="['/', section(), 'api']"
-        routerLinkActive
-        #apiLink="routerLinkActive"
-        [active]="apiLink.isActive"
-        ariaCurrentWhenActive="page"
-        >API</a
-      >
-      <a
-        mat-tab-link
-        [routerLink]="['/', section(), 'theming']"
-        routerLinkActive
-        #themingLink="routerLinkActive"
-        [active]="themingLink.isActive"
-        ariaCurrentWhenActive="page"
-        >Theming</a
-      >
-    </nav>
+        <a
+          mat-tab-link
+          [routerLink]="['/', section()]"
+          routerLinkActive
+          #playgroundLink="routerLinkActive"
+          [routerLinkActiveOptions]="{ exact: true }"
+          [active]="playgroundLink.isActive"
+          ariaCurrentWhenActive="page"
+          >Playground</a
+        >
+        <a
+          mat-tab-link
+          [routerLink]="['/', section(), 'api']"
+          routerLinkActive
+          #apiLink="routerLinkActive"
+          [active]="apiLink.isActive"
+          ariaCurrentWhenActive="page"
+          >API</a
+        >
+        <a
+          mat-tab-link
+          [routerLink]="['/', section(), 'theming']"
+          routerLinkActive
+          #themingLink="routerLinkActive"
+          [active]="themingLink.isActive"
+          ariaCurrentWhenActive="page"
+          >Theming</a
+        >
+      </nav>
+    }
 
     <mat-tab-nav-panel #tabPanel class="section-panel">
       <router-outlet />

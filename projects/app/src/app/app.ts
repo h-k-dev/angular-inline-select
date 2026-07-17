@@ -72,10 +72,22 @@ export class App {
   protected readonly title = signal('Inline Text Playground');
 
   // ---------------------------------------------------------------------------
-  // Sidenav: playground pages
+  // Sidenav: grouped sections
   // ---------------------------------------------------------------------------
-  /** The sidenav items — sourced from the docs registry, one entry per playground. */
+  /** The documented component pages — the source of truth for the contextual tabs. */
   protected readonly pages = PAGES;
+
+  /** Grouped sidenav: the component playgrounds, then the benchmark tools. */
+  protected readonly navSections = [
+    {
+      heading: 'Components',
+      items: PAGES.map((page) => ({ link: `/${page.path}`, label: page.label })),
+    },
+    {
+      heading: 'Benchmark',
+      items: [{ link: '/benchmark/guess', label: 'Guess The Editable' }],
+    },
+  ];
 
   /** Narrow viewport (<1024px): the sidenav overlays instead of pushing. */
   #isNarrow = toSignal(
@@ -115,6 +127,15 @@ export class App {
     const [segment] = this.#url().split(/[?#]/)[0].split('/').filter(Boolean);
     return segment ?? 'text';
   });
+
+  /**
+   * The Playground / API / Theming tabs only apply to a DOCUMENTED component
+   * section — benchmark pages (and any future non-component route) have no
+   * such views, so the strip hides entirely there.
+   */
+  protected showSectionTabs = computed(() =>
+    this.pages.some((page) => page.path === this.section()),
+  );
 
   // ---------------------------------------------------------------------------
   // Login

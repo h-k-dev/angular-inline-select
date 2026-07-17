@@ -1,0 +1,49 @@
+<div class="guess__hint" role="status" aria-live="polite">
+  Every editable below is hiding in the prose. Hold <kbd>Ctrl</kbd>
+  @if (revealed()) {
+    <strong>— revealed.</strong>
+  } @else {
+    to reveal them all.
+  }
+</div>
+
+<article class="post">
+  <h1 class="post__title">
+    <angular-inline-text [(value)]="title" [isSingleLine]="true" ariaLabel="Post title" />
+  </h1>
+
+  <p class="post__byline">
+    By <angular-inline-text [(value)]="author" [isSingleLine]="true" ariaLabel="Author name" />, published
+    <angular-inline-date [(value)]="publishDate" ariaLabel="Publish date" /> at
+    <angular-inline-time [(value)]="publishTime" ariaLabel="Publish time" /> —
+    <angular-inline-number [(value)]="readCount" ariaLabel="Read count" /> reads.
+  </p>
+
+  <p>
+    We started this project with a team of
+    <angular-inline-number [(value)]="teamSize" ariaLabel="Team size" /> people and one stubborn belief: an
+    editable value should look exactly like the text around it until the moment you decide to change it. No boxes,
+    no chrome, no little pencil icons — just words you can rewrite.
+  </p>
+
+  <p>
+    The first prototype shipped that spring and handled plain text, nothing else. Within
+    <angular-inline-duration [(value)]="workDuration" durationFormat="h:mm" ariaLabel="Build time" /> of focused
+    work we had numbers, then dates, then a field you could reach the author at:
+    <angular-inline-phone [(value)]="authorPhone" [codec]="codec" [showFlag]="false" ariaLabel="Author phone" />.
+    Every new type had to pass the same test — drop it into a paragraph and dare a stranger to find it.
+  </p>
+
+  <p>
+    That test is this very page. Scattered through these paragraphs are
+    <angular-inline-number [(value)]="fieldCount" ariaLabel="Editable count" /> live fields of six different kinds;
+    the settings behind the post are stored as
+    <angular-inline-json [(value)]="settings" ariaLabel="Post settings JSON" />. We almost charged
+    €<angular-inline-number [(value)]="price" [format]="priceFormat" ariaLabel="Monthly price" /> a month for the
+    privilege; we never did. Can you tell which words are alive before you press the key?
+  </p>
+
+  <p class="post__note">
+    <angular-inline-text [(value)]="note" ariaLabel="Reader note" />
+  </p>
+</article>

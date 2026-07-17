@@ -1,0 +1,81 @@
+:host {
+  display: block;
+  min-height: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+
+  // THE benchmark premise: every editable hides its resting affordance and
+  // must pass as ordinary prose. Two tokens cover every family — the line
+  // token (text / number / phone / json) and the color token (the temporal
+  // controls' dashed border, which has no line-toggle token of its own).
+  --editable-text-underline: none;
+  --editable-text-underline-color: transparent;
+}
+
+// Ctrl held: flip both tokens back on so every hidden field lights up and
+// you can check your guesses.
+:host(.guess--reveal) {
+  --editable-text-underline: underline;
+  --editable-text-underline-color: var(--mat-sys-primary);
+}
+
+.guess__hint {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+
+  margin: -24px -24px 24px;
+  padding: 12px 24px;
+
+  background: var(--mat-sys-surface-container);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+
+  kbd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85em;
+    padding: 0.1em 0.45em;
+    border-radius: 0.3em;
+    border: 1px solid var(--mat-sys-outline);
+    background: var(--mat-sys-surface-bright);
+    color: var(--mat-sys-on-surface);
+  }
+
+  strong {
+    color: var(--mat-sys-primary);
+  }
+}
+
+.post {
+  max-width: 68ch;
+  margin: 0 auto;
+
+  font: var(--mat-sys-body-large);
+  line-height: 1.7;
+  color: var(--mat-sys-on-surface);
+
+  p {
+    margin: 0 0 1.25em;
+  }
+}
+
+.post__title {
+  font: var(--mat-sys-headline-large);
+  margin: 0 0 0.25em;
+}
+
+.post__byline {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+  margin-bottom: 2em;
+}
+
+// The multi-line reader note reads as a closing line of the post.
+.post__note {
+  margin-top: 2em;
+  padding-top: 1.25em;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  font-style: italic;
+  color: var(--mat-sys-on-surface-variant);
+}
