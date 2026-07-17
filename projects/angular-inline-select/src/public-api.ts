@@ -11,5 +11,6 @@ export * from './lib/bubble-menu/bubble-menu';
 export * from './lib/bubble-menu/editable-clear';
 // Shared utilities — control-agnostic building blocks any control may use.
 export * from './lib/utils/editable-dialog/editable-dialog';
+export * from './lib/utils/middle-ellipsis/middle-ellipsis';
 export * from './lib/angular-inline-text/caret';
 export * from './lib/angular-inline-number/angular-inline-number';
