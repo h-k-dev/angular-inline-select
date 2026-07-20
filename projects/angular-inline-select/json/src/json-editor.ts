@@ -1,5 +1,13 @@
-import { EditorState, type Extension } from '@codemirror/state';
-import { EditorView, keymap, lineNumbers } from '@codemirror/view';
+import { EditorState, RangeSetBuilder, type Extension } from '@codemirror/state';
+import {
+  Decoration,
+  EditorView,
+  ViewPlugin,
+  keymap,
+  lineNumbers,
+  type DecorationSet,
+  type ViewUpdate,
+} from '@codemirror/view';
 import {
   HighlightStyle,
   StreamLanguage,
@@ -121,6 +129,68 @@ const jsonLinter = linter((view) => {
   return [diagnostic];
 });
 
+// -----------------------------------------------------------------------------
+// Indent guides — faint vertical rules under each indentation level, so nesting
+// reads at a glance. Our editing form is space-indented two per level
+// (`printEditableJson`), and the dialect is space-only, so counting leading
+// spaces is exact. Each indented line carries a `--cm-indent-levels` custom
+// property; the CSS (_editable-json.scss) draws that many evenly-spaced rules
+// with a clipped repeating gradient. One decoration object per level is cached.
+// -----------------------------------------------------------------------------
+
+const INDENT_COLUMNS = 2;
+
+const indentGuideDecorations = new Map<number, Decoration>();
+
+function indentGuideDecoration(levels: number): Decoration {
+  let deco = indentGuideDecorations.get(levels);
+  if (deco === undefined) {
+    deco = Decoration.line({
+      attributes: { class: 'cm-indentGuides', style: `--cm-indent-levels:${levels}` },
+    });
+    indentGuideDecorations.set(levels, deco);
+  }
+  return deco;
+}
+
+function buildIndentGuides(view: EditorView): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>();
+
+  for (const { from, to } of view.visibleRanges) {
+    for (let pos = from; pos <= to; ) {
+      const line = view.state.doc.lineAt(pos);
+      const text = line.text;
+
+      let spaces = 0;
+      while (spaces < text.length && text.charCodeAt(spaces) === 32) spaces++;
+
+      const levels = Math.floor(spaces / INDENT_COLUMNS);
+      if (levels > 0) builder.add(line.from, line.from, indentGuideDecoration(levels));
+
+      pos = line.to + 1;
+    }
+  }
+
+  return builder.finish();
+}
+
+const indentGuides = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = buildIndentGuides(view);
+    }
+
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.viewportChanged) {
+        this.decorations = buildIndentGuides(update.view);
+      }
+    }
+  },
+  { decorations: (plugin) => plugin.decorations },
+);
+
 export interface JsonEditorCallbacks {
   onChange: (text: string) => void;
 }
@@ -149,6 +219,7 @@ export function createJsonEditorState(
   const extensions: Extension[] = [
     jsonLanguage,
     lineNumbers(),
+    indentGuides,
     // An (empty) theme whose only job is declaring the scheme — flips every
     // `&dark` rule in CM's base theme.
     EditorView.theme({}, { dark: options.dark ?? false }),

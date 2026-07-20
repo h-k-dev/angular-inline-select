@@ -841,16 +841,6 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     if (target.closest('input, button') === null) event.preventDefault();
   }
 
-  /**
-   * An outside click DISMISSES the panel — and only that. Settling belongs
-   * to the focusout path: when the click also moves focus away, the blur
-   * settle runs anyway; when it does NOT (a hosting container's prevented
-   * chrome click), the session must survive the dismissal.
-   */
-  protected handleOutsideClick() {
-    this.overlayOpen.set(false);
-  }
-
   #inputOf(key: SideKey): HTMLInputElement | undefined {
     return (key === 'start' ? this.startInput() : this.endInput())?.nativeElement;
   }

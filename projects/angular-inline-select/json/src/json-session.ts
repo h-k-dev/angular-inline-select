@@ -88,6 +88,18 @@ export class JsonSession {
 
     this.#view = new EditorView({ state, parent: container });
     this.#view.focus();
+
+    // COLD-OPEN REMEASURE. The editor mounts the very first time inside a
+    // dialog whose layout has not settled yet; CM takes its one line-height
+    // measurement there and lands on a stale default (14px), caching it in the
+    // height map. Every gutter line number is then sized to 14px while the
+    // wrapped lines render at ~18px, so the numbers drift a little lower each
+    // row until "1" sits a full line below the `{` and a phantom last number
+    // hangs past the end. Nothing resizes the scroller afterwards (the dialog
+    // enters via transform, invisible to CM's ResizeObserver), so CM never
+    // re-measures on its own. Force one re-measure now that the row is laid
+    // out — it re-reads the real line height and re-aligns the gutter.
+    this.#view.requestMeasure();
   });
 
   #destroyView = inject(DestroyRef).onDestroy(() => this.#view?.destroy());

@@ -70,7 +70,11 @@
 
     <!-- Range: a bubble per side, each opening OUTWARD (start→left, end→right). -->
     <bubble-menu [origin]="startInput" side="start" [canShow]="clearCanShowStart()">
-      <button editableClearButton aria-label="Clear start date" (clear)="clearBubble('start')"></button>
+      <button
+        editableClearButton
+        aria-label="Clear start date"
+        (clear)="clearBubble('start')"
+      ></button>
     </bubble-menu>
     <bubble-menu [origin]="endInput" side="end" [canShow]="clearCanShowEnd()">
       <button editableClearButton aria-label="Clear end date" (clear)="clearBubble('end')"></button>
@@ -100,7 +104,11 @@
 
 <!-- Single field: one bubble anchored to the whole field, clearing the value. -->
 @if (!twoFields()) {
-  <bubble-menu [origin]="dateField" [side]="effectiveClearBubbleSide()" [canShow]="clearCanShowSingle()">
+  <bubble-menu
+    [origin]="dateField"
+    [side]="effectiveClearBubbleSide()"
+    [canShow]="clearCanShowSingle()"
+  >
     <button editableClearButton aria-label="Clear date" (clear)="clearBubble('start')"></button>
   </bubble-menu>
 }
@@ -115,7 +123,7 @@
   [cdkConnectedOverlayOrigin]="overlayOrigin() ?? origin"
   [cdkConnectedOverlayOpen]="overlayOpen()"
   [cdkConnectedOverlayPositions]="overlayPositions"
-  (overlayOutsideClick)="handleOutsideClick()"
+  (overlayOutsideClick)="this.overlayOpen.set(false)"
 >
   <div
     #panel

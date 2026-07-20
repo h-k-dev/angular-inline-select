@@ -103,7 +103,8 @@
 // COMPONENT-owned spacing (never the generic dialog's): the action row keeps
 // clear of every edge — the shadcn/MatDialog lesson learned the hard way.
 .editable-json__session .editable-panel__footer {
-  padding: var(--mat-sys-inner-spacing, 16px);
+  padding-inline: var(--mat-sys-inner-spacing, 16px);
+  padding-block-end: var(--mat-sys-inner-spacing, 16px);
 }
 
 .editable-json__editor {
@@ -151,14 +152,35 @@
     color: var(--editable-json-gutter-color, light-dark(#8c959f, #6e7681));
   }
 
-  // Numbers ride the same block padding as the code body they label.
-  .cm-gutter {
-    padding-block: var(--mat-sys-inner-spacing, 16px);
+  // NB: the gutter gets NO manual block padding. CM mirrors `.cm-content`'s
+  // top padding onto the first gutter element (a `margin-top`) once it has
+  // measured correctly, so every line number aligns with its line on its own.
+  // Adding padding here double-counts that offset and drops each number a full
+  // line below its code — the very misalignment this used to cause.
+  .cm-lineNumbers .cm-gutterElement {
+    padding-inline: var(--mat-sys-inner-spacing, 16px)
+      calc(var(--mat-sys-inner-spacing, 16px) * 0.25);
+    min-width: 3ch;
   }
 
-  .cm-lineNumbers .cm-gutterElement {
-    padding-inline: var(--mat-sys-inner-spacing, 16px) calc(var(--mat-sys-inner-spacing, 16px) * 0.25);
-    min-width: 3ch;
+  // Indent guides: one faint vertical rule per nesting level, drawn as a
+  // repeating gradient clipped to exactly `--cm-indent-levels` columns (set per
+  // line by the indentGuides plugin). `content-box` origin skips CM's 6px line
+  // padding so the first rule sits under text column 0; `1ch * 2` is one
+  // two-space indent in the monospace font, so every rule lands on an indent
+  // stop. Purely decorative — it rides behind the caret and selection.
+  .cm-line.cm-indentGuides {
+    background-image: repeating-linear-gradient(
+      to right,
+      var(--editable-json-indent-guide, light-dark(#d8dee4, #30363d)) 0,
+      var(--editable-json-indent-guide, light-dark(#d8dee4, #30363d)) 1px,
+      transparent 1px,
+      transparent calc(1ch * 2)
+    );
+    background-origin: content-box;
+    background-repeat: no-repeat;
+    background-position: 0 0;
+    background-size: calc(var(--cm-indent-levels) * 1ch * 2) 100%;
   }
 
   // CodeMirror uses the NATIVE caret (no drawSelection extension). The dark

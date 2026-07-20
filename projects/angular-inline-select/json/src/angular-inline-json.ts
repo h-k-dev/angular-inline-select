@@ -69,12 +69,7 @@ export interface InlineJsonSaved {
  */
 @Component({
   selector: 'angular-inline-json',
-  imports: [
-    NgTemplateOutlet,
-
-    BubbleMenu,
-    EditableClearButton,
-  ],
+  imports: [NgTemplateOutlet, BubbleMenu, EditableClearButton],
   templateUrl: './angular-inline-json.html',
   styleUrl: './angular-inline-json.scss',
   host: {
@@ -481,6 +476,7 @@ export class AngularInlineJson implements FormValueControl<string> {
         ariaLabel: this.ariaLabel() ?? 'Edit JSON',
         data,
       });
+
       this.#dialogRef = ref;
 
       // The settlement safety net: runs exactly once per session for EVERY
