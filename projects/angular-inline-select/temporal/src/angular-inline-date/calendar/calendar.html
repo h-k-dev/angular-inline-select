@@ -2,17 +2,17 @@
   <button
     type="button"
     class="cal__nav"
-    aria-label="Previous month"
+    [attr.aria-label]="intl.prevMonthLabel()"
     (mousedown)="$event.preventDefault()"
     (click)="moveMonths(-1)"
   >
     ‹
   </button>
-  <div class="cal__label" aria-live="polite">{{ monthLabel() }}</div>
+  <div class="cal__label" [id]="labelId" aria-live="polite">{{ monthLabel() }}</div>
   <button
     type="button"
     class="cal__nav"
-    aria-label="Next month"
+    [attr.aria-label]="intl.nextMonthLabel()"
     (mousedown)="$event.preventDefault()"
     (click)="moveMonths(1)"
   >
@@ -24,7 +24,7 @@
   #grid
   class="cal__grid"
   role="grid"
-  [attr.aria-label]="monthLabel()"
+  [attr.aria-labelledby]="labelId"
   (keydown)="handleKeydown($event)"
   (focusin)="gridFocused = true"
   (focusout)="gridFocused = false"
@@ -33,7 +33,9 @@
 >
   <div class="cal__weekdays" role="row">
     @for (name of weekdayNames(); track $index) {
-      <span class="cal__weekday" role="columnheader">{{ name }}</span>
+      <span class="cal__weekday" role="columnheader" [attr.aria-label]="name.long">{{
+        name.narrow
+      }}</span>
     }
   </div>
   @for (week of weeks(); track $index) {

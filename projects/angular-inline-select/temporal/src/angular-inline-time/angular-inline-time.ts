@@ -48,12 +48,12 @@ import {
   makeClearBubbleVisibility,
   makeShapeMemory,
   makeSideCore,
-  sideAriaLabel,
   sideSize,
   wireEditingBridge,
   type SideCore,
   type SideKey,
 } from '../side-session';
+import { TemporalIntl } from '../temporal-intl';
 import {
   addLocalDays,
   composeDbEntry,
@@ -425,6 +425,9 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   protected startDraft = computed(() => this.#startSide.draft());
   protected endDraft = computed(() => this.#endSide.draft());
 
+  /** Localizable chrome strings — here, the side words on a ranged label. */
+  #intl = inject(TemporalIntl);
+
   /** The shared session chrome: focus target, snap-back flash, focus timers. */
   #chrome = makeSideSessionChrome((key) => this.#inputOf(key));
 
@@ -540,7 +543,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   }
 
   protected ariaLabelOf(key: SideKey): string {
-    return sideAriaLabel(this.ariaLabel() ?? 'Time', key, this.twoFields());
+    return this.#intl.fieldLabel(this.ariaLabel() ?? this.#intl.timeLabel(), key, this.twoFields());
   }
 
   protected ariaInvalidOf(key: SideKey): boolean {

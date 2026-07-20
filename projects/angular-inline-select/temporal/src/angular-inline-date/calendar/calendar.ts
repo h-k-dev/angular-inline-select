@@ -19,6 +19,7 @@ import { DateTime } from 'luxon';
 
 import { toIsoDate, formatIsoDate, type IsoDate } from '../date-codec';
 import { todayIn } from '../../datetime/db-entry';
+import { TemporalIntl } from '../../temporal-intl';
 
 interface CalendarDay {
   iso: IsoDate;
@@ -26,6 +27,9 @@ interface CalendarDay {
   outside: boolean;
   today: boolean;
 }
+
+/** Distinct id per instance — the grid's `aria-labelledby` target. */
+let nextCalendarId = 0;
 
 const ISO_DAY = 'yyyy-MM-dd';
 
@@ -82,6 +86,10 @@ function firstDayOfWeek(locale: string | string[] | undefined): number {
 export class Calendar {
   #injector = inject(Injector);
   #document = inject(DOCUMENT);
+  protected intl = inject(TemporalIntl);
+
+  /** The month heading's id — the grid names itself by pointing here. */
+  protected labelId = `temporal-cal-label-${nextCalendarId++}`;
 
   /** The pending day — the field's parsed draft, mirrored per keystroke. */
   activeDay = input<IsoDate | null>(null);
@@ -258,18 +266,27 @@ export class Calendar {
 
   protected weekdayNames = computed(() => {
     const first = firstDayOfWeek(this.locale());
-    const format = (day: number) => {
+    // The visible header is `narrow` ('M') — ambiguous to a screen reader,
+    // and doubly so outside English — so each column header carries the
+    // `long` name as its accessible label. Both come from `Intl`: the
+    // aria upgrade stays at zero bundled translations.
+    const format = (style: 'narrow' | 'long', day: number) => {
       try {
         // 2023-01-01 was a Sunday — a stable anchor for weekday names.
-        return new Intl.DateTimeFormat(this.locale(), { weekday: 'narrow' }).format(
+        return new Intl.DateTimeFormat(this.locale(), { weekday: style }).format(
           new Date(2023, 0, 1 + day),
         );
       } catch {
-        return 'SMTWTFS'[day];
+        return style === 'narrow'
+          ? 'SMTWTFS'[day]
+          : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][day];
       }
     };
 
-    return Array.from({ length: 7 }, (_, index) => format((first + index) % 7));
+    return Array.from({ length: 7 }, (_, index) => {
+      const day = (first + index) % 7;
+      return { narrow: format('narrow', day), long: format('long', day) };
+    });
   });
 
   protected dayAria(iso: IsoDate): string {

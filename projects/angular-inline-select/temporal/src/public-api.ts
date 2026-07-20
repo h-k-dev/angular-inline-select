@@ -8,6 +8,7 @@
 export * from './datetime/db-entry';
 export * from './datetime/zone';
 export * from './leaf-state';
+export * from './temporal-intl';
 export * from './angular-inline-date/angular-inline-date';
 export * from './angular-inline-date/date-codec';
 export * from './angular-inline-date/calendar/calendar';

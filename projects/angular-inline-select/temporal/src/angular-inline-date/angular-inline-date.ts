@@ -61,12 +61,12 @@ import {
   makeClearBubbleVisibility,
   makeShapeMemory,
   makeSideCore,
-  sideAriaLabel,
   sideSize,
   wireEditingBridge,
   type SideCore,
   type SideKey,
 } from '../side-session';
+import { TemporalIntl } from '../temporal-intl';
 import { Calendar } from './calendar/calendar';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
@@ -372,6 +372,9 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   protected startDraft = computed(() => this.#startSide.draft());
   protected endDraft = computed(() => this.#endSide.draft());
 
+  /** The localizable chrome strings (nav/clear/quick-pick labels, revert prose). */
+  protected intl = inject(TemporalIntl);
+
   /** The shared session chrome: focus target, snap-back flash, focus timers. */
   #chrome = makeSideSessionChrome((key) => this.#inputOf(key));
 
@@ -492,7 +495,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   }
 
   protected ariaLabelOf(key: SideKey): string {
-    return sideAriaLabel(this.ariaLabel() ?? 'Date', key, this.twoFields());
+    return this.intl.fieldLabel(this.ariaLabel() ?? this.intl.dateLabel(), key, this.twoFields());
   }
 
   protected ariaInvalidOf(key: SideKey): boolean {

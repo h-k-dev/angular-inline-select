@@ -37,6 +37,7 @@ import {
   type DurationFormat,
   type DurationSavedDetails,
 } from './duration-codec';
+import { TemporalIntl } from '../temporal-intl';
 import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
@@ -251,6 +252,8 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
     { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
   ];
 
+  #intl = inject(TemporalIntl);
+
   protected revertFlash = signal(false);
   protected revertNotice = signal('');
 
@@ -396,8 +399,8 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   }
 
   #announceRevert(value: number | null) {
-    const restored = value === null ? 'empty' : formatDuration(value, this.durationFormat());
-    this.revertNotice.set(`Reverted to ${restored}`);
+    const restored = value === null ? '' : formatDuration(value, this.durationFormat());
+    this.revertNotice.set(this.#intl.revertedLabel(restored));
     this.revertFlash.set(true);
 
     if (this.#flashTimer !== null) clearTimeout(this.#flashTimer);

@@ -12,6 +12,8 @@ import {
   type WritableSignal,
 } from '@angular/core';
 
+import { TemporalIntl } from './temporal-intl';
+
 /**
  * The shared per-side session machinery of the temporal family. The date
  * and time controls are the same creature wearing different codecs: two
@@ -75,11 +77,6 @@ export function makeSideCore<T>(
 /** Content-sized input width, placeholder-floored — no layout shift. */
 export function sideSize(draft: string, placeholder: string): number {
   return Math.max(1, (draft || placeholder).length);
-}
-
-/** Ranged fields suffix the side onto the accessible name. */
-export function sideAriaLabel(base: string, key: SideKey, twoFields: boolean): string {
-  return twoFields ? `${base} ${key}` : base;
 }
 
 /**
@@ -183,6 +180,7 @@ export interface SideSessionChrome {
 export function makeSideSessionChrome(
   inputOf: (key: SideKey) => HTMLInputElement | undefined,
 ): SideSessionChrome {
+  const intl = inject(TemporalIntl);
   const focusTarget = signal<SideKey | null>(null);
   const revertFlash = signal<SideKey | null>(null);
   const revertNotice = signal('');
@@ -216,7 +214,7 @@ export function makeSideSessionChrome(
     },
 
     announceRevert(key, restored) {
-      revertNotice.set(`Reverted to ${restored === '' ? 'empty' : restored}`);
+      revertNotice.set(intl.revertedLabel(restored));
       revertFlash.set(key);
 
       if (flashTimer !== null) clearTimeout(flashTimer);

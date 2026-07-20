@@ -72,12 +72,16 @@
     <bubble-menu [origin]="startInput" side="start" [canShow]="clearCanShowStart()">
       <button
         editableClearButton
-        aria-label="Clear start date"
+        [attr.aria-label]="intl.clearLabel('start')"
         (clear)="clearBubble('start')"
       ></button>
     </bubble-menu>
     <bubble-menu [origin]="endInput" side="end" [canShow]="clearCanShowEnd()">
-      <button editableClearButton aria-label="Clear end date" (clear)="clearBubble('end')"></button>
+      <button
+        editableClearButton
+        [attr.aria-label]="intl.clearLabel('end')"
+        (clear)="clearBubble('end')"
+      ></button>
     </bubble-menu>
   }
 
@@ -89,7 +93,7 @@
     <button
       type="button"
       class="inline-date__trigger"
-      aria-label="Open calendar"
+      [attr.aria-label]="intl.openCalendarLabel()"
       [attr.aria-expanded]="overlayOpen()"
       (mousedown)="$event.preventDefault()"
       (click)="toggleCalendar($event)"
@@ -109,7 +113,11 @@
     [side]="effectiveClearBubbleSide()"
     [canShow]="clearCanShowSingle()"
   >
-    <button editableClearButton aria-label="Clear date" (clear)="clearBubble('start')"></button>
+    <button
+      editableClearButton
+      [attr.aria-label]="intl.clearLabel('single')"
+      (clear)="clearBubble('start')"
+    ></button>
   </bubble-menu>
 }
 
@@ -153,7 +161,7 @@
     }
 
     @if (quickPickList().length > 0) {
-      <div class="inline-date__quick-picks" role="group" aria-label="Quick picks">
+      <div class="inline-date__quick-picks" role="group" [attr.aria-label]="intl.quickPicksLabel()">
         @for (command of quickPickList(); track command.id) {
           <button
             type="button"
