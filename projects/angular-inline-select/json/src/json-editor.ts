@@ -21,6 +21,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { linter, lintGutter, lintKeymap, type Diagnostic } from '@codemirror/lint';
 
 import { parseJsonDraft } from './json-codec';
+import { printEditableJson } from './json-doc';
 
 // -----------------------------------------------------------------------------
 // Tokenizer — hand-rolled for EXACTLY our dialect (strict JSON + bare
@@ -191,6 +192,59 @@ const indentGuides = ViewPlugin.fromClass(
   { decorations: (plugin) => plugin.decorations },
 );
 
+// -----------------------------------------------------------------------------
+// Format — "prettier", but for OUR dialect. Real Prettier would re-quote the
+// bare identifier keys we deliberately allow; instead we round-trip through the
+// same `printEditableJson` that seeds a session (pretty, two-space, bare keys).
+// -----------------------------------------------------------------------------
+
+/**
+ * The formatted (editing-form) rendering of `text` IF it both parses and
+ * differs from it — otherwise `null`. `null` is the "nothing to do" verdict
+ * shared by every caller: an unparseable/empty draft, or one already in pretty
+ * form. Computed once so the reformat and the "can format?" badge never
+ * disagree.
+ */
+function pendingFormat(text: string): string | null {
+  const parsed = parseJsonDraft(text);
+  if (parsed.error !== undefined || parsed.value === undefined) return null;
+
+  const formatted = printEditableJson(parsed.value);
+  return formatted === text ? null : formatted;
+}
+
+/**
+ * Whether a reformat would change anything right now — drives the red-dot badge
+ * on the Format control. False for empty, invalid, and already-pretty drafts,
+ * so the badge means exactly "clicking Format will do something".
+ */
+export function canFormatJson(text: string): boolean {
+  return pendingFormat(text) !== null;
+}
+
+/**
+ * Reflow the whole document into the editing form when it currently parses.
+ * Idempotent — already-pretty text is left untouched, so a no-op never adds a
+ * history entry or jumps the caret; an unparseable (or empty) draft is a no-op
+ * too, the lint diagnostic already explaining why. The caret is clamped to the
+ * reflowed length rather than mapped: a total reformat has no position map.
+ * Returns whether anything changed. Shared by the button, the shortcut, and the
+ * paste handler below.
+ */
+export function formatJsonDoc(view: EditorView): boolean {
+  const text = view.state.doc.toString();
+
+  const formatted = pendingFormat(text);
+  if (formatted === null) return false;
+
+  view.dispatch({
+    changes: { from: 0, to: text.length, insert: formatted },
+    selection: { anchor: Math.min(view.state.selection.main.anchor, formatted.length) },
+    userEvent: 'format',
+  });
+  return true;
+}
+
 export interface JsonEditorCallbacks {
   onChange: (text: string) => void;
 }
@@ -230,7 +284,31 @@ export function createJsonEditorState(
     EditorView.lineWrapping,
     jsonLinter,
     lintGutter(),
-    keymap.of([...defaultKeymap, ...historyKeymap, ...lintKeymap, indentWithTab]),
+    // Format Document — VS Code's shortcut. First in the list so it wins the
+    // chord; always consumes it (never falls through to type an 'F').
+    keymap.of([
+      {
+        key: 'Shift-Alt-f',
+        run: (view) => {
+          formatJsonDoc(view);
+          return true;
+        },
+      },
+      ...defaultKeymap,
+      ...historyKeymap,
+      ...lintKeymap,
+      indentWithTab,
+    ]),
+    // Format-on-paste: let the paste apply, then tidy the whole document if it
+    // now parses (a pasted fragment that doesn't is left as-is). The reformat
+    // runs a microtask later — after CM has committed the paste transaction —
+    // so it operates on the pasted text, not the pre-paste doc.
+    EditorView.domEventHandlers({
+      paste: (_event, view) => {
+        queueMicrotask(() => formatJsonDoc(view));
+        return false;
+      },
+    }),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) callbacks.onChange(update.state.doc.toString());
     }),

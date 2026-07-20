@@ -6,6 +6,7 @@ import {
   TemplateRef,
   afterNextRender,
   inject,
+  signal,
   viewChild,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
@@ -14,7 +15,7 @@ import { EDITABLE_DIALOG_DATA } from 'angular-inline-select';
 
 import { EditorView } from '@codemirror/view';
 
-import { createJsonEditorState } from './json-editor';
+import { canFormatJson, createJsonEditorState, formatJsonDoc } from './json-editor';
 
 /**
  * Everything the session needs, passed through the dialog's `data` channel
@@ -70,6 +71,13 @@ export class JsonSession {
 
   protected editorContainer = viewChild.required<ElementRef<HTMLElement>>('editorContainer');
 
+  /**
+   * Whether a reformat would currently change the draft — drives the red-dot
+   * badge on (and the auto-reveal of) the Format control. Recomputed on every
+   * keystroke; seeded from the initial document below.
+   */
+  protected canFormat = signal(false);
+
   #view: EditorView | null = null;
 
   #mount = afterNextRender(() => {
@@ -82,11 +90,17 @@ export class JsonSession {
 
     const state = createJsonEditorState(
       this.data.seed,
-      { onChange: (text) => this.data.onDraftChange(text) },
+      {
+        onChange: (text) => {
+          this.data.onDraftChange(text);
+          this.canFormat.set(canFormatJson(text));
+        },
+      },
       { dark },
     );
 
     this.#view = new EditorView({ state, parent: container });
+    this.canFormat.set(canFormatJson(this.data.seed));
     this.#view.focus();
 
     // COLD-OPEN REMEASURE. The editor mounts the very first time inside a
@@ -103,6 +117,14 @@ export class JsonSession {
   });
 
   #destroyView = inject(DestroyRef).onDestroy(() => this.#view?.destroy());
+
+  /** Format: pretty-print the draft in place, then keep focus in the editor. */
+  protected format() {
+    const view = this.#view;
+    if (view === null) return;
+    formatJsonDoc(view);
+    view.focus();
+  }
 
   /** Save: hand the CM document (the source of truth) to the owner's accept path. */
   protected save() {

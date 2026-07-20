@@ -5,7 +5,28 @@
         <ng-container *ngTemplateOutlet="prefix" />
       </span>
     }
-    <div #editorContainer class="editable-json__editor"></div>
+    <div
+      class="editable-json__editor-wrap"
+      [class.editable-json__editor-wrap--formattable]="canFormat()"
+    >
+      <div #editorContainer class="editable-json__editor"></div>
+
+      <div class="editable-json__toolbar">
+        <button
+          type="button"
+          class="editable-action editable-json__format"
+          (mousedown)="$event.preventDefault(); $event.stopPropagation()"
+          (click)="format()"
+          [attr.aria-label]="canFormat() ? 'Format JSON (available)' : 'Format JSON'"
+          title="Format (Shift+Alt+F)"
+        >
+          Format
+          @if (canFormat()) {
+            <span class="editable-json__badge" aria-hidden="true"></span>
+          }
+        </button>
+      </div>
+    </div>
     @if (data.suffixTemplate(); as suffix) {
       <span class="editable-text__affix editable-text__affix--suffix" aria-hidden="true">
         <ng-container *ngTemplateOutlet="suffix" />

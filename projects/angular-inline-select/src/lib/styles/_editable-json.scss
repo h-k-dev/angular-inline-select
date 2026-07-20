@@ -107,6 +107,67 @@
   padding-block-end: var(--mat-sys-inner-spacing, 16px);
 }
 
+// The positioning context for the hover toolbar and the flex item in the line
+// (the editor itself just fills it). Column flow so the editor stretches in the
+// full-screen dialog mode below.
+.editable-json__editor-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+// The floating "Format" menu, pinned to the editor's top-right. Hidden until
+// the editor is hovered or holds focus — quiet at rest, discoverable on
+// approach. `pointer-events` gate keeps it from swallowing clicks while faded.
+.editable-json__toolbar {
+  position: absolute;
+  inset-block-start: calc(var(--mat-sys-inner-spacing, 16px) * 0.5);
+  inset-inline-end: calc(var(--mat-sys-inner-spacing, 16px) * 0.5);
+  z-index: 2;
+
+  display: flex;
+  gap: calc(var(--mat-sys-spacing, 0.25rem) * 1.5);
+
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s var(--editable-ease-standard, cubic-bezier(0.4, 0, 0.2, 1));
+
+  // Revealed on approach (hover/focus) OR self-announced: when a reformat would
+  // actually change the draft, the toolbar surfaces itself so the badge below
+  // can do its job — the gacha "there's something here" cue.
+  .editable-json__editor-wrap:hover &,
+  .editable-json__editor-wrap:focus-within &,
+  .editable-json__editor-wrap--formattable & {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+// Compact against the base action; a subtle surface so it reads over code.
+// `relative` anchors the badge to the button's own top-right corner.
+.editable-json__format {
+  position: relative;
+  height: calc(var(--mat-sys-spacing, 0.25rem) * 6);
+  box-shadow: var(--editable-json-toolbar-shadow, 0 1px 2px rgb(0 0 0 / 0.12));
+}
+
+// A small dot tucked INSIDE the button's top-right corner — present only while
+// `canFormat` (the @if in the template), so its mere existence is the signal.
+// Absolutely positioned, so appearing/disappearing never reflows the label
+// (no layout shift).
+.editable-json__badge {
+  position: absolute;
+  inset-block-start: 0.1875rem;
+  inset-inline-end: 0.1875rem;
+
+  inline-size: 0.25rem;
+  block-size: 0.25rem;
+  border-radius: 50%;
+  background: var(--editable-json-badge-color, #e5484d);
+}
+
 .editable-json__editor {
   flex: 1 1 auto;
   min-width: 0;
@@ -237,7 +298,8 @@
 // -----------------------------------------------------------------------------
 @media (prefers-reduced-motion: reduce) {
   .editable-json__field,
-  .editable-json__display {
+  .editable-json__display,
+  .editable-json__toolbar {
     transition: none;
   }
 }
