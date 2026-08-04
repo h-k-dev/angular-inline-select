@@ -2,7 +2,12 @@ import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form, type ValidationError } from '@angular/forms/signals';
 
-import { AngularInlineText, normalizeString, type InlineTextSaved } from './angular-inline-text';
+import {
+  AngularInlineText,
+  normalizeString,
+  type InlineTextSaved,
+  type InlineTextWrapBehavior,
+} from './angular-inline-text';
 import { EditableSuffix } from './editable-affix';
 import { detectSlashToken } from './editable-menu';
 import { replayEdit } from './caret';
@@ -59,6 +64,22 @@ class SignalFormHost {
 class ProjectedErrorHost {
   value = signal('initial');
   errors = signal<readonly ValidationError.WithOptionalFieldTree[]>([]);
+}
+
+@Component({
+  imports: [AngularInlineText],
+  template: `
+    <angular-inline-text
+      [(value)]="value"
+      [isSingleLine]="isSingleLine()"
+      [wrapBehavior]="wrapBehavior()"
+    />
+  `,
+})
+class WrapHost {
+  value = signal('a value long enough to need a decision about wrapping');
+  isSingleLine = signal(false);
+  wrapBehavior = signal<InlineTextWrapBehavior>('noWrap');
 }
 
 @Component({
@@ -530,5 +551,78 @@ describe('AngularInlineText — projected [editable-error]', () => {
       'Custom pattern message',
     );
     expect(document.querySelector('.editable-panel__message--error')).toBeNull();
+  });
+});
+
+// `isSingleLine` owns the VALUE (may a line break exist?), `wrapBehavior` owns
+// the PAINT (what happens at a width constraint) — all four combinations are
+// legal, and neither input may reach into the other's concern.
+describe('AngularInlineText — isSingleLine vs wrapBehavior', () => {
+  let h: Harness<WrapHost>;
+
+  const paintsNoWrap = () => h.display().classList.contains('editable-text__display--no-wrap');
+
+  const set = (isSingleLine: boolean, wrapBehavior: InlineTextWrapBehavior = 'noWrap') => {
+    h.host.isSingleLine.set(isSingleLine);
+    h.host.wrapBehavior.set(wrapBehavior);
+    h.fixture.detectChanges();
+  };
+
+  beforeEach(() => {
+    h = setup(WrapHost);
+  });
+
+  it('single-line: noWrap by default, wrap on request', () => {
+    set(true);
+    expect(paintsNoWrap()).toBe(true);
+
+    // A single-line value wrapped over several visual lines
+    set(true, 'wrap');
+    expect(paintsNoWrap()).toBe(false);
+  });
+
+  it('multi-line always wraps — wrapBehavior is inert outside single-line', () => {
+    set(false, 'noWrap');
+    expect(paintsNoWrap()).toBe(false);
+
+    set(false, 'wrap');
+    expect(paintsNoWrap()).toBe(false);
+  });
+
+  it('single-line still forbids line breaks in the value while wrapping', async () => {
+    set(true, 'wrap');
+
+    await typeText(h, 'first\nsecond');
+    accept(h);
+
+    expect(h.host.value()).toBe('first second');
+  });
+
+  it('multi-line keeps line breaks in the value, whatever wrapBehavior says', async () => {
+    set(false, 'noWrap');
+
+    await typeText(h, 'first\nsecond');
+    accept(h);
+
+    expect(h.host.value()).toBe('first\nsecond');
+  });
+
+  it('single-line still accepts on Enter while wrapping', async () => {
+    set(true, 'wrap');
+
+    await typeText(h, 'typed');
+    h.editor()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    h.fixture.detectChanges();
+
+    expect(h.host.value()).toBe('typed');
+    expect(h.editable().editing()).toBe(false);
+  });
+
+  it('the elevated editor always wraps — it never carries the no-wrap paint', async () => {
+    set(true, 'noWrap');
+
+    await elevate(h);
+
+    expect(h.editor()!.classList.contains('editable-text__display--no-wrap')).toBe(false);
   });
 });

@@ -14,7 +14,7 @@
     #display
     role="textbox"
     class="editable-text__display"
-    [class.editable-text__display--single-line]="isSingleLine()"
+    [class.editable-text__display--no-wrap]="wrapMode() === 'noWrap'"
     [class.editable-text__display--filled]="!isEmpty()"
     [textContent]="displayText()"
     [attr.contenteditable]="editableMode()"

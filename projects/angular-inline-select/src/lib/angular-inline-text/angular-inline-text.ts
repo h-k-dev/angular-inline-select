@@ -38,6 +38,18 @@ interface ValueNormalizationDetails {
   changed: boolean;
 }
 
+/**
+ * How a SINGLE-LINE in-flow display paints text wider than its container.
+ *
+ * - `'noWrap'` (default) — stay on the one line and ellipsize at the
+ *   constraint.
+ * - `'wrap'` — break onto the next line: at whitespace first, inside long words
+ *   when there is no whitespace to break at, hyphenating where the browser can.
+ *
+ * Multi-line fields always wrap and ignore this input entirely.
+ */
+export type InlineTextWrapBehavior = 'wrap' | 'noWrap';
+
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineTextSaved {
   /** The value the session settled on — the committed value or the restored baseline. */
@@ -225,7 +237,31 @@ export class AngularInlineText implements FormValueControl<string> {
   /** Whether the field is elevated (an edit session is open). Two-way bindable. */
   editing = model<boolean>(false);
 
+  /**
+   * Whether the VALUE is a single line: no line break may exist in it. Enter
+   * accepts instead of inserting one, and pasted breaks collapse to spaces.
+   * Says nothing about how the text is PAINTED — a single-line value may still
+   * wrap over several visual lines (`wrapBehavior`).
+   */
   isSingleLine = input<boolean>(false);
+
+  /**
+   * SINGLE-LINE only — how the in-flow display handles a width constraint:
+   * `'noWrap'` (default) keeps the one line and ellipsizes at the constraint;
+   * `'wrap'` paints the one logical line over as many visual lines as the
+   * container needs, breaking at whitespace first, inside long words when
+   * there is none (hyphenated where the browser can). Multi-line fields
+   * ignore it entirely and always wrap. The elevated editor always wraps: a
+   * fixed readable measure is the point of the panel, and text you cannot
+   * see is text you cannot edit.
+   */
+  wrapBehavior = input<InlineTextWrapBehavior>('noWrap');
+
+  /** `wrapBehavior` gated to its scope: multi-line fields always wrap. */
+  protected wrapMode = computed<InlineTextWrapBehavior>(() =>
+    this.isSingleLine() ? this.wrapBehavior() : 'wrap',
+  );
+
   placeholder = input<string>('N/A');
 
   /** Accessible name for the field (contenteditable has no native label association). */
@@ -964,7 +1000,7 @@ export class AngularInlineText implements FormValueControl<string> {
   #measureContentOffsetEffect = afterRenderEffect({
     read: () => {
       this.displayText();
-      this.isSingleLine();
+      this.wrapMode();
       this.#measureTick();
       this.#measureContentOffset();
     },

@@ -10,15 +10,25 @@ import { FormField, form, required, pattern, disabled, readonly } from '@angular
 
 // Material
 import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatTableModule } from '@angular/material/table';
 
 // Components
-import { AngularInlineText } from '../../../../../angular-inline-select/src/lib/angular-inline-text/angular-inline-text';
+import {
+  AngularInlineText,
+  type InlineTextWrapBehavior,
+} from '../../../../../angular-inline-select/src/lib/angular-inline-text/angular-inline-text';
 
 export interface DemoRow {
   position: number;
-  name: string;
-  notes: string;
+  /** One logical line, always far too long for its column. */
+  title: string;
+  /** One logical line whose overflow is a single unbreakable word. */
+  compound: string;
+  /** Several authored lines, each too long for its column. */
+  note: string;
+  /** Several authored lines with an unbreakable word in them. */
+  report: string;
 }
 
 const INITIAL_PROJECT_NAME = 'Aurora';
@@ -27,30 +37,67 @@ const INITIAL_SUMMARY =
   'Save with Ctrl+Enter or the Save button, discard with Escape — ' +
   'the overlay only appears once you actually change something.';
 
-// Mixed lengths on purpose: short names sit naturally, long ones must
-// ellipsize inside the fixed-width name column without pushing it.
-const SAMPLE_NAMES = [
-  'Iris',
-  'Aurora Borealis',
-  'Halo',
-  'Gossamer Drift Relay',
-  'Ember',
-  'Junction Point Observatory of the Western Rim',
-  'Cascade',
-  'Flux Capacitor Calibration and Maintenance Facility Northwest',
-  'Drift',
+// Every cell below is deliberately too long for its column: what these tables
+// demonstrate is what happens AT the width constraint, so nothing may fit.
+
+/** One logical line — no line break anywhere, plenty of whitespace to break at. */
+const SAMPLE_TITLES = [
+  'Junction Point Observatory of the Western Rim, survey sector nine',
+  'Flux Capacitor Calibration and Maintenance Facility, Northwest Approach',
   'The Extraordinarily Long Research Vessel Designation That Never Fits Anywhere',
+  'Gossamer Drift Relay, secondary handshake array and telemetry mast',
+  'Aurora Borealis Deep Field Observation Platform, upper orbital ring',
 ];
 
-// Mixed lengths on purpose: empty shows the placeholder, short ones stay on
-// one line, long ones must wrap to several lines inside the notes column.
-const SAMPLE_NOTES = [
-  '',
-  'Stable.',
-  'Needs a follow-up during the next maintenance window.',
-  'Recalibrated twice this cycle. The drift is within tolerance, but keep an eye on the secondary readings until the next full diagnostic.',
-  'Long-form note to exercise wrapping: the array was realigned after the last storm season, power draw is nominal, and the relay handshake completes in under forty milliseconds. Crew rotation is scheduled for the third week, pending transport availability and weather on the pass.',
+/** One logical line whose overflow is a single word — nowhere to break politely. */
+const SAMPLE_COMPOUNDS = [
+  'Rekalibrierungsmaßnahmenverordnung filed against the starboard array',
+  'Pending: interplanetaryhyperspectralimagingandtelemetrysubsystemoverhaul',
+  'Betriebssicherheitsüberprüfungsbescheinigung issued for the whole ring',
+  'Escalated as antidisestablishmentarianism_of_the_docking_clamp_committee',
+  'Filed under Höchstgeschwindigkeitsbegrenzungsüberschreitung, third cycle',
 ];
+
+/**
+ * Several authored lines — the line breaks are user content and must survive.
+ * Some samples include a BLANK line (paragraph break): an empty line is user
+ * content too, and both paints must keep it.
+ */
+const SAMPLE_NOTES = [
+  'Recalibrated twice this cycle and the drift is still within tolerance.\n' +
+    'Keep an eye on the secondary readings until the next full diagnostic.',
+  'The array was realigned after the last storm season and power draw is nominal.\n' +
+    'Relay handshake completes in under forty milliseconds, every attempt.\n' +
+    '\n' +
+    'Crew rotation is scheduled for the third week, pending transport.',
+  'Follow-up needed during the next maintenance window, whenever that lands.\n' +
+    '\n' +
+    'Nothing here is urgent, but none of it should be forgotten either.',
+];
+
+/** Several authored lines, at least one of which is an unbreakable word. */
+const SAMPLE_REPORTS = [
+  'Status: Verkehrsinfrastrukturfinanzierungsgesellschaft review outstanding.\n' +
+    'Everything else on the checklist came back clean on the first pass.',
+  'Flagged: supercalifragilisticexpialidocious_diagnostic_output_channel_seven\n' +
+    'Downgraded to advisory after the second read, no action required today.\n' +
+    '\n' +
+    'Next audit lands with the quarterly rotation.',
+  'Awaiting Grundstücksverkehrsgenehmigungszuständigkeitsübertragungsverordnung.\n' +
+    'The paperwork trails the work by about a week, as it always does.',
+];
+
+// Striding across pools of different sizes so the four columns of a row never
+// line up into the same combination twice down the table.
+function makeDemoRows(count: number): DemoRow[] {
+  return Array.from({ length: count }, (_, i) => ({
+    position: i + 1,
+    title: SAMPLE_TITLES[i % SAMPLE_TITLES.length],
+    compound: SAMPLE_COMPOUNDS[(i + 2) % SAMPLE_COMPOUNDS.length],
+    note: SAMPLE_NOTES[i % SAMPLE_NOTES.length],
+    report: SAMPLE_REPORTS[(i + 1) % SAMPLE_REPORTS.length],
+  }));
+}
 
 @Component({
   selector: 'app-text-playground',
@@ -60,6 +107,7 @@ const SAMPLE_NOTES = [
   imports: [
     // Material
     MatButtonModule,
+    MatButtonToggleModule,
     MatTableModule,
 
     // Forms
@@ -128,24 +176,36 @@ export class TextPlayground {
   }
 
   // ---------------------------------------------------------------------------
-  // Table example (100 rows)
+  // Table examples: isSingleLine (the VALUE) vs wrapBehavior (the PAINT)
+  //
+  // Two tables — one per isSingleLine — each with an exclusive wrapBehavior
+  // toggle, so every combination is two clicks away. Each column is narrower
+  // than its content, so every cell has to make the decision under test.
   // ---------------------------------------------------------------------------
-  protected displayedColumns = ['position', 'name', 'notes'];
 
-  // 10 × 5 pools with coprime-ish striding so name and note lengths combine
-  // in every variation across the 100 rows.
-  protected rows: DemoRow[] = Array.from({ length: 100 }, (_, i) => ({
-    position: i + 1,
-    name: `${SAMPLE_NAMES[i % SAMPLE_NAMES.length]} ${i + 1}`,
-    notes: SAMPLE_NOTES[(i + Math.floor(i / 5)) % SAMPLE_NOTES.length],
-  }));
+  /** "Single Line in Table": one whitespace-heavy column, one unbreakable-word column. */
+  protected singleLineColumns = ['position', 'title', 'compound'];
+  protected singleLineRows: DemoRow[] = makeDemoRows(4);
+  protected singleLineWrap = signal<InlineTextWrapBehavior>('noWrap');
+
+  /**
+   * "Text Area in Table": authored line breaks, with and without a long word.
+   * No paint controls here — multi-line always wraps (`wrapBehavior` is
+   * single-line-only).
+   */
+  protected textAreaColumns = ['position', 'note', 'report'];
+  protected textAreaRows: DemoRow[] = makeDemoRows(4);
 
   // ---------------------------------------------------------------------------
-  // Layout shift tester
+  // Floating nav
   // ---------------------------------------------------------------------------
-  // Pushes the whole content area aside with a left margin to stress-test
-  // layout stability: the in-flow display text must move with the page while
-  // idle, and typing in the elevated editor must never shift the page.
-  protected pushMargin = signal(0);
-  protected oscillate = signal(false);
+  // Plain `href="#…"` resolves against `<base href="/">` and would navigate to
+  // "/#…", losing the /text route — so the nav scrolls programmatically.
+  // scrollIntoView also handles the real scroll container (the sidenav
+  // content, not the document); `scroll-margin-top` clears the sticky tabs.
+  protected scrollToExample(event: Event, id: string) {
+    event.preventDefault();
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
 }

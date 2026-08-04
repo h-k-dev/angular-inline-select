@@ -56,10 +56,20 @@
 // -----------------------------------------------------------------------------
 .editable-text__display {
   display: inline;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
   cursor: text;
   outline: none;
+
+  // WRAPPING (`wrapBehavior: 'wrap'`) — break at whitespace first, inside a
+  // long word when there is no whitespace to break at, and hyphenate where the
+  // browser can. It lives in the base rule and the `--no-wrap` modifier (the
+  // default) overrides it, so the wrapping properties stay in one place.
+  // `hyphens: auto` only fires when a language is known
+  // (a `lang` attribute on the document or an ancestor); without one the
+  // browser silently skips hyphenation and `overflow-wrap` still breaks the
+  // word, just without the hyphen. `--editable-text-hyphens: none` opts out.
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  hyphens: var(--editable-text-hyphens, auto);
 
   font-family: inherit;
   font-size: inherit;
@@ -95,7 +105,7 @@
   // generated content — it renders, but it isn't caret-able content). An
   // empty field has nothing to wrap, so promoting it to inline-block costs
   // nothing and gives the caret a box to render in — same reason the
-  // single-line variant (always inline-block) never had this problem.
+  // no-wrap variant (always inline-block) never had this problem.
   &:empty {
     display: inline-block;
     min-width: 1px; // caret-able even with an empty placeholder
@@ -130,8 +140,15 @@
   }
 
   // ---------------------------------------------------------------------------
-  // MODIFIER: single-line — never wraps; ellipsizes when the container is
-  // narrower than the content (e.g. fixed-layout table cells).
+  // MODIFIER: no-wrap (`wrapBehavior: 'noWrap'`) — the text stays on the lines
+  // it was authored on and ellipsizes when the container is narrower than the
+  // content (e.g. fixed-layout table cells). This is paint only: whether the
+  // VALUE may contain a line break is `isSingleLine`'s business, so a
+  // multi-line value here keeps its breaks and ellipsizes each line.
+  //
+  // `white-space: pre` — not `nowrap`: `nowrap` would fold authored breaks into
+  // spaces and collapse interior space runs, so the display would disagree with
+  // the editor (which is `pre-wrap`) about the very text it is showing.
   //
   // `overflow: clip` — never `hidden`: a scroll container (hidden/auto/scroll)
   // moves an inline-block's baseline to its bottom margin edge, which lifts
@@ -139,12 +156,13 @@
   // baseline, so the field sits in running copy exactly like normal
   // characters. The clip margin keeps the offset dashed underline visible.
   // ---------------------------------------------------------------------------
-  &--single-line {
+  &--no-wrap {
     display: inline-block;
     min-width: 0;
     max-width: 100%;
 
-    white-space: nowrap;
+    white-space: pre;
+    hyphens: none; // nothing wraps, so a hyphen could only ever be noise
     overflow: clip;
     overflow-clip-margin: 0.6em;
     text-overflow: ellipsis;
@@ -153,11 +171,17 @@
 
 // -----------------------------------------------------------------------------
 // ELEMENT: elevated editing surface (inside .editable-panel)
+//
+// Always wraps, whatever `wrapBehavior` says: the panel exists to give the
+// draft a fixed readable measure, and text clipped out of view is text the
+// user cannot edit. No hyphenation either — the editor shows the value
+// literally, so nothing appears in it that isn't in the string.
 // -----------------------------------------------------------------------------
 .editable-text__editor {
   display: block;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  hyphens: none;
   outline: none;
   cursor: text;
 

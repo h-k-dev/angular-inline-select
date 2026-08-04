@@ -182,6 +182,12 @@ const TEXT_SURFACE_TOKENS: TokenGroup = {
       description: 'Opacity of the placeholder (shown when the field is empty).',
     },
     {
+      token: '--editable-text-hyphens',
+      fallback: 'auto',
+      description:
+        'Hyphenation of the in-flow display while wrapping (`wrapBehavior: "wrap"`). `auto` needs a language to be known — a `lang` attribute on the document or an ancestor — otherwise the browser skips the hyphen and breaks the word plainly. Set to `none` to never hyphenate.',
+    },
+    {
       token: '--editable-text-affix-color',
       fallback: 'var(--mat-sys-on-surface-variant, inherit)',
       description: 'Color of prefix/suffix affixes.',
@@ -515,7 +521,14 @@ export const DOCS: Record<string, SectionDocs> = {
             type: 'boolean',
             default: 'false',
             description:
-              'Single-line mode: strips line breaks, accepts on Enter, ellipsizes instead of wrapping.',
+              'Constrains the VALUE to one line: no line break may exist in it (Enter accepts, pasted breaks collapse to spaces). Says nothing about how the text is painted — see wrapBehavior.',
+          },
+          {
+            name: 'wrapBehavior',
+            type: "'noWrap' | 'wrap'",
+            default: "'noWrap'",
+            description:
+              "Single-line only — how the display handles a width constraint: 'noWrap' keeps the one line and ellipsizes, 'wrap' paints it over several visual lines (breaking at whitespace, inside long words when there is none, hyphenated where the browser can). Multi-line fields ignore it entirely and always wrap. The elevated editor always wraps.",
           },
           {
             name: 'placeholder',
