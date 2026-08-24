@@ -6,6 +6,8 @@ import {
   AngularInlineNumber,
   defaultParseNumber,
   defaultFormatNumber,
+  makeParseNumber,
+  makeFormatNumber,
   type InlineNumberSaved,
 } from './angular-inline-number';
 import { AngularInlineText } from '../angular-inline-text/angular-inline-text';
@@ -57,6 +59,22 @@ class NumberSuffixHost {
   value = signal<number | string | null>(49.9);
 }
 
+@Component({
+  imports: [AngularInlineNumber],
+  template: `
+    <angular-inline-number
+      [(value)]="value"
+      [restrictInput]="restrict()"
+      [decimalSeparator]="separator()"
+    />
+  `,
+})
+class NumberRestrictedHost {
+  value = signal<number | string | null>(null);
+  restrict = signal(true);
+  separator = signal<'.' | ',' | 'both'>('both');
+}
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -67,6 +85,7 @@ interface Harness<T> {
   display: () => HTMLElement;
   editor: () => HTMLElement | null;
   inner: () => AngularInlineText;
+  number: () => AngularInlineNumber;
 }
 
 function setup<T>(hostType: new () => T): Harness<T> {
@@ -81,6 +100,7 @@ function setup<T>(hostType: new () => T): Harness<T> {
     editor: () => document.querySelector('.editable-text__editor') as HTMLElement | null,
     inner: () =>
       fixture.debugElement.children[0].children[0].componentInstance as AngularInlineText,
+    number: () => fixture.debugElement.children[0].componentInstance as AngularInlineNumber,
   };
 }
 
@@ -250,5 +270,177 @@ describe('AngularInlineNumber — signal form [formField] binding', () => {
 
     expect(h.inner().editing()).toBe(true);
     expect(h.host.model()).toBe(-3); // live channel — not committed, rolls back on discard
+  });
+});
+
+
+// =============================================================================
+// Decimal separator + restricted input
+// =============================================================================
+
+describe('separator-aware codec', () => {
+  it('accepts either separator on "both" and normalizes to a dot-decimal number', () => {
+    const parse = makeParseNumber('both');
+
+    expect(parse('1,5')).toBe(1.5);
+    expect(parse('1.5')).toBe(1.5);
+    expect(parse(',5')).toBe(0.5);
+    expect(parse('-2,25')).toBe(-2.25);
+  });
+
+  it('accepts only the configured separator', () => {
+    expect(makeParseNumber(',')('1,5')).toBe(1.5);
+    expect(makeParseNumber(',')('1.5')).toBeUndefined();
+    expect(makeParseNumber('.')('1,5')).toBeUndefined();
+    expect(makeParseNumber('.')('1.5')).toBe(1.5);
+  });
+
+  it('still rejects the shapes Number() would otherwise accept', () => {
+    const parse = makeParseNumber('both');
+
+    for (const bad of ['Infinity', '1e3', '0x10', 'NaN', '1.2.3', '1,2,3', '--5']) {
+      expect(parse(bad)).toBeUndefined();
+    }
+  });
+
+  it('reads a comma as a DECIMAL point, so "1,000" is one — not one thousand', () => {
+    // Documented consequence: a field cannot take the comma in both roles.
+    expect(makeParseNumber('both')('1,000')).toBe(1);
+    expect(defaultParseNumber('1,000')).toBeUndefined();
+  });
+
+  it('formats with the configured separator, "both" settling on the dot', () => {
+    expect(makeFormatNumber(',')(1.5)).toBe('1,5');
+    expect(makeFormatNumber('both')(1.5)).toBe('1.5');
+    expect(makeFormatNumber('.')(1.5)).toBe('1.5');
+    expect(makeFormatNumber(',')(null)).toBe('');
+  });
+
+  it('keeps the dot-decimal defaults unchanged', () => {
+    expect(defaultParseNumber('12.5')).toBe(12.5);
+    expect(defaultFormatNumber(12.5)).toBe('12.5');
+  });
+});
+
+describe('AngularInlineNumber — decimalSeparator on the composed control', () => {
+  let h: Harness<NumberRestrictedHost>;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [NumberRestrictedHost] });
+    h = setup(NumberRestrictedHost);
+  });
+
+  it("renders idle text with the ',' separator, not just in the formatter unit", () => {
+    h.host.separator.set(',');
+    h.host.value.set(48.5);
+    h.fixture.detectChanges();
+
+    expect(h.display().textContent).toBe('48,5');
+  });
+
+  it("settles 'both' on the canonical dot", () => {
+    h.host.separator.set('both');
+    h.host.value.set(48.5);
+    h.fixture.detectChanges();
+
+    expect(h.display().textContent).toBe('48.5');
+  });
+
+  it('keeps the model dot-decimal whatever the display shows', () => {
+    h.host.separator.set(',');
+    h.host.value.set(48.5);
+    h.fixture.detectChanges();
+
+    // A separator never crosses the contract boundary.
+    expect(h.host.value()).toBe(48.5);
+    expect(h.number().parseFailed()).toBe(false);
+  });
+});
+
+describe('AngularInlineNumber — restrictInput', () => {
+  let h: Harness<NumberRestrictedHost>;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [NumberRestrictedHost] });
+    h = setup(NumberRestrictedHost);
+  });
+
+  /** Opens the session with an accepted character, then replaces the draft. */
+  async function typeRestricted(text: string) {
+    const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
+    Object.defineProperty(event, 'inputType', { value: 'insertText' });
+    Object.defineProperty(event, 'data', { value: '0' });
+
+    h.display().dispatchEvent(event);
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    const editor = h.editor();
+    if (!editor) throw new Error('elevated editor not found');
+
+    editor.textContent = text;
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+    h.fixture.detectChanges();
+  }
+
+  it('rejects letters as they are typed and never raises the parse gate', async () => {
+    await typeRestricted('12ab,5');
+
+    expect(h.editor()?.textContent).toBe('12,5');
+    expect(h.inner().value()).toBe('12,5');
+    // The letters never landed, so the draft was never unparseable.
+    expect(h.number().parseFailed()).toBe(false);
+  });
+
+  it('normalizes a comma draft to a dot-decimal number on the model', async () => {
+    await typeRestricted('12,5');
+    accept(h);
+
+    expect(h.host.value()).toBe(12.5);
+  });
+
+  it('admits BOTH separators regardless of the codec — no dead decimal key', async () => {
+    // The filter is a superset of every codec, never a mirror of one: a
+    // ','-codec field on a '.'-emitting keyboard must not silently swallow
+    // the decimal key. The codec stays the authority on what parses.
+    h.host.separator.set(',');
+    h.fixture.detectChanges();
+
+    await typeRestricted('1.5');
+
+    expect(h.inner().value()).toBe('1.5');
+    // Admitted by the filter, rejected by the codec — visibly, via the gate.
+    expect(h.number().parseFailed()).toBe(true);
+  });
+
+  it('parses the codec-correct separator through the same filter', async () => {
+    h.host.separator.set(',');
+    h.fixture.detectChanges();
+
+    await typeRestricted('1,5');
+    accept(h);
+
+    expect(h.host.value()).toBe(1.5);
+  });
+
+  it('lets everything through when the opt-in is off', async () => {
+    h.host.restrict.set(false);
+    h.fixture.detectChanges();
+
+    await typeRestricted('12ab');
+
+    expect(h.inner().value()).toBe('12ab');
+    expect(h.number().parseFailed()).toBe(true);
+  });
+
+  it('filters, it does not validate — the parse gate still catches "1.2.3"', async () => {
+    h.host.separator.set('.');
+    h.fixture.detectChanges();
+
+    await typeRestricted('1.2.3');
+
+    expect(h.inner().value()).toBe('1.2.3');
+    expect(h.number().parseFailed()).toBe(true);
   });
 });

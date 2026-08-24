@@ -122,3 +122,47 @@ export function replayEdit(
       return null;
   }
 }
+
+export interface FilteredText {
+  /** The text with rejected characters removed. */
+  text: string;
+  /** The caret offset, shifted left by the rejections that fell before it. */
+  caret: number;
+}
+
+/**
+ * Drops every character `allow` rejects, keeping the caret anchored to the
+ * text that survives.
+ *
+ * A per-character predicate (rather than a free string → string transform) is
+ * what makes the caret math exact: the rejected indices are known, so the
+ * caret shifts by exactly the count of rejections *before* it. A free
+ * transform could only diff before/after and guess, which is what produces
+ * caret jumps.
+ *
+ * This filters, it does not validate: `[0-9.]` still admits `1.2.3`.
+ *
+ * Offsets are UTF-16 code units, matching DOM selection offsets. A predicate
+ * that admitted astral characters would split their surrogate pairs — a
+ * non-issue for the numeric/ASCII classes this exists for.
+ *
+ * `allow` may carry any flags: the stateful ones are normalized away here
+ * rather than trusted to the caller, since `test()` on a `g`/`y` regex
+ * advances `lastIndex` and would reject every other character.
+ */
+export function filterChars(text: string, caret: number, allow: RegExp): FilteredText {
+  const test =
+    allow.global || allow.sticky
+      ? new RegExp(allow.source, allow.flags.replace(/[gy]/g, ''))
+      : allow;
+
+  let out = '';
+  let shift = 0;
+
+  for (let i = 0; i < text.length; i++) {
+    if (test.test(text[i])) out += text[i];
+    else if (i < caret) shift++;
+  }
+
+  return { text: out, caret: caret - shift };
+}

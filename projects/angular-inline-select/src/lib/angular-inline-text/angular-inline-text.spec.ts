@@ -10,7 +10,7 @@ import {
 } from './angular-inline-text';
 import { EditableSuffix } from './editable-affix';
 import { detectSlashToken } from './editable-menu';
-import { replayEdit } from './caret';
+import { replayEdit, filterChars, getSelectionOffsets, setCaretOffset } from './caret';
 
 // =============================================================================
 // Hosts — one per binding mode
@@ -92,6 +92,17 @@ class WrapHost {
 })
 class SuffixHost {
   value = signal('10');
+}
+
+@Component({
+  imports: [AngularInlineText],
+  template: `
+    <angular-inline-text [(value)]="value" [isSingleLine]="true" [allowedChars]="allowed()" />
+  `,
+})
+class FilteredHost {
+  value = signal('');
+  allowed = signal<RegExp | undefined>(/[0-9]/);
 }
 
 // =============================================================================
@@ -624,5 +635,344 @@ describe('AngularInlineText — isSingleLine vs wrapBehavior', () => {
     await elevate(h);
 
     expect(h.editor()!.classList.contains('editable-text__display--no-wrap')).toBe(false);
+  });
+});
+
+
+// =============================================================================
+// Character filtering
+// =============================================================================
+
+describe('filterChars', () => {
+  it('drops rejected characters and keeps the caret on the survivors', () => {
+    // "1aa2" with the caret at the end → "12", caret follows to 2.
+    expect(filterChars('1aa2', 4, /[0-9]/)).toEqual({ text: '12', caret: 2 });
+  });
+
+  it('shifts the caret only by rejections that fall BEFORE it', () => {
+    // "1a2b", caret between "a" and "2" (offset 2): one rejection precedes it.
+    expect(filterChars('1a2b', 2, /[0-9]/)).toEqual({ text: '12', caret: 1 });
+  });
+
+  it('leaves accepted text and the caret untouched', () => {
+    expect(filterChars('123', 2, /[0-9]/)).toEqual({ text: '123', caret: 2 });
+  });
+
+  it('can empty the text entirely', () => {
+    expect(filterChars('abc', 3, /[0-9]/)).toEqual({ text: '', caret: 0 });
+  });
+
+  it('normalizes stateful flags itself — a /g caller must not get every other char', () => {
+    // Defended in the helper, not just in the component: `caret.ts` is public
+    // API, so a direct consumer can pass /g. Undefended this returns '13'.
+    expect(filterChars('1234', 4, /[0-9]/g)).toEqual({ text: '1234', caret: 4 });
+    expect(filterChars('1234', 4, /[0-9]/y)).toEqual({ text: '1234', caret: 4 });
+  });
+});
+
+describe('AngularInlineText — allowedChars', () => {
+  let h: Harness<FilteredHost>;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [FilteredHost] });
+    h = setup(FilteredHost);
+  });
+
+  /**
+   * The shared `elevate()` helper types 'x', which a digit filter rejects —
+   * and a rejected keystroke deliberately does NOT elevate. Open the session
+   * with an accepted character instead, then replace the draft.
+   */
+  async function typeFiltered(text: string) {
+    const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
+    Object.defineProperty(event, 'inputType', { value: 'insertText' });
+    Object.defineProperty(event, 'data', { value: '0' });
+
+    h.display().dispatchEvent(event);
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    const editor = h.editor();
+    if (!editor) throw new Error('elevated editor not found');
+
+    editor.textContent = text;
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+    h.fixture.detectChanges();
+  }
+
+  it('never writes a rejected character to the value channel', async () => {
+    await typeFiltered('1aa2');
+
+    expect(h.host.value()).toBe('12');
+    expect(h.editor()?.textContent).toBe('12');
+  });
+
+  it('passes the draft through untouched when no filter is set', async () => {
+    h.host.allowed.set(undefined);
+    h.fixture.detectChanges();
+
+    await elevate(h);
+    await typeText(h, '1aa2');
+
+    expect(h.host.value()).toBe('1aa2');
+  });
+
+  it('strips stateful regex flags — a /g filter would reject every other char', async () => {
+    h.host.allowed.set(/[0-9]/g);
+    h.fixture.detectChanges();
+
+    await typeFiltered('1234');
+
+    expect(h.host.value()).toBe('1234');
+  });
+
+  // ---------------------------------------------------------------------------
+  // The swallow guard: only a mutation elevates
+  // ---------------------------------------------------------------------------
+
+  it('does NOT elevate when the filter erases the whole keystroke', () => {
+    const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
+    Object.defineProperty(event, 'inputType', { value: 'insertText' });
+    Object.defineProperty(event, 'data', { value: 'a' });
+
+    h.display().dispatchEvent(event);
+    h.fixture.detectChanges();
+
+    expect(h.editable().editing()).toBe(false);
+    expect(h.host.value()).toBe('');
+  });
+
+  it('DOES elevate when a rejected keystroke replaces a selection', async () => {
+    // Baseline "42", the whole of it selected, then "a" typed: the letter is
+    // rejected but the selection was still removed — that is a real mutation.
+    h.host.value.set('42');
+    h.fixture.detectChanges();
+
+    const display = h.display();
+    const range = document.createRange();
+    range.selectNodeContents(display);
+
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
+    Object.defineProperty(event, 'inputType', { value: 'insertText' });
+    Object.defineProperty(event, 'data', { value: 'a' });
+
+    display.dispatchEvent(event);
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(h.editable().editing()).toBe(true);
+    expect(h.host.value()).toBe('');
+  });
+
+  it('elevates on an accepted keystroke', async () => {
+    const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
+    Object.defineProperty(event, 'inputType', { value: 'insertText' });
+    Object.defineProperty(event, 'data', { value: '7' });
+
+    h.display().dispatchEvent(event);
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(h.editable().editing()).toBe(true);
+    expect(h.host.value()).toBe('7');
+  });
+});
+
+
+// =============================================================================
+// Filtering: per-keystroke path, caret, IME, paste
+// =============================================================================
+
+describe('AngularInlineText — allowedChars, keystroke by keystroke', () => {
+  let h: Harness<FilteredHost>;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [FilteredHost] });
+    h = setup(FilteredHost);
+  });
+
+  /** Opens the session on an accepted character. */
+  async function open() {
+    const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
+    Object.defineProperty(event, 'inputType', { value: 'insertText' });
+    Object.defineProperty(event, 'data', { value: '0' });
+
+    h.display().dispatchEvent(event);
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+  }
+
+  /**
+   * Types into the editor ONE character at a time, inserting at the live
+   * caret the way a keyboard does — rather than replacing the whole draft and
+   * filtering once. This is the path that actually exercises the rewrite and
+   * the caret restore.
+   */
+  function typeEach(chars: string) {
+    const editor = h.editor();
+    if (!editor) throw new Error('elevated editor not found');
+
+    for (const ch of chars) {
+      const at = getSelectionOffsets(editor)?.start ?? (editor.textContent ?? '').length;
+      const text = editor.textContent ?? '';
+
+      editor.textContent = text.slice(0, at) + ch + text.slice(at);
+      setCaretOffset(editor, at + 1);
+
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+      h.fixture.detectChanges();
+    }
+  }
+
+  function caretAt(el: HTMLElement) {
+    return getSelectionOffsets(el)?.start ?? -1;
+  }
+
+  it('filters each keystroke as it lands, never accumulating rejects', async () => {
+    await open();
+
+    const editor = h.editor()!;
+    editor.textContent = '';
+    setCaretOffset(editor, 0);
+
+    typeEach('1aa2');
+
+    expect(editor.textContent).toBe('12');
+    expect(h.host.value()).toBe('12');
+  });
+
+  it('holds the caret in place across a filtered rewrite', async () => {
+    await open();
+
+    const editor = h.editor()!;
+    editor.textContent = '15';
+    setCaretOffset(editor, 1);
+
+    // A rejected keystroke mid-text must not drift the caret to the end.
+    typeEach('a');
+    expect(editor.textContent).toBe('15');
+    expect(caretAt(editor)).toBe(1);
+
+    // The next accepted character therefore lands where the user was typing.
+    typeEach('9');
+    expect(editor.textContent).toBe('195');
+    expect(caretAt(editor)).toBe(2);
+  });
+
+  // ---------------------------------------------------------------------------
+  // IME: the rewrite must not tear down a live composition
+  // ---------------------------------------------------------------------------
+
+  function composingInput(el: HTMLElement) {
+    const event = new Event('input', { bubbles: true });
+    Object.defineProperty(event, 'isComposing', { value: true });
+    el.dispatchEvent(event);
+    h.fixture.detectChanges();
+  }
+
+  it('leaves a composition alone while it is in flight', async () => {
+    await open();
+
+    const editor = h.editor()!;
+    editor.textContent = '1a';
+    setCaretOffset(editor, 2);
+
+    composingInput(editor);
+
+    // Untouched: rewriting here would abort the IME mid-composition.
+    expect(editor.textContent).toBe('1a');
+  });
+
+  it('filters once the composition commits', async () => {
+    await open();
+
+    const editor = h.editor()!;
+    editor.textContent = '1a';
+    setCaretOffset(editor, 2);
+
+    composingInput(editor);
+    editor.dispatchEvent(new Event('compositionend', { bubbles: true }));
+    h.fixture.detectChanges();
+
+    expect(editor.textContent).toBe('1');
+    expect(h.host.value()).toBe('1');
+  });
+
+  it('keeps streaming mid-composition when no filter is set', async () => {
+    h.host.allowed.set(undefined);
+    h.fixture.detectChanges();
+
+    await elevate(h);
+
+    const editor = h.editor()!;
+    editor.textContent = 'compos';
+    setCaretOffset(editor, 6);
+
+    composingInput(editor);
+
+    // The guard is gated on the filter: unfiltered fields must not regress to
+    // withholding the draft until the IME commits.
+    expect(h.host.value()).toBe('compos');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Paste on the resting display
+  // ---------------------------------------------------------------------------
+
+  function pasteOnDisplay(text: string) {
+    const event = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: { getData: () => text } });
+    h.display().dispatchEvent(event);
+    h.fixture.detectChanges();
+  }
+
+  it('does NOT elevate when a paste is entirely illegal', () => {
+    pasteOnDisplay('N/A');
+
+    expect(h.editable().editing()).toBe(false);
+    expect(h.host.value()).toBe('');
+  });
+
+  it('elevates with the surviving characters when a paste is partly legal', async () => {
+    pasteOnDisplay('a1b2');
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(h.editable().editing()).toBe(true);
+    expect(h.host.value()).toBe('12');
+  });
+});
+
+describe('AngularInlineText — single-line newline strip', () => {
+  let h: Harness<FilteredHost>;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [FilteredHost] });
+    h = setup(FilteredHost);
+    h.host.allowed.set(undefined);
+    h.fixture.detectChanges();
+  });
+
+  it('restores the caret after collapsing pasted line breaks', async () => {
+    await elevate(h);
+
+    const editor = h.editor()!;
+    editor.textContent = 'a\nb';
+    setCaretOffset(editor, 3);
+
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+    h.fixture.detectChanges();
+
+    expect(h.host.value()).toBe('a b');
+    // The rewrite used to drop the caret entirely.
+    expect(getSelectionOffsets(editor)?.start).toBe(3);
   });
 });

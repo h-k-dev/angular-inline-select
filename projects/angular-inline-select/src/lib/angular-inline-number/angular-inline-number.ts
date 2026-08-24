@@ -26,25 +26,87 @@ export interface InlineNumberSaved {
 }
 
 /**
- * Dot-decimal default codec: `''` means empty (`null`), text that is not a
- * number means unparseable (`undefined` — raises the parse gate).
+ * Which decimal separator a field accepts in a draft and shows when idle.
+ *
+ * - `'.'` (default) — dot only, the JavaScript-native shape.
+ * - `','` — comma only, for locales that write `1,5`.
+ * - `'both'` — accepts either while typing, displays the canonical dot.
+ *
+ * The model is always a `number`, so the bound field never sees a separator
+ * of any kind: `1,5` reaches the schema as `1.5`.
  */
-export function defaultParseNumber(raw: string): number | null | undefined {
-  const trimmed = raw.trim();
-  if (trimmed === '') return null;
+export type DecimalSeparator = '.' | ',' | 'both';
 
-  // Dot-decimal only. `Number()` alone would accept hex (`0x10`), binary,
-  // octal, scientific (`1e3`) and `Infinity` — all surprising in a plain
-  // number field — so gate on a strict decimal shape first.
-  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(trimmed)) return undefined;
+/**
+ * The characters a restricted number draft admits: digits, sign, and BOTH
+ * decimal separators — regardless of which one the codec actually parses.
+ *
+ * Deliberately a SUPERSET of any one codec rather than a mirror of it. A
+ * `decimalSeparator: ','` field on a keyboard that emits `.` (which is most
+ * of them — `inputMode="decimal"` gives no guarantee about which separator
+ * the virtual key produces) would otherwise have a silently dead decimal
+ * key. Admitting both keeps the codec the sole authority on what *parses*, so
+ * the wrong separator raises a visible parse error instead of vanishing.
+ */
+const NUMBER_CHARS = /[0-9+.,-]/;
 
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : undefined;
+/** The separator characters a setting accepts in a draft. */
+function acceptedSeparators(separator: DecimalSeparator): string {
+  return separator === 'both' ? '.,' : separator;
 }
 
-export function defaultFormatNumber(value: number | null): string {
-  return value === null ? '' : String(value);
+/** The separator a setting emits when formatting. `'both'` settles on the dot. */
+function displayedSeparator(separator: DecimalSeparator): '.' | ',' {
+  return separator === ',' ? ',' : '.';
 }
+
+/**
+ * Builds a parser for a separator setting: `''` means empty (`null`), text
+ * that is not a number means unparseable (`undefined` — raises the parse
+ * gate), and anything parseable normalizes to a dot-decimal `number`.
+ *
+ * Note that admitting the comma as a DECIMAL separator necessarily means
+ * `'1,000'` reads as `1`, not one thousand. A field cannot accept the comma
+ * in both roles; thousands grouping is a `format` concern, not a `parse` one.
+ */
+export function makeParseNumber(
+  separator: DecimalSeparator = '.',
+): (raw: string) => number | null | undefined {
+  // `.` and `,` are both literal inside a character class.
+  const accepted = `[${acceptedSeparators(separator)}]`;
+
+  // `Number()` alone would accept hex (`0x10`), binary, octal, scientific
+  // (`1e3`) and `Infinity` — all surprising in a plain number field — so gate
+  // on a strict decimal shape first.
+  const shape = new RegExp(`^[+-]?(?:\\d+(?:${accepted}\\d*)?|${accepted}\\d+)$`);
+
+  return (raw: string) => {
+    const trimmed = raw.trim();
+    if (trimmed === '') return null;
+    if (!shape.test(trimmed)) return undefined;
+
+    const parsed = Number(trimmed.replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+}
+
+/** Builds a formatter for a separator setting. @see makeParseNumber */
+export function makeFormatNumber(
+  separator: DecimalSeparator = '.',
+): (value: number | null) => string {
+  const shown = displayedSeparator(separator);
+
+  return (value: number | null) => {
+    if (value === null) return '';
+
+    const text = String(value);
+    return shown === '.' ? text : text.replace('.', shown);
+  };
+}
+
+/** The dot-decimal codec — the default when no `decimalSeparator` is set. */
+export const defaultParseNumber = makeParseNumber('.');
+export const defaultFormatNumber = makeFormatNumber('.');
 
 /**
  * Inline number: a `FormValueControl<number>` that COMPOSES the inline text
@@ -109,11 +171,60 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
   protected suffixTpl = computed(() => this.suffixTemplate() ?? this.contentSuffix()?.templateRef);
 
   /**
-   * The codec — swap both halves to localize (e.g. Intl comma decimals).
-   * `parse` returns `null` for empty and `undefined` for unparseable text.
+   * Which decimal separator the draft accepts and the idle text shows.
+   * `'both'` takes either while typing and settles on the dot.
+   *
+   * This never reaches the bound field: the model is a `number`, so a
+   * comma-typed `1,5` arrives at the schema as `1.5`.
    */
-  parse = input<(raw: string) => number | null | undefined>(defaultParseNumber);
-  format = input<(value: number | null) => string>(defaultFormatNumber);
+  decimalSeparator = input<DecimalSeparator>('.');
+
+  /**
+   * Opt-in: characters that cannot appear in ANY number are rejected as they
+   * are typed, rather than landing in the draft and raising the parse gate.
+   * Off by default.
+   *
+   * The admitted set is {@link NUMBER_CHARS} — digits, sign, and both decimal
+   * separators — independent of `decimalSeparator`. It is a superset of every
+   * codec, never a mirror of one, so no keyboard can end up with a dead
+   * decimal key. Which separator actually *parses* stays the codec's call, and
+   * the wrong one surfaces as a visible parse error.
+   *
+   * That superset is also why a custom `parse` composes here: the filter only
+   * removes characters no numeric codec could want. A codec needing letters
+   * (hex, `1e3`, unit suffixes) should leave this off and use
+   * `angular-inline-text` with its own `allowedChars`.
+   *
+   * A filter is not a validator: `1.2.3` and `1,5.5` both survive it and the
+   * parse gate still catches them. What it buys is that `parseFailed()` never
+   * flips for a stray letter, so no error message flashes while someone
+   * fat-fingers.
+   *
+   * Rejection is silent — nothing is announced, and a paste of entirely
+   * illegal text (`'N/A'`) onto an empty field does nothing at all. Name the
+   * constraint in `ariaLabel` ("Fuel reserve in litres, digits only") so it is
+   * discoverable before the user hits it rather than after.
+   */
+  restrictInput = input(false);
+
+  /** The character class handed to the inner control, or `undefined` when off. */
+  protected allowedChars = computed(() => (this.restrictInput() ? NUMBER_CHARS : undefined));
+
+  /**
+   * The codec — override either half to localize beyond `decimalSeparator`
+   * (e.g. Intl grouping). `parse` returns `null` for empty and `undefined`
+   * for unparseable text. Left unset, both derive from `decimalSeparator`.
+   */
+  parse = input<((raw: string) => number | null | undefined) | undefined>(undefined);
+  format = input<((value: number | null) => string) | undefined>(undefined);
+
+  /** The effective codec: an explicit override, else the separator's own. */
+  protected activeParse = computed(
+    () => this.parse() ?? makeParseNumber(this.decimalSeparator()),
+  );
+  protected activeFormat = computed(
+    () => this.format() ?? makeFormatNumber(this.decimalSeparator()),
+  );
 
   /** Form Value Contract: touch — forwarded from the inner control. */
   touch = output<void>();
@@ -137,7 +248,7 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
     if (value === null || value === undefined) return null;
     if (typeof value === 'number') return Number.isNaN(value) ? null : value;
 
-    return this.parse()(value) ?? null;
+    return this.activeParse()(value) ?? null;
   });
 
   /**
@@ -154,7 +265,7 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
    * `'12.5'`.
    */
   protected innerValue = linkedSignal<string, string>({
-    source: () => this.format()(this.numericValue()),
+    source: () => this.activeFormat()(this.numericValue()),
     computation: (source, prev) => (this.editing() ? (prev?.value ?? source) : source),
   });
 
@@ -163,7 +274,7 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
    * consumers can present a message for it in their `[editable-error]`
    * content (the synthetic error itself is message-less).
    */
-  readonly parseFailed = computed(() => this.parse()(this.innerValue()) === undefined);
+  readonly parseFailed = computed(() => this.activeParse()(this.innerValue()) === undefined);
 
   /**
    * Errors forwarded to the inner control: the contract errors plus the
@@ -181,13 +292,13 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
   protected handleInnerValue(raw: string) {
     this.innerValue.set(raw);
 
-    const parsed = this.parse()(raw);
+    const parsed = this.activeParse()(raw);
     if (parsed !== undefined && parsed !== this.numericValue()) this.value.set(parsed);
   }
 
   /** Retype the settled session: strings inside, numbers outside. */
   protected handleInnerSaved(session: InlineTextSaved) {
-    const parsed = this.parse()(session.value);
+    const parsed = this.activeParse()(session.value);
     // The parse gate blocks unparseable commits; the fallback covers discards
     // rolling back to a baseline the current codec cannot read.
     const value = parsed === undefined ? this.numericValue() : parsed;

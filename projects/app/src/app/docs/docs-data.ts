@@ -551,6 +551,13 @@ export const DOCS: Record<string, SectionDocs> = {
             description:
               'Trims leading/trailing whitespace on commit. Interior spacing is never touched.',
           },
+          {
+            name: 'allowedChars',
+            type: 'RegExp | undefined',
+            default: 'undefined',
+            description:
+              'Opt-in character filter, tested against one character at a time. Rejected characters never reach the draft, so the bound field never observes them. Covers keystrokes and paste on both surfaces; drop and IME only once the panel is open (on the resting display neither delivers text at all — the payload is discarded and the field elevates empty-handed). On the resting display a keystroke the filter erases does not even open the editor: only a mutation elevates. Rejection is silent and unannounced. Filters, does not validate.',
+          },
           ...AFFIX_INPUTS,
           {
             name: 'hintTemplate',
@@ -620,17 +627,32 @@ export const DOCS: Record<string, SectionDocs> = {
           },
           ARIA_LABEL_INPUT,
           {
+            name: 'decimalSeparator',
+            type: "'.' | ',' | 'both'",
+            default: "'.'",
+            description:
+              "Separator the draft accepts and the idle text shows. 'both' takes either while typing and settles on the dot. The model is always a number, so the bound field never sees a separator.",
+          },
+          {
+            name: 'restrictInput',
+            type: 'boolean',
+            default: 'false',
+            description:
+              'Opt-in: characters that cannot appear in ANY number are rejected as they are typed. Admits digits, sign and BOTH decimal separators regardless of decimalSeparator — a superset of every codec, so no keyboard ends up with a dead decimal key; the codec still decides what parses, visibly, via the parse gate. Filters, does not validate — 1.2.3 survives it. Rejection is silent, including a paste of entirely illegal text, so name the constraint in ariaLabel.',
+          },
+          {
             name: 'parse',
             type: '(raw: string) => number | null | undefined',
-            default: 'defaultParseNumber',
+            default: 'decimalSeparator codec',
             description:
-              'Draft → number. Return undefined to reject the draft (parse error), null for an intentional empty.',
+              'Draft → number. Return undefined to reject the draft (parse error), null for an intentional empty. Unset, it derives from decimalSeparator.',
           },
           {
             name: 'format',
             type: '(value: number | null) => string',
-            default: 'defaultFormatNumber',
-            description: 'Number → display string for the in-flow text.',
+            default: 'decimalSeparator codec',
+            description:
+              'Number → display string for the in-flow text. Unset, it derives from decimalSeparator.',
           },
           ...AFFIX_INPUTS,
         ],

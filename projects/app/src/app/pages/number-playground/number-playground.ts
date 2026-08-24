@@ -53,6 +53,24 @@ export class NumberPlayground {
     value === null ? '' : value.toFixed(2);
 
   // ---------------------------------------------------------------------------
+  // Restricted input example: opt-in character filter + comma decimals
+  // ---------------------------------------------------------------------------
+  protected fuelReserve = signal<number | string | null>(48.5);
+
+  protected fuelReserveType = computed(() =>
+    this.fuelReserve() === null ? 'null' : typeof this.fuelReserve(),
+  );
+
+  // ---------------------------------------------------------------------------
+  // Comma-separator example: ',' in the draft AND idle text, dot-decimal model
+  // ---------------------------------------------------------------------------
+  protected cableLength = signal<number | string | null>(48.5);
+
+  protected cableLengthType = computed(() =>
+    this.cableLength() === null ? 'null' : typeof this.cableLength(),
+  );
+
+  // ---------------------------------------------------------------------------
   // Signal form example: numeric schema + field state toggles
   // ---------------------------------------------------------------------------
   protected fieldRequired = signal(true);

@@ -39,6 +39,60 @@
         </p>
       </div>
 
+      <div class="example-card" id="restricted-example">
+        <h3 class="example-card__title">Restricted input (opt-in filter)</h3>
+        <p class="prose">
+          Fuel reserve:
+          <angular-inline-number
+            [(value)]="fuelReserve"
+            [restrictInput]="true"
+            decimalSeparator="both"
+            placeholder="litres"
+            ariaLabel="Fuel reserve in litres — digits and a decimal separator only"
+          >
+            <ng-template editableSuffix>&nbsp;L</ng-template>
+          </angular-inline-number>
+          aboard. Type <code>12ab,5</code>: the letters never land in the draft, and the comma reads as a decimal
+          point, so the model is <code>{{ fuelReserve() ?? '∅' }}</code> (<code>{{ fuelReserveType() }}</code
+          >) — the bound field only ever sees a dot-decimal number. This field runs
+          <code>decimalSeparator="both"</code>, so the idle text settles on the canonical dot.
+        </p>
+        <p class="form-toggles__hint">
+          Press a letter on the resting field and nothing happens at all — no editor, no announcement, because only
+          a real mutation elevates and rejection is silent. Same for pasting <code>N/A</code> onto an empty field, so
+          name the constraint in <code>ariaLabel</code> rather than leaving users to discover it. The filter is not a
+          validator: <code>1.2.3</code> survives it and the parse gate still blocks the save.
+        </p>
+      </div>
+
+      <div class="example-card" id="comma-example">
+        <h3 class="example-card__title">Comma decimals</h3>
+        <p class="prose">
+          Cable length:
+          <angular-inline-number
+            #cable
+            [(value)]="cableLength"
+            [restrictInput]="true"
+            decimalSeparator=","
+            placeholder="metres"
+            ariaLabel="Cable length in metres, digits and a comma"
+          >
+            <ng-template editableSuffix>&nbsp;m</ng-template>
+          </angular-inline-number>
+          of cable. Here <code>decimalSeparator=","</code> governs both halves of the codec, so the idle text reads
+          <code>48,5</code> — while the model stays a dot-decimal
+          <code>{{ cableLength() ?? '∅' }}</code> (<code>{{ cableLengthType() }}</code
+          >). A separator never crosses the contract boundary.
+        </p>
+        <p class="form-toggles__hint">
+          Type <code>1.5</code> here: the filter admits the dot — it admits digits, sign and BOTH separators
+          whatever the codec is, so no keyboard ends up with a dead decimal key — and the codec then rejects it
+          visibly through the parse gate
+          <em>({{ cable.parseFailed() ? 'currently failing' : 'currently parsing' }})</em>. A silently swallowed key
+          would be the worse failure.
+        </p>
+      </div>
+
       <div class="example-card" id="number-form-example">
         <h3 class="example-card__title">Signal form + numeric validation</h3>
         <p class="prose">

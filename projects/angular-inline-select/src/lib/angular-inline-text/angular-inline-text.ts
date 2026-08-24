@@ -26,7 +26,7 @@ import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 import { CdkConnectedOverlayConfig, ConnectedPosition, OverlayModule } from '@angular/cdk/overlay';
 import { A11yModule, _IdGenerator } from '@angular/cdk/a11y';
 
-import { getSelectionOffsets, setCaretOffset, replayEdit } from './caret';
+import { getSelectionOffsets, setCaretOffset, replayEdit, filterChars } from './caret';
 import { EditablePrefix, EditableSuffix } from './editable-affix';
 import { EditableHint } from './editable-hint';
 import { EditableMenu, detectSlashToken, type SlashToken } from './editable-menu';
@@ -424,6 +424,45 @@ export class AngularInlineText implements FormValueControl<string> {
   normalizeValue = input(false);
 
   /**
+   * Opt-in character filter: a regex tested against ONE character at a time.
+   * Rejected characters never reach the draft, so the bound field never
+   * observes them and no error state flickers on the way past.
+   *
+   * What it covers, precisely:
+   * - **Keystrokes** and **paste** — on the resting display and in the panel.
+   * - **Drop** and **IME** — only once the panel is open. On the resting
+   *   display neither delivers text in the first place: a drop's payload is
+   *   discarded by the `beforeinput` interception (`insertFromDrop` is not a
+   *   replayable intent) and a composition is aborted by the focus handoff.
+   *   Both pre-date this filter; both elevate the field empty-handed and the
+   *   user repeats the gesture in the editor, where the filter does apply.
+   *
+   * Rejection is silent and total. On the resting display a keystroke the
+   * filter erases does not even open the editor: the control's rule is that
+   * only a mutation elevates (clicks, focus and caret moves never do), and an
+   * erased keystroke mutates nothing. Nothing is announced — see the
+   * accessibility note on `angular-inline-number`'s `restrictInput`.
+   *
+   * This filters, it does not validate — `[0-9.]` still admits `1.2.3`. Shape
+   * validation stays with the schema.
+   */
+  allowedChars = input<RegExp | undefined>(undefined);
+
+  /**
+   * The active filter, or `null` when filtering is off. Stateful flags are
+   * stripped once here (rather than per keystroke inside `filterChars`) so
+   * the hot path allocates nothing.
+   */
+  #charFilter = computed(() => {
+    const allow = this.allowedChars();
+    if (!allow) return null;
+
+    return allow.global || allow.sticky
+      ? new RegExp(allow.source, allow.flags.replace(/[gy]/g, ''))
+      : allow;
+  });
+
+  /**
    * The session baseline: follows the committed value while idle and freezes
    * for the duration of an edit session — the live channel writes every
    * keystroke into `value`, so the draft and the value model are one and the
@@ -589,6 +628,22 @@ export class AngularInlineText implements FormValueControl<string> {
     }
   }
 
+  /** Applies the character filter, or passes the text through untouched. */
+  #filter(text: string, caret: number) {
+    const allow = this.#charFilter();
+    return allow ? filterChars(text, caret, allow) : { text, caret };
+  }
+
+  /**
+   * Whether a filtered edit came out as a no-op: the filter removed something
+   * and what survived is the committed text. Nothing mutated, so nothing
+   * should happen — not even elevation. The `!== raw` half keeps unfiltered
+   * fields on exactly their old behaviour.
+   */
+  #filteredToNothing(filtered: string, raw: string, committed: string) {
+    return filtered !== raw && filtered === committed;
+  }
+
   /**
    * The display element is caret-able but immutable: every `beforeinput` is
    * cancelled, its intent replayed onto the committed text, and the result
@@ -612,8 +667,17 @@ export class AngularInlineText implements FormValueControl<string> {
 
     const replayed = replayEdit(committed, selection, event as InputEvent, this.isSingleLine());
 
-    if (replayed) this.elevate(replayed.caret, replayed.text);
-    else this.elevate(selection.start);
+    if (!replayed) {
+      // An intent we cannot replay (undo, drop, formatting) — elevate
+      // unchanged and let the editor handle it.
+      this.elevate(selection.start);
+      return;
+    }
+
+    const filtered = this.#filter(replayed.text, replayed.caret);
+    if (this.#filteredToNothing(filtered.text, replayed.text, committed)) return;
+
+    this.elevate(filtered.caret, filtered.text);
   }
 
   /**
@@ -654,7 +718,11 @@ export class AngularInlineText implements FormValueControl<string> {
     };
 
     const draft = committed.slice(0, selection.start) + text + committed.slice(selection.end);
-    this.elevate(selection.start + text.length, draft);
+
+    const filtered = this.#filter(draft, selection.start + text.length);
+    if (this.#filteredToNothing(filtered.text, draft, committed)) return;
+
+    this.elevate(filtered.caret, filtered.text);
   }
 
   /**
@@ -797,7 +865,16 @@ export class AngularInlineText implements FormValueControl<string> {
    * The DOM is the source of truth while typing; `innerText` preserves
    * line breaks (unlike `textContent` when the browser inserts `<br>`).
    */
-  protected handleEditorInput() {
+  protected handleEditorInput(event?: Event) {
+    // A composition in flight owns the DOM until the IME commits: rewriting
+    // underneath it tears the composition down (`é`, `ñ`, CJK all die on
+    // their first intermediate state). With a filter active, defer the whole
+    // pass to `compositionend` and apply it once to the finished text.
+    //
+    // Gated on the filter so unfiltered fields keep streaming per keystroke
+    // exactly as before — with nothing to rewrite there is nothing to tear.
+    if ((event as InputEvent | undefined)?.isComposing && this.#charFilter()) return;
+
     const el = this.editor()?.nativeElement;
     if (!el) return;
 
@@ -807,10 +884,36 @@ export class AngularInlineText implements FormValueControl<string> {
     // An "empty" editable can report a lone line break
     if (text === '\n') text = '';
 
+    // Read the caret up front — the rewrites below move it.
+    let caret = getSelectionOffsets(el)?.start ?? text.length;
+    let rewritten = false;
+
     // Single-line: strip line breaks that slip in via paste
     if (this.isSingleLine() && text.includes('\n')) {
       text = text.replace(/\n+/g, ' ');
+      caret = Math.min(caret, text.length);
+      rewritten = true;
+    }
+
+    // Character filter. Rewriting synchronously inside the `input` handler
+    // lands before the browser paints, so a rejected character is never
+    // visible; and the write below dedupes against the unchanged value
+    // (`model.set` guards on `equal`), so the bound field is not notified at
+    // all. Order matters: filtering AFTER `value.set` — from an effect, say —
+    // would flash the rejected draft through the field's validation.
+    const allow = this.#charFilter();
+    if (allow) {
+      const filtered = filterChars(text, caret, allow);
+      if (filtered.text !== text) {
+        text = filtered.text;
+        caret = filtered.caret;
+        rewritten = true;
+      }
+    }
+
+    if (rewritten) {
       el.textContent = text;
+      setCaretOffset(el, caret);
     }
 
     // Live draft channel: bound parents (and their schema validation) follow
@@ -819,6 +922,15 @@ export class AngularInlineText implements FormValueControl<string> {
     this.value.set(text);
 
     this.#detectMenu(el);
+  }
+
+  /**
+   * The IME committed: run the pass deferred while composing. Browsers differ
+   * on whether the final `input` lands before or after `compositionend`, so
+   * both paths reach here — the pass is idempotent, which makes that moot.
+   */
+  protected handleEditorCompositionEnd() {
+    this.handleEditorInput();
   }
 
   /** Arrow-key navigation while the slash menu is open. */
