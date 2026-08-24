@@ -10,6 +10,58 @@
   <a href="#textarea-example" (click)="scrollToExample($event, 'textarea-example')">Text area</a>
 </nav>
 
+<!--
+  Page sub header — the record's own chrome, above the content, spanning the
+  full width. The point of it living HERE and not inside an `.example` is the
+  screen EDGE: an inline-end aligned editable sits flush against the right of
+  the viewport, so the clear bubble it opens has no room to grow into. There is
+  nowhere for the inline-end position to go, and the slot is narrow enough
+  (mobile max) that the value can only ellipsize — the two constraints the
+  bubble has to survive together.
+-->
+<header class="subheader">
+  <!--
+    Row one is the bar proper: lead on the inline start, value slot pinned to
+    the inline end. The lead TRUNCATES rather than wrapping, so the slot keeps
+    its place at the edge at every width down to a phone — the slot surviving
+    at the inline end is the whole premise of the example.
+  -->
+  <div class="subheader__row">
+    <div class="subheader__lead">
+      <h1 class="subheader__title">Junction Point Observatory</h1>
+      <p class="subheader__breadcrumb">Western Rim · survey sector nine</p>
+    </div>
+
+    <!--
+      The rightmost slot — narrow (mobile max) and `min-width: 0` so the flex
+      item may shrink below its content, which is what hands the ellipsis to
+      the field instead of blowing the bar open.
+    -->
+    <div class="subheader__slot">
+      <span class="subheader__label">Owner</span>
+      <angular-inline-text
+        class="subheader__value"
+        [isSingleLine]="true"
+        wrapBehavior="noWrap"
+        [value]="subheaderOwner()"
+        (savedModelChange)="subheaderOwner.set($event.value)"
+        placeholder="Unassigned"
+        [normalizeValue]="true"
+        ariaLabel="Record owner"
+      />
+    </div>
+  </div>
+
+  <!--
+    Value-length switch — its own row, so it can never compete with the slot
+    for the inline end. Short fits; long can only ellipsize.
+  -->
+  <div class="subheader__switch" role="group" aria-label="Owner value length">
+    <button type="button" (click)="subheaderOwner.set(SHORT_OWNER)">Short</button>
+    <button type="button" (click)="subheaderOwner.set(LONG_OWNER)">Long</button>
+  </div>
+</header>
+
 <main>
   <section class="example" id="paragraph-example">
     <header class="example__header">

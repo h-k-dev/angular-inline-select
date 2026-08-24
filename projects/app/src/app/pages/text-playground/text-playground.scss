@@ -93,3 +93,100 @@ main {
     flex-direction: row;
   }
 }
+
+/* --- Page sub header: metadata in a phone-width slot at the SCREEN edge --- */
+
+// Full-bleed on purpose. No `max-width`, no centring, and only a hair of inline
+// padding — the slot's right edge has to land flush against the viewport's, so
+// the inline-end clear bubble genuinely runs out of room.
+.subheader {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface-container);
+}
+
+.subheader__row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+// The lead absorbs all the slack and TRUNCATES — never wraps. A wrapping lead
+// would grow the bar and shove the slot off the inline end, which is the one
+// thing this layout may not do.
+.subheader__lead {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.subheader__title,
+.subheader__breadcrumb {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subheader__title {
+  font: var(--mat-sys-title-medium);
+}
+
+.subheader__breadcrumb {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// Value-length switch — plain pills, deliberately quiet: this is demo chrome
+// sitting in the bar, not part of what the bar demonstrates. Its own row, so it
+// never competes with the slot for the inline end.
+.subheader__switch {
+  display: flex;
+  gap: 4px;
+
+  button {
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--mat-sys-outline-variant);
+    background: var(--mat-sys-surface-bright);
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-label-small);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--mat-sys-primary-container);
+      color: var(--mat-sys-on-primary-container);
+    }
+  }
+}
+
+// The rightmost slot. `max-width` is half the point of the example: a
+// phone-friendly cap the value cannot fit in, so the field has to ellipsize.
+// `min-width: 0` lets it shrink further on a real narrow viewport.
+.subheader__slot {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(100%, 14rem);
+
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.subheader__label {
+  flex: 0 0 auto;
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// A flex item blockifies, so the host's `display: inline` doesn't apply here;
+// `min-width: 0` is what lets it shrink under its content and hand the
+// constraint down to the field's own `max-width: 100%`.
+.subheader__value {
+  flex: 0 1 auto;
+  min-width: 0;
+}

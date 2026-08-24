@@ -37,6 +37,14 @@ const INITIAL_SUMMARY =
   'Save with Ctrl+Enter or the Save button, discard with Escape — ' +
   'the overlay only appears once you actually change something.';
 
+/**
+ * Sub-header slot values. The long one is what the example exists for: it can
+ * never fit the phone-width slot, so `noWrap` must ellipsize it. The short one
+ * is the control case — it fits, so nothing is clipped.
+ */
+const SHORT_OWNER = 'R. Vance';
+const LONG_OWNER = 'Rosalind Vance-Okonkwo, Western Rim survey office';
+
 // Every cell below is deliberately too long for its column: what these tables
 // demonstrate is what happens AT the width constraint, so nothing may fit.
 
@@ -133,6 +141,15 @@ export class TextPlayground {
     this.projectName.set(INITIAL_PROJECT_NAME);
     this.summary.set(INITIAL_SUMMARY);
   }
+
+  // ---------------------------------------------------------------------------
+  // Page sub header: the value lives in a phone-width slot at the inline END of
+  // a full-bleed bar, so it sits flush against the screen edge AND can only
+  // ellipsize. Exposed to the template so the switch can swap the two cases.
+  // ---------------------------------------------------------------------------
+  protected readonly SHORT_OWNER = SHORT_OWNER;
+  protected readonly LONG_OWNER = LONG_OWNER;
+  protected subheaderOwner = signal(LONG_OWNER);
 
   // ---------------------------------------------------------------------------
   // Signal form example: schema-driven validation + field state toggles

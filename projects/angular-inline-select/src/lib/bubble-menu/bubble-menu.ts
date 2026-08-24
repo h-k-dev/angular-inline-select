@@ -66,8 +66,6 @@ function endOffsetPositions(offset: { x: number; y: number }): ConnectedPosition
       offsetX: offset.x,
       offsetY: offset.y,
     },
-    // Fallback: below the field, end-aligned (rare — content-end near the edge).
-    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 8 },
   ];
 }
 
