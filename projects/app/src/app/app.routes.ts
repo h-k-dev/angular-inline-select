@@ -77,6 +77,13 @@ export const routes: Routes = [
     ],
   },
 
+  // Pattern section — a layout recipe, not a documented component: no
+  // api/theming children, so the section tabs stay hidden here.
+  {
+    path: 'patterns/form-grid',
+    loadComponent: () => import('./pages/form-grid/form-grid').then((m) => m.FormGridPage),
+  },
+
   // Benchmark section — not a documented component, so no api/theming children.
   {
     path: 'benchmark/guess',

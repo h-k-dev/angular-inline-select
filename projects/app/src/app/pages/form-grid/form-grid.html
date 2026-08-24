@@ -1,0 +1,29 @@
+<main>
+  <section class="example" id="form-grid-example">
+    <header class="example__header">
+      <h2>Form grid</h2>
+      <p>
+        The label/value layout every record page ends up needing: pairs side by side while there is
+        room, folded top down under <code>{{ foldCh }}ch</code>. The decision belongs to the
+        <em>container</em> — a container query on the grid's own host, not a viewport media query —
+        so the same markup is two-column in a wide column and stacked in a narrow one, with no
+        measurement, no <code>ResizeObserver</code> and no input threaded through the tree. Narrow
+        the viewport (or the host box, in devtools) to watch it fold.
+      </p>
+    </header>
+
+    <div class="example__body example-stack">
+      <div class="example-card">
+        <app-field-grid (emitted)="logEmit($event)" />
+      </div>
+
+      @if (emittedEvents().length > 0) {
+        <div class="event-log" role="log" aria-label="Emitted events">
+          @for (entry of emittedEvents(); track $index) {
+            <code class="event-log__entry">{{ entry }}</code>
+          }
+        </div>
+      }
+    </div>
+  </section>
+</main>

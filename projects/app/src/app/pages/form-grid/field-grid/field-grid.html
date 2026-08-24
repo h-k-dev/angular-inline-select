@@ -1,0 +1,335 @@
+<!--
+  A description list, laid out as a grid: `.field-grid__row` is `display:
+  contents`, so every <dt>/<dd> is a grid item of the SAME grid and all labels
+  share one column track. That is what keeps the values aligned down the card —
+  and what lets a single `grid-template-columns` swap fold the whole thing to
+  stacked rows inside the container query. See field-grid.scss.
+-->
+<dl class="field-grid__list">
+  <!-- Text, single line: required, projected error, edge-trimmed on commit. -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Project</dt>
+    <dd class="field-grid__value">
+      <angular-inline-text
+        [formField]="recordForm.project"
+        [isSingleLine]="true"
+        placeholder="Project name…"
+        [normalizeValue]="true"
+        ariaLabel="Project name"
+        (saved)="logEmit('project.saved', $event)"
+      >
+        <span editable-error>
+          @if (projectMissing()) {
+            A project name is required.
+          }
+        </span>
+      </angular-inline-text>
+    </dd>
+  </div>
+
+  <!--
+    Text, multi line: authored line breaks are user content and survive; the
+    panel hint is a live character counter that never touches the draft.
+  -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Summary</dt>
+    <dd class="field-grid__value">
+      <angular-inline-text
+        [formField]="recordForm.summary"
+        placeholder="Add a description…"
+        [normalizeValue]="true"
+        ariaLabel="Project summary"
+        (saved)="logEmit('summary.saved', $event)"
+      >
+        <span editable-error>
+          @if (summaryTooLong()) {
+            That is longer than {{ summaryMax }} characters.
+          }
+        </span>
+        <ng-template editableHint>{{ summaryLength() }}/{{ summaryMax }}</ng-template>
+      </angular-inline-text>
+    </dd>
+  </div>
+
+  <!-- Number: codec formatting (two decimals) + a suffix outside the draft. -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Budget</dt>
+    <dd class="field-grid__value">
+      <angular-inline-number
+        [formField]="recordForm.budget"
+        [format]="budgetFormat"
+        placeholder="Budget…"
+        ariaLabel="Budget in euros"
+        (saved)="logEmit('budget.saved', $event)"
+      >
+        <ng-template editableSuffix><mat-icon inline>euro</mat-icon></ng-template>
+        <span editable-error>
+          @if (budgetOutOfRange()) {
+            Budgets run from 0 to 100,000 €.
+          }
+        </span>
+      </angular-inline-number>
+    </dd>
+  </div>
+
+  <!-- Phone: the codec interprets, the flag prefix picks the country. -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Telephone</dt>
+    <dd class="field-grid__value">
+      <angular-inline-phone
+        #telephone
+        [formField]="recordForm.telephone"
+        [codec]="codec"
+        defaultCountry="DE"
+        ariaLabel="Telephone number"
+        (saved)="logEmit('telephone.saved', $event)"
+      >
+        <span editable-error>
+          @if (telephone.parseFailed()) {
+            That doesn’t read as a phone number — digits, spaces and an optional leading “+”.
+          } @else if (telephoneMissing()) {
+            A telephone number is required.
+          }
+        </span>
+      </angular-inline-phone>
+    </dd>
+  </div>
+
+  <!-- Date: typed or picked; the model is the UTC ISO DB entry. -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Deadline</dt>
+    <dd class="field-grid__value">
+      <angular-inline-date
+        #deadline
+        [formField]="recordForm.deadline"
+        placeholder="Deadline…"
+        ariaLabel="Deadline date"
+        (saved)="logEmit('deadline.saved', $event)"
+      >
+        <span editable-error>
+          @if (deadline.parseFailed()) {
+            That doesn’t read as a date — try “24.12.2026”, “24.12.” or “2026-12-24”.
+          }
+        </span>
+      </angular-inline-date>
+    </dd>
+  </div>
+
+  <!-- JSON: a bounded preview that elevates into a real CodeMirror editor. -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Metadata</dt>
+    <dd class="field-grid__value">
+      <angular-inline-json
+        [formField]="recordForm.metadata"
+        ariaLabel="Record metadata"
+        (saved)="logEmit('metadata.saved', $event)"
+      >
+        <ng-template editableError>That is not valid JSON.</ng-template>
+      </angular-inline-json>
+    </dd>
+  </div>
+
+  <!--
+    Slash menu: the control owns the trigger, the keyboard and the combobox
+    ARIA; this template owns the options. Type “/” in the field.
+  -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Status</dt>
+    <dd class="field-grid__value">
+      <angular-inline-text
+        [formField]="recordForm.status"
+        [isSingleLine]="true"
+        placeholder="Status…"
+        [normalizeValue]="true"
+        ariaLabel="Project status"
+        (saved)="logEmit('status.saved', $event)"
+      >
+        <ng-template editablePrefix><mat-icon inline>flag</mat-icon></ng-template>
+        <ng-template editableHint>Type “/” for the status list.</ng-template>
+        <ng-template editableMenu let-query let-apply="apply" let-activeId="activeId">
+          <div role="listbox" aria-label="Statuses">
+            @for (option of filterStatus(query); track option.id) {
+              <div
+                role="option"
+                [id]="option.id"
+                [attr.data-active]="option.id === activeId()"
+                [attr.aria-selected]="option.id === activeId()"
+                (click)="apply(option.label)"
+              >
+                <mat-icon inline>{{ option.icon }}</mat-icon>
+                <span>{{ option.label }}</span>
+              </div>
+            } @empty {
+              <div class="field-grid__menu-empty">No status matches “{{ query }}”.</div>
+            }
+          </div>
+        </ng-template>
+      </angular-inline-text>
+    </dd>
+  </div>
+
+  <!--
+    The value is far too long for the column at ANY width: `noWrap` keeps the
+    one line and ellipsizes at the constraint instead of growing the row.
+  -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Reference</dt>
+    <dd class="field-grid__value">
+      <angular-inline-text
+        [formField]="recordForm.reference"
+        [isSingleLine]="true"
+        wrapBehavior="noWrap"
+        placeholder="Reference…"
+        [normalizeValue]="true"
+        ariaLabel="Record reference"
+        (saved)="logEmit('reference.saved', $event)"
+      />
+    </dd>
+  </div>
+
+  <!-- Character filter + shape validation: the filter types, the schema judges. -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Callsign</dt>
+    <dd class="field-grid__value">
+      <angular-inline-text
+        [formField]="recordForm.callsign"
+        [isSingleLine]="true"
+        [allowedChars]="callsignChars"
+        placeholder="AUR-01"
+        [normalizeValue]="true"
+        ariaLabel="Vessel callsign"
+        (saved)="logEmit('callsign.saved', $event)"
+      >
+        <ng-template editableHint>Capitals, digits and “-” only.</ng-template>
+        <span editable-error>
+          @if (callsignPatternBroken()) {
+            Callsigns look like “AUR-01” — two to four capitals, a dash, then digits.
+          }
+        </span>
+      </angular-inline-text>
+    </dd>
+  </div>
+
+  <!-- Comma decimals: both halves of the codec, dot-decimal model. -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Cable</dt>
+    <dd class="field-grid__value">
+      <angular-inline-number
+        [formField]="recordForm.cable"
+        decimalSeparator=","
+        placeholder="Length…"
+        ariaLabel="Cable length in metres"
+        (saved)="logEmit('cable.saved', $event)"
+      >
+        <ng-template editableSuffix>&nbsp;m</ng-template>
+      </angular-inline-number>
+    </dd>
+  </div>
+
+  <!-- The plain case: a bare integer, no codec, no affix. -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Crew</dt>
+    <dd class="field-grid__value">
+      <angular-inline-number
+        [formField]="recordForm.crew"
+        placeholder="Crew…"
+        ariaLabel="Crew count"
+        (saved)="logEmit('crew.saved', $event)"
+      />
+    </dd>
+  </div>
+
+  <!-- Same control, national display and mobile-only interpretation. -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Mobile</dt>
+    <dd class="field-grid__value">
+      <angular-inline-phone
+        #mobile
+        [formField]="recordForm.mobile"
+        [codec]="codec"
+        defaultCountry="DE"
+        numberKind="mobile"
+        displayFormat="national"
+        placeholder="Mobile…"
+        ariaLabel="Mobile number"
+        (saved)="logEmit('mobile.saved', $event)"
+      >
+        <span editable-error>
+          @if (mobile.parseFailed()) {
+            That doesn’t read as a phone number — digits, spaces and an optional leading “+”.
+          }
+        </span>
+      </angular-inline-phone>
+    </dd>
+  </div>
+
+  <!-- The binding shape IS the mode: { start, end } renders the two-field pair. -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Vacation</dt>
+    <dd class="field-grid__value">
+      <angular-inline-date
+        [formField]="recordForm.vacation"
+        [ranged]="true"
+        ariaLabel="Vacation dates"
+        (saved)="logEmit('vacation.saved', $event)"
+      />
+    </dd>
+  </div>
+
+  <!-- Time, pinned to 24 h through the locale extension — zero codec changes. -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Kickoff</dt>
+    <dd class="field-grid__value">
+      <angular-inline-time
+        [formField]="recordForm.kickoff"
+        locale="en-u-hc-h23"
+        placeholder="Kickoff…"
+        ariaLabel="Kickoff time in 24-hour time"
+        (saved)="logEmit('kickoff.saved', $event)"
+      />
+    </dd>
+  </div>
+
+  <!-- Ranged time, seeded overnight: the end instant wears the +1 badge. -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Shift</dt>
+    <dd class="field-grid__value">
+      <angular-inline-time
+        [formField]="recordForm.shift"
+        [ranged]="true"
+        locale="en-u-hc-h23"
+        ariaLabel="Shift start and end"
+        (saved)="logEmit('shift.saved', $event)"
+      />
+    </dd>
+  </div>
+
+  <!-- Duration: the model is seconds, the display is h:mm. -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Estimate</dt>
+    <dd class="field-grid__value">
+      <angular-inline-duration
+        [formField]="recordForm.estimate"
+        durationFormat="h:mm"
+        [step]="60"
+        placeholder="Estimate…"
+        ariaLabel="Work estimate"
+        (saved)="logEmit('estimate.saved', $event)"
+      />
+    </dd>
+  </div>
+</dl>
+
+<div class="field-grid__toggles" role="group" aria-label="Field state">
+  <button mat-stroked-button (click)="fieldRequired.update((v) => !v)">
+    Required: {{ fieldRequired() ? 'on' : 'off' }}
+  </button>
+  <button mat-stroked-button (click)="fieldReadonly.update((v) => !v)">
+    Readonly: {{ fieldReadonly() ? 'on' : 'off' }}
+  </button>
+  <button mat-stroked-button (click)="fieldDisabled.update((v) => !v)">
+    Disabled: {{ fieldDisabled() ? 'on' : 'off' }}
+  </button>
+  <button mat-stroked-button (click)="recordForm().markAsTouched()">Mark touched</button>
+  <button mat-stroked-button (click)="resetRecord()">Reset record</button>
+</div>

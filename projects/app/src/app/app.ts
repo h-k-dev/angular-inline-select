@@ -77,11 +77,15 @@ export class App {
   /** The documented component pages — the source of truth for the contextual tabs. */
   protected readonly pages = PAGES;
 
-  /** Grouped sidenav: the component playgrounds, then the benchmark tools. */
+  /** Grouped sidenav: the component playgrounds, the patterns, then the benchmark tools. */
   protected readonly navSections = [
     {
       heading: 'Components',
       items: PAGES.map((page) => ({ link: `/${page.path}`, label: page.label })),
+    },
+    {
+      heading: 'Patterns',
+      items: [{ link: '/patterns/form-grid', label: 'Form Grid' }],
     },
     {
       heading: 'Benchmark',

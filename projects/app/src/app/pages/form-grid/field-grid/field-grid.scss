@@ -1,0 +1,94 @@
+// =============================================================================
+// The form-grid pattern: label/value pairs side by side, folding top down when
+// the CONTAINER — not the viewport — runs out of room.
+// =============================================================================
+
+:host {
+  display: block;
+
+  // THE container. Every query below asks THIS box how wide it is, so the same
+  // markup can be two-column in a wide page column and stacked in a narrow one
+  // with no media query, no ResizeObserver and no input to thread through.
+  container-type: inline-size;
+  container-name: field-grid;
+}
+
+// One grid for the whole list — never a grid per row: the labels have to share
+// a single column track, or the values stop lining up down the card.
+.field-grid__list {
+  margin: 0;
+
+  display: grid;
+  grid-template-columns: minmax(6ch, max-content) minmax(0, 1fr);
+  column-gap: 1.5rem;
+  row-gap: 0.75rem;
+  align-items: baseline;
+}
+
+// `display: contents` dissolves the row wrapper: its <dt>/<dd> become items of
+// the list grid above, which is what keeps every label in the same track while
+// the markup stays a well-formed <dl> of pairs.
+.field-grid__row {
+  display: contents;
+}
+
+.field-grid__label {
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-on-surface-variant);
+
+  // The label column is `max-content`: let a long label fold rather than push
+  // the value column off the card.
+  overflow-wrap: break-word;
+}
+
+.field-grid__value {
+  margin: 0; // <dd> reset
+
+  // The value track is `minmax(0, 1fr)`; this is the other half of the deal —
+  // it lets the cell shrink under its content and hands the width constraint
+  // down to the field, where `noWrap` turns it into an ellipsis.
+  min-width: 0;
+}
+
+// -----------------------------------------------------------------------------
+// THE FOLD — under 40ch of container the pairs stack: label above value.
+// -----------------------------------------------------------------------------
+@container field-grid (width < 40ch) {
+  .field-grid__list {
+    grid-template-columns: minmax(0, 1fr);
+
+    // Stacked, the row gap is now the LABEL-to-value gap, so it tightens; the
+    // air between pairs comes back as a margin on the label below.
+    row-gap: 0.125rem;
+  }
+
+  .field-grid__row + .field-grid__row .field-grid__label {
+    margin-block-start: 0.875rem;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Slots: the affix icons and the slash menu render from templates declared
+// here, so these styles reach them even inside the elevated panel.
+// -----------------------------------------------------------------------------
+mat-icon[inline] {
+  // Optical: inline mat-icon affixes sit on the text baseline, not raised.
+  vertical-align: text-bottom;
+}
+
+.field-grid__menu-empty {
+  padding: 0.25rem 0.5rem;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// -----------------------------------------------------------------------------
+// Card controls
+// -----------------------------------------------------------------------------
+.field-grid__toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  margin-block-start: 1.5rem;
+}
