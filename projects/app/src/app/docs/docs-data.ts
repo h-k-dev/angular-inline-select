@@ -327,23 +327,14 @@ const CHROME_TOKENS: TokenGroup = {
     },
     {
       token: '--editable-text-action-background',
-      fallback: 'oklch(from var(--mat-sys-surface-container-highest, #eee) l c h / 0.75)',
-      description: 'Background of the pill action buttons (Discard, Clear).',
+      fallback: 'var(--mat-sys-surface-container-highest, #eee)',
+      description:
+        'Background of the pill action buttons (Discard, Clear). Always solid and never animated — the pill can sit over the field\u2019s own text, and the press `scale` carries the pointer affordance.',
     },
     {
       token: '--editable-text-action-color',
       fallback: 'var(--mat-sys-on-surface-variant, #5f6368)',
       description: 'Text color of the pill action buttons.',
-    },
-    {
-      token: '--editable-text-action-hover-background',
-      fallback: 'var(--mat-sys-surface-container-highest, #eee)',
-      description: 'Hover background of the pill action buttons.',
-    },
-    {
-      token: '--editable-text-action-hover-color',
-      fallback: 'var(--mat-sys-on-surface-variant, #5f6368)',
-      description: 'Hover text color of the pill action buttons.',
     },
     {
       token: '--editable-text-action-save-background',

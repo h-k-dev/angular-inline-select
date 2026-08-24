@@ -221,30 +221,27 @@
   font: var(--mat-sys-body-small, 0.875rem/calc(1.25 / 0.875) system-ui);
   color: var(--mat-sys-on-surface, #1f1f1f);
 
+  // ALWAYS SOLID — the background never changes and never animates. Two
+  // reasons: the bubble's pill can be pushed inward over the field's own text
+  // (screen edge + ellipsized value), and a translucent rest state lets those
+  // glyphs bleed through it; and the pointer affordance is already carried by
+  // `cursor: pointer` plus the press `scale` below, so a hover tint would be
+  // redundant motion on top of it.
   background-color: var(
     --editable-text-action-background,
-    oklch(from var(--mat-sys-surface-container-highest, #eee) l c h / 0.75)
+    var(--mat-sys-surface-container-highest, #eee)
   );
   color: var(--editable-text-action-color, var(--mat-sys-on-surface-variant, #5f6368));
   padding-inline: calc(var(--mat-sys-spacing, 0.25rem) * 2.5);
   border-radius: var(--mat-sys-radius, 0.625rem);
   height: calc(var(--mat-sys-spacing, 0.25rem) * 8);
 
+  // Scale only — the sole animated property on these pills.
   transition: scale 0.15s cubic-bezier(0.23, 1, 0.32, 1);
   scale: 1;
 
   &:active {
     scale: 0.98;
-  }
-
-  &:hover,
-  :focus-visible {
-    background-color: var(
-      --editable-text-action-hover-background,
-      var(--mat-sys-surface-container-highest, #eee)
-    );
-
-    color: var(--editable-text-action-hover-color, var(--mat-sys-on-surface-variant, #5f6368));
   }
 }
 
