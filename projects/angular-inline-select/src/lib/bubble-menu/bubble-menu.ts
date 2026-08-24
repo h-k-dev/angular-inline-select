@@ -19,13 +19,33 @@ import { OverlayModule, type ConnectedPosition } from '@angular/cdk/overlay';
 export type BubbleMenuSide = 'start' | 'end';
 
 /**
+ * THE POSITION CONTRACT — PUSH, BUT STAY ON THE INLINE.
+ *
+ * Every position set below holds exactly ONE position, deliberately. Do not add
+ * fallbacks to any of them.
+ *
+ * CDK only PUSHES an overlay (`cdkConnectedOverlayPush`, set in the template)
+ * when NO preferred position fits completely: it walks the list and the moment
+ * one fits it takes it and returns. So a fallback ALWAYS wins at a screen edge —
+ * and it wins badly. The bubble leaves the text line, drops out of its
+ * container onto whatever sits below, and anchors to the box's corner, nowhere
+ * near a ragged last line.
+ *
+ * With a single position nothing ever "fits", so CDK pushes along the inline
+ * axis instead: the bubble slides inward OVER the field's own text, holding the
+ * line's vertical centre exactly. That also keeps the hover bridge intact by
+ * construction — a pushed container overlaps the field rather than sitting
+ * across a gap from it — and it is why the action pills are painted fully
+ * opaque (styles/_editable.scss): they sit on top of live text.
+ */
+
+/**
  * Default side: grow toward inline-END, vertically CENTRED on the field — the
  * same vertical placement the text control's measured `contentOffset` resolves
  * to on a single line, so every single-line field (the temporal family) sits
  * on the line instead of riding high off the box's bottom corner. Multi-line
  * text never lands here: it always feeds `contentOffset` (and hides the bubble
- * while empty). Falls back to bottom-right (below the field, end-aligned) when
- * there is no inline room. start/end are direction-aware — RTL flips for free.
+ * while empty). start/end are direction-aware — RTL flips for free.
  *
  * The inline offset is ZERO: the container TOUCHES the field so there is no
  * dead zone for the pointer to cross. The visual gap is transparent
@@ -34,17 +54,17 @@ export type BubbleMenuSide = 'start' | 'end';
  */
 const END_POSITIONS: ConnectedPosition[] = [
   { originX: 'end', originY: 'center', overlayX: 'start', overlayY: 'center', offsetX: 0 },
-  { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 8 },
 ];
 
 /**
  * Start side (the inline-START field of a range): grow toward inline-START,
- * centre-anchored, falling back to bottom-left — the mirror of {@link END_POSITIONS},
- * so a range pair's two bubbles open outward and never collide.
+ * centre-anchored — the mirror of {@link END_POSITIONS}, so a range pair's two
+ * bubbles open outward and never collide. At the inline-START screen edge it
+ * pushes the other way (rightward, over its own field's text), mirroring the
+ * end side.
  */
 const START_POSITIONS: ConnectedPosition[] = [
   { originX: 'start', originY: 'center', overlayX: 'end', overlayY: 'center', offsetX: 0 },
-  { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 8 },
 ];
 
 /**
@@ -55,6 +75,9 @@ const START_POSITIONS: ConnectedPosition[] = [
  * re-resolves it on scroll (correct inside scrolling tables); the offset just
  * nudges from the corner to the content end. `offsetX`/`offsetY` are filled in
  * per-instance from the measurement.
+ *
+ * Single position, per the position contract above — a ragged last line near
+ * the inline edge pushes inward over its own text rather than dropping below.
  */
 function endOffsetPositions(offset: { x: number; y: number }): ConnectedPosition[] {
   return [

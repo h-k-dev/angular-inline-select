@@ -182,6 +182,11 @@ const TEXT_SURFACE_TOKENS: TokenGroup = {
       description: 'Opacity of the placeholder (shown when the field is empty).',
     },
     {
+      token: '--editable-text-placeholder-color',
+      fallback: 'var(--mat-sys-on-surface-variant, inherit)',
+      description: 'Text color of the placeholder (shown when the field is empty).',
+    },
+    {
       token: '--editable-text-hyphens',
       fallback: 'auto',
       description:
@@ -386,6 +391,11 @@ const TEMPORAL_TOKENS: TokenGroup = {
       description: 'Opacity of empty-segment placeholders.',
     },
     {
+      token: '--editable-text-placeholder-color',
+      fallback: 'var(--mat-sys-on-surface-variant, inherit)',
+      description: 'Text color of empty-segment placeholders.',
+    },
+    {
       token: '--editable-text-affix-color',
       fallback: 'var(--mat-sys-on-surface-variant, inherit)',
       description: 'Color of prefix/suffix affixes.',
@@ -428,6 +438,11 @@ const JSON_SURFACE_TOKENS: TokenGroup = {
       token: '--editable-text-placeholder-opacity',
       fallback: '0.3875',
       description: 'Opacity of the empty-field placeholder.',
+    },
+    {
+      token: '--editable-text-placeholder-color',
+      fallback: 'var(--mat-sys-on-surface-variant, inherit)',
+      description: 'Text color of the empty-field placeholder.',
     },
     {
       token: '--editable-text-dim-opacity',

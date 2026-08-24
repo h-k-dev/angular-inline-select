@@ -34,7 +34,7 @@
 }
 .inline-time__input::placeholder {
   font-style: italic;
-  color: inherit;
+  color: var(--editable-text-placeholder-color, var(--mat-sys-on-surface-variant, inherit));
   opacity: var(--editable-text-placeholder-opacity, 0.3875);
 }
 .inline-time__input:disabled {
