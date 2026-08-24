@@ -54,6 +54,8 @@
     [cdkTrapFocusAutoCapture]="false"
     (keydown.escape)="handleEscape($event)"
     (keydown.control.enter)="handleCtrlEnter()"
+    (keydown.tab)="handleTabKey($event, 1)"
+    (keydown.shift.tab)="handleTabKey($event, -1)"
   >
     <div class="editable-panel__line">
       @if (prefixTpl(); as prefix) {
@@ -108,6 +110,15 @@
     }
 
     <div class="editable-panel__footer" [attr.id]="panelId + '-messages'">
+      <!--
+        Scope Tab instruction — screen-reader only. Lives in the messages
+        container so the editor's existing aria-describedby carries it; a
+        sighted user learns the same thing by the panel simply closing.
+      -->
+      @if (scopeTabHint(); as hint) {
+        <span class="editable-visually-hidden">{{ hint }}</span>
+      }
+
       <!--
         Mat-form-field rule: the field decides WHEN errors show (touched or a
         save attempt), the consumer only decides WHAT they say. Projected
@@ -164,6 +175,10 @@
 </ng-template>
 
 <!-- Floating clear affordance — anchored to the in-flow field area (after the suffix, not the text) -->
-<bubble-menu [origin]="fieldArea" [contentOffset]="clearContentOffset()" [canShow]="bubbleMenuCanShow()">
+<bubble-menu
+  [origin]="fieldArea"
+  [contentOffset]="clearContentOffset()"
+  [canShow]="bubbleMenuCanShow()"
+>
   <button editableClearButton aria-label="Clear value" (clear)="clearValue($event)"></button>
 </bubble-menu>

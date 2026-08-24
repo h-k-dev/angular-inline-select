@@ -21,6 +21,7 @@ import {
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 import {
+  EDITABLE_SCOPE,
   EditablePrefix,
   EditableSuffix,
   BubbleMenu,
@@ -742,8 +743,39 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
 
   // -- Keyboard -----------------------------------------------------------------------
 
+  /**
+   * The ancestor Tab-to-accept scope, or `null` — see the date control: the
+   * commit already rides the native focusout; only the EDGE Tab's landing
+   * spot is the scope's business.
+   */
+  #scope = inject(EDITABLE_SCOPE, { optional: true });
+
   protected handleKeydown(key: SideKey, event: KeyboardEvent) {
     switch (event.key) {
+      case 'Tab': {
+        const scope = this.#scope;
+        if (!scope?.tabCommits()) return;
+
+        const direction = event.shiftKey ? -1 : 1;
+        const internalMove =
+          this.twoFields() &&
+          ((key === 'start' && direction === 1) || (key === 'end' && direction === -1));
+        if (internalMove) return; // the native side-to-side Tab stays
+
+        // `'stay'` refuses the Tab like Enter's parse gate (Tab gesture
+        // only — blur keeps the native snap-back regardless of policy).
+        if (scope.onBlocked() === 'stay' && this.parseFailed()) {
+          event.preventDefault();
+          this.#side(key).saveAttempted.set(true);
+          scope.announce('blocked');
+          return;
+        }
+
+        // Own the Tab only when the walk can place it — at the scope's edge
+        // the native Tab proceeds (blur settles, focus leaves the region).
+        if (scope.advanceFrom(event.target as HTMLElement, direction)) event.preventDefault();
+        return;
+      }
       case 'Enter': {
         event.preventDefault();
         if (this.parseFailed()) {

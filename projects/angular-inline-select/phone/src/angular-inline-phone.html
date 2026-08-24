@@ -1,13 +1,20 @@
 <!--
   The country-detection prefix — feedback AND the picker trigger. A button so
-  it's tappable on mobile and Tab-reachable in the panel; opens the shared
-  country list in a CDK overlay. Rendered outside the contenteditable, so the
-  click never touches the draft.
+  it's tappable on mobile; opens the shared country list in a CDK overlay.
+  Rendered outside the contenteditable, so the click never touches the draft.
+
+  tabindex="-1", the ARIA combobox convention for auxiliary popup buttons:
+  the keyboard path to the same function is the slash menu (`/de` in the
+  editor — searchable, caret never leaves), so Tab lands in the FIELD, not
+  on its chrome. Click/touch focus still works. Gated on the menu actually
+  being available: with `showCountryMenu` off the trigger IS the keyboard
+  path and stays in the tab order.
 -->
 <ng-template #flagTpl>
   <button
     type="button"
     class="country-trigger"
+    [attr.tabindex]="showCountryMenu() ? '-1' : null"
     [attr.aria-label]="'Change country' + (country() ? ' (' + country() + ')' : '')"
     aria-haspopup="listbox"
     [attr.aria-expanded]="pickerOpen()"

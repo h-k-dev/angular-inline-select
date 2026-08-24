@@ -13,6 +13,7 @@ import {
   contentChild,
   input,
   effect,
+  afterNextRender,
   afterRenderEffect,
   signal,
   untracked,
@@ -24,6 +25,7 @@ import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 // Shared chrome — generic (dialog service/actions/affixes/clear bubble), not text-specific.
 import {
   BubbleMenu,
+  EDITABLE_SCOPE,
   EditableClearButton,
   EditableDialog,
   EditableDialogRef,
@@ -89,6 +91,30 @@ export class AngularInlineJson implements FormValueControl<string> {
 
   /** The modal session host — MatDialog-shaped service, lazily fed the session component. */
   #dialog = inject(EditableDialog);
+
+  // ---------------------------------------------------------------------------
+  // Tab-to-accept scope (opt-in via an ancestor [editableScope])
+  //
+  // Registration only: the walk lands on the preview and `advanceMode:
+  // 'edit'` opens the dialog — the one field where "just type" cannot start
+  // the session. Tab INSIDE the dialog stays a text gesture (a modal is a
+  // deliberate stop), so no keydown wiring here.
+  // ---------------------------------------------------------------------------
+  #scope = inject(EDITABLE_SCOPE, { optional: true });
+  #hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
+  #scopeDestroyRef = inject(DestroyRef);
+
+  #registerWithScope = afterNextRender(() => {
+    const scope = this.#scope;
+    if (!scope) return;
+
+    const unregister = scope.register({
+      host: this.#hostEl.nativeElement,
+      entry: this.display().nativeElement,
+      beginEdit: () => this.elevate(),
+    });
+    this.#scopeDestroyRef.onDestroy(unregister);
+  });
 
   /** The committed value channel: raw JSON text (DB-friendly), never re-serialized on commit. */
   value = model('');

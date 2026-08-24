@@ -24,6 +24,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 
 // Components — core entry point
+import {
+  EditableScope,
+  type EditableScopeAdvanceMode,
+  type EditableScopeBlockedPolicy,
+} from '../../../../../../angular-inline-select/src/lib/utils/editable-scope/editable-scope';
 import { AngularInlineText } from '../../../../../../angular-inline-select/src/lib/angular-inline-text/angular-inline-text';
 import { AngularInlineNumber } from '../../../../../../angular-inline-select/src/lib/angular-inline-number/angular-inline-number';
 import {
@@ -153,6 +158,9 @@ function initialRecord(): RecordModel {
     EditableHint,
     EditableMenu,
     EditableErrorTemplate,
+
+    // Tab-to-accept scope
+    EditableScope,
   ],
 })
 export class FieldGrid {
@@ -174,6 +182,13 @@ export class FieldGrid {
   protected fieldRequired = signal(true);
   protected fieldReadonly = signal(false);
   protected fieldDisabled = signal(false);
+
+  // ---------------------------------------------------------------------------
+  // Tab-to-accept scope — opt-in: Tab in an open editor settles + advances
+  // ---------------------------------------------------------------------------
+  protected tabCommits = signal(true);
+  protected advanceMode = signal<EditableScopeAdvanceMode>('edit');
+  protected onBlocked = signal<EditableScopeBlockedPolicy>('revert');
 
   protected recordForm = form(this.recordModel, (path) => {
     // The schema decides validity only — the error TEXTS live in the projected

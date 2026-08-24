@@ -285,3 +285,19 @@
     animation: none;
   }
 }
+
+// -----------------------------------------------------------------------------
+// UTILITY: screen-reader-only text (the CDK visually-hidden pattern, library-
+// local so consumers don't depend on Material's global styles being present)
+// -----------------------------------------------------------------------------
+.editable-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

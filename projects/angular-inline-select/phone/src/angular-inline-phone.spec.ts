@@ -135,6 +135,13 @@ describe('AngularInlinePhone — [(value)] binding', () => {
     expect(prefix?.textContent?.trim()).toBe('🇩🇪');
   });
 
+  it('the flag trigger is click-only — out of the tab order (slash menu is the keyboard path)', () => {
+    const trigger = h.fixture.nativeElement.querySelector(
+      '.country-trigger',
+    ) as HTMLButtonElement | null;
+    expect(trigger?.getAttribute('tabindex')).toBe('-1');
+  });
+
   it('commits national input as E.164 through the codec round-trip', async () => {
     await typeText(h, '0170 9876543');
     accept(h);
@@ -219,7 +226,9 @@ describe('AngularInlinePhone — [(value)] binding', () => {
     h.fixture.detectChanges();
 
     // Pick Austria (+43) — the idle-commit path
-    (h.phone() as unknown as { pickCountry(o: { country: string; dialCode: string }): void }).pickCountry({
+    (
+      h.phone() as unknown as { pickCountry(o: { country: string; dialCode: string }): void }
+    ).pickCountry({
       country: 'AT',
       dialCode: '43',
     });

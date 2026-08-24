@@ -24,6 +24,7 @@ import {
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 import {
+  EDITABLE_SCOPE,
   EditablePrefix,
   EditableSuffix,
   type BubbleMenuSide,
@@ -66,7 +67,13 @@ export interface InlineDurationSaved {
  */
 @Component({
   selector: 'angular-inline-duration',
-  imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgTemplateOutlet, BubbleMenu, EditableClearButton],
+  imports: [
+    CdkConnectedOverlay,
+    CdkOverlayOrigin,
+    NgTemplateOutlet,
+    BubbleMenu,
+    EditableClearButton,
+  ],
   templateUrl: './angular-inline-duration.html',
   styleUrl: './angular-inline-duration.scss',
   host: {
@@ -409,8 +416,38 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
 
   // -- Keyboard -----------------------------------------------------------------------
 
+  /**
+   * The ancestor Tab-to-accept scope, or `null` — see the date control: the
+   * commit already rides the native focusout; only the Tab's landing spot
+   * is the scope's business (single input, so every Tab is an edge Tab).
+   */
+  #scope = inject(EDITABLE_SCOPE, { optional: true });
+
   protected handleKeydown(event: KeyboardEvent) {
     switch (event.key) {
+      case 'Tab': {
+        const scope = this.#scope;
+        if (!scope?.tabCommits()) return;
+
+        // `'stay'` refuses the Tab like Enter's parse gate (Tab gesture
+        // only — blur keeps the native snap-back regardless of policy).
+        if (
+          scope.onBlocked() === 'stay' &&
+          parseDuration(this.draft(), this.durationFormat()) === undefined
+        ) {
+          event.preventDefault();
+          this.#saveAttempted.set(true);
+          scope.announce('blocked');
+          return;
+        }
+
+        // Own the Tab only when the walk can place it — at the scope's edge
+        // the native Tab proceeds (blur settles, focus leaves the region).
+        if (scope.advanceFrom(event.target as HTMLElement, event.shiftKey ? -1 : 1)) {
+          event.preventDefault();
+        }
+        return;
+      }
       case 'Enter': {
         event.preventDefault();
         if (parseDuration(this.draft(), this.durationFormat()) === undefined) {

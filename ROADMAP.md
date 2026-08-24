@@ -93,6 +93,24 @@ editor (flat string), never a *document* editor, and stays that way:
   `handlePanelAttach`, not just on `input`). Known remaining fall-through:
   word-delete (`deleteWordBackward`) still elevates unchanged — rare, no
   clipboard stake; revisit if it bites.
+- **Editable scope — Tab-to-accept (opt-in).** `[editableScope]` +
+  `EDITABLE_SCOPE` (pull-based, the temporal leaf-state pattern): inside a
+  scope, Tab/Shift+Tab in the elevated panel SETTLES the session and
+  advances to the next/previous field — the temporal Tab-is-navigation tier
+  ported to the panel family. Invalid drafts follow the scope's `onBlocked`
+  (`'revert'` default: snap back + advance; `'stay'`: reveal + refuse);
+  `advanceMode` `'edit'` (default — the landed field's session opens, so
+  settle-and-keep-typing needs no second gesture; JSON registers so its
+  dialog chains too) or `'focus'`; DOM-order walk with registered fields
+  collapsing their chrome to one stop. The temporal controls hand their
+  EDGE Tab to the walk (internal start↔end stays native), so date → JSON
+  chains like text → text. Scopeless fields keep the focus trap exactly. A11y: settle outcomes announced via CDK `LiveAnnouncer` (saved
+  polite; reverted/blocked assertive — silent data loss is the real Tab
+  hazard) and a visually-hidden Tab instruction woven into the panel's
+  `aria-describedby`; all strings are scope inputs for i18n. Demo:
+  `/patterns/form-grid`; consumer/integration doc:
+  `GUIDELINE-EDITABLE-SCOPE.md` (includes the phase-2 LLM-suggestion
+  contract sketch — `suggestion` ghost text + two-stage Tab).
 
 Verified against `@angular/forms/signals` 22.0: `touched`/`invalid`/`hidden`
 are auto-bound custom-control inputs; `touch` → `markAsTouched()`;

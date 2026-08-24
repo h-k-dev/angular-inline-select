@@ -27,6 +27,7 @@ import { CdkConnectedOverlayConfig, ConnectedPosition, OverlayModule } from '@an
 import { A11yModule, _IdGenerator } from '@angular/cdk/a11y';
 
 import { getSelectionOffsets, setCaretOffset, replayEdit, filterChars } from './caret';
+import { EDITABLE_SCOPE } from '../utils/editable-scope/editable-scope';
 import { EditablePrefix, EditableSuffix } from './editable-affix';
 import { EditableHint } from './editable-hint';
 import { EditableMenu, detectSlashToken, type SlashToken } from './editable-menu';
@@ -854,6 +855,85 @@ export class AngularInlineText implements FormValueControl<string> {
     this.revert();
     // Detach without close() (navigation, destroy): sync the open state.
     if (this.editing()) this.editing.set(false);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tab-to-accept scope (opt-in via an ancestor [editableScope])
+  // ---------------------------------------------------------------------------
+
+  /** The ancestor scope, or `null` — a scopeless field keeps the focus trap. */
+  #scope = inject(EDITABLE_SCOPE, { optional: true });
+
+  /**
+   * The scope's Tab instruction, rendered visually hidden inside the panel's
+   * messages container (already the editor's `aria-describedby`) — how a
+   * screen-reader user learns that Tab saves here. `null` outside a scope,
+   * or while the scope has Tab-commit off.
+   */
+  protected scopeTabHint = computed(() =>
+    this.#scope?.tabCommits() ? this.#scope.tabHint() : null,
+  );
+
+  #hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  #scopeDestroyRef = inject(DestroyRef);
+
+  /**
+   * Registration is the composition boundary: wrapping controls (number,
+   * phone) contain this control, so THEIR chrome (a flag trigger) sits inside
+   * this host and collapses into the one field stop for free.
+   */
+  #registerWithScope = afterNextRender(() => {
+    const scope = this.#scope;
+    if (!scope) return;
+
+    const unregister = scope.register({
+      host: this.#hostEl.nativeElement,
+      entry: this.display().nativeElement,
+      beginEdit: () => this.elevate((this.value() ?? '').length),
+    });
+    this.#scopeDestroyRef.onDestroy(unregister);
+  });
+
+  /**
+   * Scoped Tab: settle the session, then advance. Only live inside a scope
+   * whose `tabCommits` is on — otherwise the event is left alone and
+   * `cdkTrapFocus` keeps cycling the panel (today's behavior).
+   *
+   * The settle follows the house temporal tiers: a clean or readable draft
+   * COMMITS; an invalid one follows the scope's `onBlocked` policy — snap
+   * back and advance (`'revert'`, the Tab-is-navigation default) or reveal
+   * the errors and refuse (`'stay'`, mat submit semantics). An open slash
+   * menu claims the first Tab and just closes, mirroring two-stage Escape.
+   */
+  protected handleTabKey(event: Event, direction: 1 | -1) {
+    const scope = this.#scope;
+    if (!scope?.tabCommits()) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (this.menuOpen()) {
+      this.#closeMenu();
+      return;
+    }
+
+    const changed = this.normalization().changed;
+
+    if (changed && this.isInvalid()) {
+      if (scope.onBlocked() === 'stay') {
+        this.accept(); // refused: reveals errors, session stays open
+        scope.announce('blocked');
+        return;
+      }
+      this.cancel(); // navigation tier: snap back, move on
+      scope.announce('reverted');
+    } else {
+      this.accept(); // commits (or settles unchanged) and closes
+      if (changed) scope.announce('saved'); // an unchanged settle is a non-event
+    }
+
+    scope.advanceFrom(this.display().nativeElement, direction);
   }
 
   // ---------------------------------------------------------------------------

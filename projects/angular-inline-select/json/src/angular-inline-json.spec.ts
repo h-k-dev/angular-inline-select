@@ -2,6 +2,8 @@ import { ApplicationRef, Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { EditorView } from '@codemirror/view';
 
+import { AngularInlineText, EditableScope } from 'angular-inline-select';
+
 import { AngularInlineJson, type InlineJsonSaved } from './angular-inline-json';
 
 @Component({
@@ -249,7 +251,9 @@ describe('AngularInlineJson', () => {
     expect(host.touchCount).toBe(0);
     expect(host.sessions).toEqual([]); // no settlement emission (family: the text control's detach path)
     expect(
-      (document.activeElement as HTMLElement | null)?.classList?.contains('editable-json__display') ?? false,
+      (document.activeElement as HTMLElement | null)?.classList?.contains(
+        'editable-json__display',
+      ) ?? false,
     ).toBe(false);
   });
 
@@ -293,5 +297,60 @@ describe('AngularInlineJson', () => {
     expect(host.value()).toBe('');
     expect(host.saved).toEqual([{ value: '' }]);
     expect(host.touchCount).toBe(1);
+  });
+});
+
+// =============================================================================
+// Tab-to-accept scope integration — the ONE field where "just type" cannot
+// start the session, so the scope's edit-advance must open the dialog.
+// =============================================================================
+
+describe('AngularInlineJson — inside an [editableScope]', () => {
+  @Component({
+    imports: [AngularInlineJson, AngularInlineText, EditableScope],
+    template: `
+      <div editableScope>
+        <angular-inline-text class="text" [(value)]="text" [isSingleLine]="true" />
+        <angular-inline-json [(value)]="json" [(editing)]="jsonEditing" />
+      </div>
+    `,
+  })
+  class ScopedJsonHost {
+    text = signal('alpha');
+    json = signal('{"a":1}');
+    jsonEditing = signal(false);
+  }
+
+  afterEach(() => {
+    document.querySelectorAll('.cdk-overlay-container').forEach((el) => el.remove());
+  });
+
+  it("a Tab-commit lands on the preview and opens the dialog (advanceMode 'edit' default)", async () => {
+    const fixture = TestBed.createComponent(ScopedJsonHost);
+    fixture.detectChanges();
+    const host = fixture.componentInstance;
+
+    // Elevate the TEXT field via an intercepted first edit.
+    const display = fixture.nativeElement.querySelector(
+      '.text .editable-text__display',
+    ) as HTMLElement;
+    const edit = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
+    Object.defineProperty(edit, 'inputType', { value: 'insertText' });
+    Object.defineProperty(edit, 'data', { value: 'x' });
+    display.dispatchEvent(edit);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const panel = document.querySelector('.editable-panel');
+    if (!panel) throw new Error('elevated panel not found');
+    panel.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }),
+    );
+    fixture.detectChanges();
+
+    // The text session settled; the JSON session opened without another gesture.
+    expect(document.querySelector('.editable-panel')).toBeNull();
+    expect(host.jsonEditing()).toBe(true);
   });
 });

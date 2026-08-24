@@ -301,6 +301,13 @@ describe('AngularInlineDate (input rehost)', () => {
     expect(h.start().value).toBe('May 12, 2026');
   });
 
+  it('the calendar trigger is click-only — out of the tab order (focus already opens the panel)', () => {
+    const trigger = h.fixture.nativeElement.querySelector(
+      '.inline-date__trigger',
+    ) as HTMLButtonElement | null;
+    expect(trigger?.getAttribute('tabindex')).toBe('-1');
+  });
+
   it('focus opens the panel WITHOUT stealing focus; the grid mirrors the draft', async () => {
     focusInput(h, h.start());
 
@@ -425,9 +432,7 @@ describe('AngularInlineDate (input rehost)', () => {
 
 @Component({
   imports: [AngularInlineDate],
-  template: `
-    <angular-inline-date [(value)]="value" locale="en" zone="Asia/Tokyo" [now]="now" />
-  `,
+  template: ` <angular-inline-date [(value)]="value" locale="en" zone="Asia/Tokyo" [now]="now" /> `,
 })
 class ZonedDateHost {
   value = signal<InlineDateValue>(dayToDbEntry('2026-07-21', 'Asia/Tokyo'));

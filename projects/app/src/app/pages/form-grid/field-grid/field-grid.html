@@ -5,7 +5,20 @@
   and what lets a single `grid-template-columns` swap fold the whole thing to
   stacked rows inside the container query. See field-grid.scss.
 -->
-<dl class="field-grid__list">
+<!--
+  The scope is the Tab opt-in: inside it, Tab in an open editor SETTLES the
+  session and moves to the next field (Shift+Tab backwards) instead of cycling
+  the panel's own actions. Unregistered stops — the temporal controls' native
+  inputs, the JSON preview — participate through the DOM walk, so the whole
+  mixed grid keeps one gesture.
+-->
+<dl
+  class="field-grid__list"
+  editableScope
+  [tabCommits]="tabCommits()"
+  [advanceMode]="advanceMode()"
+  [onBlocked]="onBlocked()"
+>
   <!-- Text, single line: required, projected error, edge-trimmed on commit. -->
   <div class="field-grid__row">
     <dt class="field-grid__label">Project</dt>
@@ -332,4 +345,16 @@
   </button>
   <button mat-stroked-button (click)="recordForm().markAsTouched()">Mark touched</button>
   <button mat-stroked-button (click)="resetRecord()">Reset record</button>
+  <button mat-stroked-button (click)="tabCommits.update((v) => !v)">
+    Tab commits: {{ tabCommits() ? 'on' : 'off' }}
+  </button>
+  <button
+    mat-stroked-button
+    (click)="advanceMode.set(advanceMode() === 'focus' ? 'edit' : 'focus')"
+  >
+    Advance: {{ advanceMode() }}
+  </button>
+  <button mat-stroked-button (click)="onBlocked.set(onBlocked() === 'revert' ? 'stay' : 'revert')">
+    On blocked: {{ onBlocked() }}
+  </button>
 </div>

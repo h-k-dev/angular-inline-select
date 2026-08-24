@@ -90,9 +90,16 @@
       <ng-container [ngTemplateOutlet]="tpl" />
     </span>
   } @else if (showCalendar()) {
+    <!--
+      tabindex="-1", the ARIA combobox convention for auxiliary popup buttons:
+      the calendar already opens on the input's own focus and ArrowDown hands
+      the grid the keyboard — the trigger duplicates that for pointer/touch,
+      so Tab lands in the FIELD, not on its chrome.
+    -->
     <button
       type="button"
       class="inline-date__trigger"
+      tabindex="-1"
       [attr.aria-label]="intl.openCalendarLabel()"
       [attr.aria-expanded]="overlayOpen()"
       (mousedown)="$event.preventDefault()"

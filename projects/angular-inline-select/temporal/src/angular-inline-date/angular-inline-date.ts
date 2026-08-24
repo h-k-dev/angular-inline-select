@@ -30,6 +30,7 @@ import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 // Core
 import {
+  EDITABLE_SCOPE,
   EditablePrefix,
   EditableSuffix,
   BubbleMenu,
@@ -683,8 +684,45 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   // -- Keyboard -------------------------------------------------------------------
 
+  /**
+   * The ancestor Tab-to-accept scope, or `null`. The control commits on
+   * Tab/blur NATIVELY — the scope only takes over WHERE focus goes: an
+   * edge Tab (leaving the control, not the internal start↔end move) walks
+   * the scope's stops instead of the raw DOM order, so the landed field's
+   * session can open (`advanceMode: 'edit'`). The settle itself still runs
+   * through the normal focusout path once focus has moved.
+   */
+  #scope = inject(EDITABLE_SCOPE, { optional: true });
+
   protected handleInputKeydown(key: SideKey, event: KeyboardEvent) {
     switch (event.key) {
+      case 'Tab': {
+        const scope = this.#scope;
+        if (!scope?.tabCommits()) return;
+
+        const direction = event.shiftKey ? -1 : 1;
+        const internalMove =
+          this.twoFields() &&
+          ((key === 'start' && direction === 1) || (key === 'end' && direction === -1));
+        if (internalMove) return; // the native side-to-side Tab stays
+
+        // `'stay'` refuses the Tab like Enter's parse gate would. Only the
+        // Tab GESTURE — blur can never be refused, so it keeps the native
+        // snap-back regardless of policy.
+        if (scope.onBlocked() === 'stay' && this.#side(key).parsed() === undefined) {
+          event.preventDefault();
+          this.#side(key).saveAttempted.set(true);
+          scope.announce('blocked');
+          return;
+        }
+
+        // Own the Tab only when the walk can place it. At the scope's edge
+        // the NATIVE Tab proceeds — blur settles and focus leaves the
+        // region, exactly the `wrap: false` contract. Preventing first
+        // would turn the last field into a Tab trap.
+        if (scope.advanceFrom(event.target as HTMLElement, direction)) event.preventDefault();
+        return;
+      }
       case 'Enter': {
         event.preventDefault();
         const side = this.#side(key);
