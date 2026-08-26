@@ -802,7 +802,10 @@ export const DOCS: Record<string, SectionDocs> = {
             name: 'placeholder',
             type: 'string | undefined',
             default: 'undefined',
-            description: 'Placeholder for the (start) date.',
+            description:
+              "Placeholder for the (start) date. Unset, the locale's numeric pattern in " +
+              "the locale's own field letters ('tt.mm.jjjj' de, 'mm/dd/yyyy' en-US) — " +
+              'letters from TemporalIntl.datePlaceholderTokens().',
           },
           {
             name: 'endPlaceholder',

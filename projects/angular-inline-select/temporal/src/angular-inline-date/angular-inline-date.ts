@@ -106,7 +106,10 @@ interface DateSide extends SideCore<IsoDate> {
  *
  * Session semantics are GESTURE-TIERED (the Notion/GCal convention):
  * - Enter  = explicit commit — an unreadable draft BLOCKS with the error.
- * - Escape = explicit revert to the session baseline.
+ * - Escape = two-stage, the house convention: the first press peels the
+ *   summoned panel (draft intact), the next reverts to the session
+ *   baseline. A panel showing only the parse gate is skipped — a broken
+ *   draft clears in ONE press.
  * - Tab / blur = navigation, never a validity checkpoint: a readable draft
  *   COMMITS and focus moves on; an unreadable draft SNAPS BACK to the
  *   baseline and focus moves anyway. Never trap, never persist a draft
@@ -167,8 +170,9 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   /**
    * Placeholder override. Unset, the field shows the LOCALE'S numeric date
-   * pattern (`'dd.mm.yyyy'` German, `'mm/dd/yyyy'` en-US) — fixed size per
-   * locale, so the placeholder-floored width never shifts.
+   * pattern, spelled in the locale's own field letters (`'tt.mm.jjjj'`
+   * German, `'mm/dd/yyyy'` en-US; letters from `TemporalIntl`) — fixed size
+   * per locale, so the placeholder-floored width never shifts.
    */
   placeholder = input<string | undefined>(undefined);
   /**
@@ -179,9 +183,13 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   endPlaceholder = input<string | undefined>(undefined);
 
   /** Public: the resolved placeholder verdict (adapters render from this, not the input). */
-  readonly effectivePlaceholder = computed(
-    () => this.placeholder() ?? localeDatePlaceholder(this.locale()),
-  );
+  readonly effectivePlaceholder = computed(() => {
+    const explicit = this.placeholder();
+    if (explicit !== undefined) return explicit;
+
+    const locale = this.locale();
+    return localeDatePlaceholder(locale, this.intl.datePlaceholderTokens(locale));
+  });
 
   /**
    * The UNIFORM adapter surface (every temporal control exposes it): the
@@ -383,6 +391,15 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   protected overlayOpen = signal(false);
 
+  /**
+   * One-shot: the `focusin` that Escape's own focus-return fires must not
+   * re-open the panel Escape just closed. Set by `escapeCalendar`, consumed
+   * by the next `handleFocusIn`. A flag rather than statement order, because
+   * `focus()` dispatches `focusin` asynchronously in some environments —
+   * closing "after" the focus call is not a guarantee anywhere.
+   */
+  #suppressPanelOnFocus = false;
+
   /** Public: whether the panel is showing (hosting containers coordinate on it). */
   readonly panelVisible = computed(() => this.overlayOpen());
 
@@ -563,8 +580,33 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     }
 
     this.focusTarget.set(key);
-    if (!this.effectiveReadonly() && !this.effectiveDisabled()) this.overlayOpen.set(true);
+
+    const suppressed = this.#suppressPanelOnFocus;
+    this.#suppressPanelOnFocus = false;
+    if (!suppressed && !this.effectiveReadonly() && !this.effectiveDisabled()) {
+      this.overlayOpen.set(true);
+    }
+
     this.editing.set(true);
+  }
+
+  /**
+   * A pointer in the field OPENS the panel — it never closes it. This is the
+   * only pointer route back in after a pick: the grid cells `preventDefault`
+   * their mousedown, so focus never left the field, the next click fires no
+   * `focusin`, and `handleFocusIn` never runs.
+   *
+   * Open-only, NOT a toggle, per the ARIA combobox division of labour: the
+   * TEXTBOX is a text-editing surface — a click there is a caret move, and
+   * must not also dismiss the popup (the touch case makes that plain) —
+   * while the 📅 BUTTON is the toggle. Idempotent, so the pointer that also
+   * brings focus simply agrees with `handleFocusIn`. Nothing is prevented:
+   * the caret still lands where it was clicked.
+   */
+  protected handleInputPointerdown() {
+    if (this.effectiveDisabled() || this.effectiveReadonly()) return;
+
+    this.overlayOpen.set(true);
   }
 
   /**
@@ -739,6 +781,23 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       case 'Escape': {
         event.preventDefault();
         event.stopPropagation();
+
+        // Stage 1 — peel the summoned panel, draft INTACT. The house
+        // convention (the text control's slash menu does the same): cancel
+        // addresses the innermost thing the user summoned, one layer per
+        // press. Typing or a pointer brings the panel straight back, so
+        // nothing is lost by dismissing it.
+        //
+        // Skipped while the parse gate is up: a panel that is only there to
+        // say WHY the commit was refused is feedback, not summoned chrome,
+        // and it does not survive the revert anyway — spending a press on it
+        // would make a broken draft cost two Escapes to clear.
+        if (this.overlayOpen() && !this.parseGateVisible()) {
+          this.overlayOpen.set(false);
+          return;
+        }
+
+        // Stage 2 — revert the draft to the session baseline (flash + announce).
         this.#settle(key, { revert: true, keepOpen: true });
         this.overlayOpen.set(false);
         return;
@@ -784,10 +843,10 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
     const other: SideKey = key === 'start' ? 'end' : 'start';
     if (this.twoFields() && this.#side(other).committed() === null) {
+      // Handing the session over — the panel STAYS for the completing pick.
       this.#chrome.focusSide(other);
     } else {
-      this.overlayOpen.set(false);
-      this.#chrome.focusSide(key);
+      this.#closePanelReturningFocus(key);
     }
   }
 
@@ -827,8 +886,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   /** A drag painted [start, end] — commit the pair whole and close. */
   protected commitDraggedRange(range: { start: IsoDate; end: IsoDate }) {
     this.#commitBothSides(range.start, range.end);
-    this.overlayOpen.set(false);
-    this.#chrome.focusSide(this.focusTarget() ?? 'start');
+    this.#closePanelReturningFocus(this.focusTarget() ?? 'start');
   }
 
   /**
@@ -846,9 +904,35 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     this.#chrome.focusSide('end');
   }
 
-  /** Escape in the grid hands control back to the focused input (session continues). */
+  /**
+   * Escape in the grid is the SAME peel as Escape in the input: leave the
+   * calendar — close it and hand control back to the focused input, draft
+   * intact. Collapsing the two into one layer keeps the stack exactly two
+   * deep (calendar, then draft), so reverting from inside the grid never
+   * costs three presses.
+   */
   protected escapeCalendar() {
-    this.#chrome.focusSide(this.focusTarget() ?? 'start');
+    this.#closePanelReturningFocus(this.focusTarget() ?? 'start');
+  }
+
+  /**
+   * Closes the panel and puts focus back on a side's input — the one correct
+   * way to do those two things together. Naive `set(false)` + `focusSide()`
+   * does NOT work: when focus is inside the panel (the grid), returning it
+   * fires `focusin`, and `handleFocusIn` re-opens the panel that was just
+   * closed. Pointer paths never showed it because the grid cells
+   * `preventDefault` their mousedown, so focus never left the input and the
+   * focus call was a no-op — it only ever bit KEYBOARD picks.
+   */
+  #closePanelReturningFocus(key: SideKey) {
+    const input = this.#inputOf(key);
+    // Only claim the suppression when a `focusin` is actually coming — an
+    // unconsumed flag would swallow the NEXT session's panel.
+    const movingFocus = input !== undefined && this.#document.activeElement !== input;
+
+    this.#suppressPanelOnFocus = movingFocus;
+    this.overlayOpen.set(false);
+    if (movingFocus) this.#chrome.focusSide(key);
   }
 
   /**

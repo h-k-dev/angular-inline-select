@@ -238,22 +238,113 @@ export function parseDateInput(
 const placeholderCache = new Map<string, string>();
 
 /**
- * The locale's NUMERIC date pattern as a fixed-size typing hint:
- * `'dd.mm.yyyy'` for German, `'mm/dd/yyyy'` for en-US, `'yyyy. mm. dd.'`
- * for Korean — order and separators from `Intl.formatToParts`, zero
- * bundled tables. Four-digit year on purpose: it is what a commit
- * displays back (the parser reads 2-digit years as 20xx regardless).
- * Used as the control's default placeholder, which also floors the
- * field width — same locale, same size, every render.
+ * The letters ONE locale spells the date fields with in a typing hint —
+ * `{ day: 't', month: 'm', year: 'j' }` renders German's `tt.mm.jjjj`.
+ * Lower-cased by convention here (the control's placeholders are quiet);
+ * an override may return any casing.
  */
-export function localeDatePlaceholder(locale?: string | string[]): string {
-  const key = JSON.stringify(locale ?? '');
+export interface DatePlaceholderTokens {
+  day: string;
+  month: string;
+  year: string;
+}
+
+/**
+ * The one thing `Intl` cannot tell us. `formatToParts` gives the field
+ * ORDER and the separators for every locale on earth, but the letters a
+ * reader expects in a typing hint are words in their language — `Tag`,
+ * `jour`, `giorno`, `день` — and no `Intl` surface exposes them. So: a
+ * table, kept to the primary language subtag, listing what native date
+ * inputs show in that locale. Unlisted languages fall back to `d/m/y`,
+ * which is also correct for every English variant — and is where a
+ * language whose own words would COLLIDE belongs (Lithuanian's mėnuo and
+ * metai are both `m`; `mmmm-mm-dd` hints less than `yyyy-mm-dd`).
+ */
+const PLACEHOLDER_TOKENS: Record<string, DatePlaceholderTokens> = {
+  bg: { day: 'д', month: 'м', year: 'г' }, // ден / месец / година
+  bs: { day: 'd', month: 'm', year: 'g' }, // dan / mjesec / godina
+  ca: { day: 'd', month: 'm', year: 'a' }, // dia / mes / any
+  cs: { day: 'd', month: 'm', year: 'r' }, // den / měsíc / rok
+  da: { day: 'd', month: 'm', year: 'å' }, // dag / måned / år
+  de: { day: 't', month: 'm', year: 'j' }, // Tag / Monat / Jahr
+  el: { day: 'η', month: 'μ', year: 'ε' }, // ημέρα / μήνας / έτος
+  es: { day: 'd', month: 'm', year: 'a' }, // día / mes / año
+  et: { day: 'p', month: 'k', year: 'a' }, // päev / kuu / aasta
+  fi: { day: 'p', month: 'k', year: 'v' }, // päivä / kuukausi / vuosi
+  fr: { day: 'j', month: 'm', year: 'a' }, // jour / mois / année
+  hr: { day: 'd', month: 'm', year: 'g' }, // dan / mjesec / godina
+  hu: { day: 'n', month: 'h', year: 'é' }, // nap / hónap / év
+  it: { day: 'g', month: 'm', year: 'a' }, // giorno / mese / anno
+  lv: { day: 'd', month: 'm', year: 'g' }, // diena / mēnesis / gads
+  nb: { day: 'd', month: 'm', year: 'å' }, // dag / måned / år
+  nl: { day: 'd', month: 'm', year: 'j' }, // dag / maand / jaar
+  nn: { day: 'd', month: 'm', year: 'å' },
+  no: { day: 'd', month: 'm', year: 'å' },
+  pl: { day: 'd', month: 'm', year: 'r' }, // dzień / miesiąc / rok
+  pt: { day: 'd', month: 'm', year: 'a' }, // dia / mês / ano
+  ro: { day: 'z', month: 'l', year: 'a' }, // zi / lună / an
+  ru: { day: 'д', month: 'м', year: 'г' }, // день / месяц / год
+  sk: { day: 'd', month: 'm', year: 'r' }, // deň / mesiac / rok
+  sl: { day: 'd', month: 'm', year: 'l' }, // dan / mesec / leto
+  sr: { day: 'd', month: 'm', year: 'g' }, // dan / mesec / godina
+  sv: { day: 'd', month: 'm', year: 'å' }, // dag / månad / år
+  tr: { day: 'g', month: 'a', year: 'y' }, // gün / ay / yıl
+  uk: { day: 'д', month: 'м', year: 'р' }, // день / місяць / рік
+};
+
+const DEFAULT_PLACEHOLDER_TOKENS: DatePlaceholderTokens = { day: 'd', month: 'm', year: 'y' };
+
+/**
+ * The placeholder letters for a locale: the first tag in the list whose
+ * primary language subtag the table knows, else `d/m/y`. The resolution
+ * mirrors `Intl`'s own list handling — a `['de-AT', 'en']` binding takes
+ * German, because that is the locale `formatToParts` will have used for
+ * the surrounding order and separators.
+ */
+export function datePlaceholderTokens(locale?: string | string[]): DatePlaceholderTokens {
+  if (locale === undefined) {
+    // Browser default — whatever `Intl` will resolve the pattern with.
+    try {
+      locale = new Intl.DateTimeFormat().resolvedOptions().locale;
+    } catch {
+      return DEFAULT_PLACEHOLDER_TOKENS;
+    }
+  }
+
+  for (const tag of Array.isArray(locale) ? locale : [locale]) {
+    const language = tag.toLowerCase().split(/[-_]/)[0];
+    const tokens = PLACEHOLDER_TOKENS[language];
+    if (tokens) return tokens;
+  }
+
+  return DEFAULT_PLACEHOLDER_TOKENS;
+}
+
+/**
+ * The locale's NUMERIC date pattern as a fixed-size typing hint:
+ * `'tt.mm.jjjj'` for German, `'mm/dd/yyyy'` for en-US, `'yyyy. mm. dd.'`
+ * for Korean — order and separators from `Intl.formatToParts`, the field
+ * letters from `tokens` (the locale's own, per `datePlaceholderTokens`).
+ * Four-digit year on purpose: it is what a commit displays back (the
+ * parser reads 2-digit years as 20xx regardless). Used as the control's
+ * default placeholder, which also floors the field width — same locale,
+ * same size, every render.
+ */
+export function localeDatePlaceholder(
+  locale?: string | string[],
+  tokens: DatePlaceholderTokens = datePlaceholderTokens(locale),
+): string {
+  const key = JSON.stringify([locale ?? '', tokens.day, tokens.month, tokens.year]);
   const cached = placeholderCache.get(key);
   if (cached !== undefined) return cached;
 
+  const day = tokens.day.repeat(2);
+  const month = tokens.month.repeat(2);
+  const year = tokens.year.repeat(4);
+
   // The reference day needs 2-digit day AND month — else a locale that
   // ignores the '2-digit' request would produce a lying width floor.
-  let pattern = 'yyyy-mm-dd';
+  let pattern = `${year}-${month}-${day}`;
   try {
     pattern = new Intl.DateTimeFormat(locale, {
       day: '2-digit',
@@ -264,11 +355,11 @@ export function localeDatePlaceholder(locale?: string | string[]): string {
       .map((part) => {
         switch (part.type) {
           case 'day':
-            return 'dd';
+            return day;
           case 'month':
-            return 'mm';
+            return month;
           case 'year':
-            return 'yyyy';
+            return year;
           case 'literal':
             return part.value;
           default:

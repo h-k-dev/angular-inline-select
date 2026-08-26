@@ -1,5 +1,9 @@
 import { Injectable, signal } from '@angular/core';
 
+import {
+  datePlaceholderTokens as builtinDatePlaceholderTokens,
+  type DatePlaceholderTokens,
+} from './angular-inline-date/date-codec';
 import type { SideKey } from './side-session';
 
 /**
@@ -59,6 +63,22 @@ export class TemporalIntl {
   clearLabel(side: SideKey | 'single'): string {
     const noun = this.dateLabel().toLowerCase();
     return side === 'single' ? `Clear ${noun}` : `Clear ${this.#sideWord(side)} ${noun}`;
+  }
+
+  /**
+   * The letters the date field's typing hint spells its parts with, for the
+   * locale the field renders in (`tt.mm.jjjj` in German). Field ORDER and
+   * separators still come from `Intl` — only the letters are words in a
+   * language, which no `Intl` surface exposes. The built-in table covers
+   * the common locales; override for one it doesn't know, or to change the
+   * casing:
+   *
+   *     datePlaceholderTokens() {
+   *       return { day: 'T', month: 'M', year: 'J' };
+   *     }
+   */
+  datePlaceholderTokens(locale?: string | string[]): DatePlaceholderTokens {
+    return builtinDatePlaceholderTokens(locale);
   }
 
   /** The snap-back announcement; `''` restored → the empty word. */

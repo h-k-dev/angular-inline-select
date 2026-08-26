@@ -49,15 +49,35 @@ async function settle(fixture: ComponentFixture<ValueBindingHost>) {
   TestBed.inject(ApplicationRef).tick();
 }
 
-/** Opens the session dialog (lazy import + CM mount) and waits until the editor exists. */
-async function openSession(fixture: ComponentFixture<ValueBindingHost>) {
+/**
+ * Opens the session dialog (lazy import + CM mount) and waits until the
+ * editor exists.
+ *
+ * The wait is a DEADLINE, not a count of settles. What it waits on is the
+ * component's `await import(…)` of CodeMirror, and that resolves on
+ * wall-clock module loading rather than on how many times the task queue is
+ * flushed — so an iteration budget buys however much time the iterations
+ * happen to take, which is not a quantity this spec controls.
+ *
+ * Measured: a WARM open needs one settle (~20-110ms), while the first open
+ * in the file pays the cold import and needs ten (~300ms). Twenty settles
+ * was therefore about 2x headroom, and only on an unloaded machine — under
+ * parallel-suite load the import slows down while the settles do not, so the
+ * margin collapsed and exactly one test flaked: the first one to open a
+ * session, the only one paying cold-import cost. A time budget does not
+ * erode that way.
+ */
+async function openSession(fixture: ComponentFixture<ValueBindingHost>, timeoutMs = 4000) {
   const display = fixture.nativeElement.querySelector('.editable-json__display') as HTMLElement;
   display.click();
 
-  for (let i = 0; i < 20 && document.querySelector('.cm-editor') === null; i++) {
+  const deadline = Date.now() + timeoutMs;
+  while (document.querySelector('.cm-editor') === null) {
+    if (Date.now() >= deadline) {
+      throw new Error(`session never mounted within ${timeoutMs}ms`);
+    }
     await settle(fixture);
   }
-  if (document.querySelector('.cm-editor') === null) throw new Error('session never mounted');
 }
 
 /** The mounted CodeMirror view — the session's source of truth for the draft. */
@@ -73,6 +93,21 @@ function typeDraft(fixture: ComponentFixture<ValueBindingHost>, text: string) {
   view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
   fixture.detectChanges();
 }
+
+/**
+ * Pre-warms the module the control loads with `await import('./json-session')`
+ * — CodeMirror and all.
+ *
+ * This is the flake fix proper. Module loading is cached per run, so exactly
+ * ONE test per file paid the cold import, and it was whichever ran first: the
+ * only spec ever observed flaking. Importing the module up front makes every
+ * open a warm one, which removes the variance instead of merely leaving more
+ * room for it. `openSession`'s deadline is then defence in depth rather than
+ * the thing standing between this file and a red build.
+ */
+beforeAll(async () => {
+  await import('./json-session');
+});
 
 describe('AngularInlineJson', () => {
   it('creates and starts idle', () => {

@@ -14,6 +14,7 @@ import {
   echoDateShape,
   dateValuesEqual,
   localeDatePlaceholder,
+  datePlaceholderTokens,
   type DateSavedDetails,
   type InlineDateValue,
 } from './date-codec';
@@ -89,12 +90,28 @@ describe('date codec', () => {
     expect(formatIsoDate(null)).toBe('');
   });
 
-  it('derives the placeholder pattern from the locale — fixed size, no tables', () => {
-    expect(localeDatePlaceholder('de')).toBe('dd.mm.yyyy');
+  it('derives the placeholder pattern from the locale — order from Intl, letters from the table', () => {
+    expect(localeDatePlaceholder('de')).toBe('tt.mm.jjjj');
     expect(localeDatePlaceholder('en')).toBe('mm/dd/yyyy');
     expect(localeDatePlaceholder('en-GB')).toBe('dd/mm/yyyy');
+    // The letters are the locale's own words; the order stays Intl's.
+    expect(localeDatePlaceholder('fr')).toBe('jj/mm/aaaa');
+    expect(localeDatePlaceholder('hu')).toBe('éééé. hh. nn.');
+    // A language the table doesn't list keeps d/m/y under its own order.
+    expect(localeDatePlaceholder('ko')).toBe('yyyy. mm. dd.');
     // An unknown tag throws inside Intl — the ISO fallback stands.
-    expect(localeDatePlaceholder('no-such-tag-!!')).toBe('yyyy-mm-dd');
+    expect(localeDatePlaceholder('xx-such-tag-!!')).toBe('yyyy-mm-dd');
+  });
+
+  it('resolves placeholder letters by primary subtag, first known tag wins', () => {
+    expect(datePlaceholderTokens('de-AT')).toEqual({ day: 't', month: 'm', year: 'j' });
+    expect(datePlaceholderTokens(['de-CH', 'en'])).toEqual({ day: 't', month: 'm', year: 'j' });
+    // No listed language in the list → the d/m/y default.
+    expect(datePlaceholderTokens('ja')).toEqual({ day: 'd', month: 'm', year: 'y' });
+  });
+
+  it('takes the placeholder letters from an explicit token override', () => {
+    expect(localeDatePlaceholder('de', { day: 'T', month: 'M', year: 'J' })).toBe('TT.MM.JJJJ');
   });
 
   it('builds relative + weekday commands with localized and English matching', () => {
@@ -271,6 +288,13 @@ function type(h: Harness<unknown>, input: HTMLInputElement, text: string) {
   h.fixture.detectChanges();
 }
 
+/** A pointer press on an input — the pointerdown Angular binds, focus-order faithful. */
+function pointer(h: Harness<unknown>, input: HTMLInputElement) {
+  input.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }));
+  input.focus(); // no-op when it already had focus — exactly the browser's order
+  h.fixture.detectChanges();
+}
+
 function press(h: Harness<unknown>, input: HTMLInputElement, key: string) {
   input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
   h.fixture.detectChanges();
@@ -372,13 +396,49 @@ describe('AngularInlineDate (input rehost)', () => {
     expect(h.host.sessions).toEqual([{ value: db('2026-12-24'), changed: true }]);
   });
 
-  it('Escape reverts to the session baseline and closes the panel', () => {
+  it('Escape stage 1 peels the panel and leaves the draft ALONE', () => {
     type(h, h.start(), '24.12.2026');
+    expect(h.panel()).not.toBeNull();
+
     press(h, h.start(), 'Escape');
+
+    // The panel is gone; the draft — and the live value it wrote — stand.
+    expect(h.panel()).toBeNull();
+    expect(h.start().value).toBe('24.12.2026');
+    expect(h.host.field().value()).toBe(db('2026-12-24'));
+    expect(h.host.saved).toEqual([]);
+  });
+
+  it('Escape stage 2 reverts to the session baseline', () => {
+    type(h, h.start(), '24.12.2026');
+    press(h, h.start(), 'Escape'); // stage 1: panel
+    press(h, h.start(), 'Escape'); // stage 2: draft
 
     expect(h.host.field().value()).toBe(db('2026-05-12'));
     expect(h.start().value).toBe('May 12, 2026');
     expect(h.host.saved).toEqual([]);
+    expect(h.panel()).toBeNull();
+  });
+
+  it('typing after stage 1 brings the panel back', () => {
+    type(h, h.start(), '24.12.2026');
+    press(h, h.start(), 'Escape');
+    expect(h.panel()).toBeNull();
+
+    type(h, h.start(), '25.12.2026');
+    expect(h.panel()).not.toBeNull();
+  });
+
+  it('a draft blocked by the parse gate reverts in ONE press', () => {
+    type(h, h.start(), 'not a date');
+    press(h, h.start(), 'Enter'); // refused — the panel now carries the error
+    expect(h.panel()).not.toBeNull();
+
+    press(h, h.start(), 'Escape');
+
+    // No press spent on the error panel: the revert lands immediately.
+    expect(h.start().value).toBe('May 12, 2026');
+    expect(h.host.field().value()).toBe(db('2026-05-12'));
     expect(h.panel()).toBeNull();
   });
 
@@ -402,6 +462,12 @@ describe('AngularInlineDate (input rehost)', () => {
     );
     h.fixture.detectChanges();
     expect(document.activeElement).toBe(h.start());
+    // ONE peel, not two: leaving the grid closes the calendar with it, so the
+    // stack stays two deep and a revert from the grid never costs three presses.
+    expect(h.panel()).toBeNull();
+
+    // The grid needs reopening for the pick below — typing does that.
+    press(h, h.start(), 'ArrowDown');
 
     const cell = gridCell('2026-05-20')!;
     cell.click();
@@ -411,6 +477,87 @@ describe('AngularInlineDate (input rehost)', () => {
     expect(h.start().value).toBe('May 20, 2026');
     expect(h.panel()).toBeNull();
     expect(document.activeElement).toBe(h.start());
+  });
+
+  it('clicking the still-focused field after a pick REOPENS the panel', async () => {
+    focusInput(h, h.start());
+    expect(h.panel()).not.toBeNull();
+
+    gridCell('2026-05-20')!.click();
+    await settle(h);
+    // The pick closed the panel and focus never left the field — so no
+    // `focusin` will fire again. The pointer alone has to get us back in.
+    expect(h.panel()).toBeNull();
+    expect(document.activeElement).toBe(h.start());
+
+    pointer(h, h.start());
+    expect(h.panel()).not.toBeNull();
+  });
+
+  it('a pointer in the field only ever OPENS — a caret click never dismisses', () => {
+    // The ARIA combobox division of labour: the textbox edits text, the 📅
+    // button toggles. Clicking to move the caret must not close the popup.
+    pointer(h, h.start());
+    expect(h.panel()).not.toBeNull();
+
+    pointer(h, h.start());
+    expect(h.panel()).not.toBeNull();
+
+    pointer(h, h.start());
+    expect(h.panel()).not.toBeNull();
+  });
+
+  it('typing after a pick reopens the panel too', async () => {
+    focusInput(h, h.start());
+    gridCell('2026-05-20')!.click();
+    await settle(h);
+    expect(h.panel()).toBeNull();
+
+    type(h, h.start(), '21.5.2026');
+    expect(h.panel()).not.toBeNull();
+  });
+
+  it('the 📅 trigger stays the pointer TOGGLE (both halves)', () => {
+    const trigger = h.fixture.nativeElement.querySelector(
+      '.inline-date__trigger',
+    ) as HTMLButtonElement;
+
+    focusInput(h, h.start());
+    expect(h.panel()).not.toBeNull();
+
+    trigger.click();
+    h.fixture.detectChanges();
+    expect(h.panel()).toBeNull();
+
+    trigger.click();
+    h.fixture.detectChanges();
+    expect(h.panel()).not.toBeNull();
+  });
+
+  it('a KEYBOARD pick from the grid closes the panel and returns focus', async () => {
+    focusInput(h, h.start());
+    press(h, h.start(), 'ArrowDown');
+
+    const gridKey = (key: string) => {
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+      );
+    };
+
+    expect((document.activeElement as HTMLElement).getAttribute('data-day')).toBe('2026-05-12');
+
+    gridKey('ArrowRight'); // move off the committed day so the pick is a CHANGE
+    await settle(h);
+    expect((document.activeElement as HTMLElement).getAttribute('data-day')).toBe('2026-05-13');
+
+    // Enter with focus INSIDE the panel: returning focus to the input fires a
+    // `focusin` that must not re-open the panel the pick just closed.
+    gridKey('Enter');
+    await settle(h);
+
+    expect(h.panel()).toBeNull();
+    expect(document.activeElement).toBe(h.start());
+    expect(savedStartDays(h.host.saved)).toEqual(['2026-05-13']);
   });
 
   it('a quick-pick chip commits its resolved date', async () => {

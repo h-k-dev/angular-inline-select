@@ -291,7 +291,12 @@
 // local so consumers don't depend on Material's global styles being present)
 // -----------------------------------------------------------------------------
 .editable-visually-hidden {
+  // Pinned: an absolutely-positioned box without top/left keeps its static
+  // position and pushes scrollable overflow onto the containing block (the
+  // phantom-scroll trap that hit the aria-live spans).
   position: absolute;
+  top: 0;
+  left: 0;
   width: 1px;
   height: 1px;
   margin: -1px;
