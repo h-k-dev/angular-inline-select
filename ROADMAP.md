@@ -630,6 +630,109 @@ paste sanitization on WebKit builds that misreport support. Needs a hands-on
 pass on iOS Safari: paste interception, IME composition elevate, caret
 replay, and the Selection-based paste fallback.
 
+## Shipped — the clear seam (`editableClear`) — 2026-08-26
+
+**The ask (iusta core).** Two things, in one breath: *inject a custom clear
+button into every inline variant*, and *open a mat dialog when it is
+clicked*. The library had the first half only as styling
+(`[editableClear]`, the bare behavior directive) with no way to get the
+button INTO a control, and nothing at all for the second: every control
+hard-coded `<button editableClearButton>` inside its own `<bubble-menu>`,
+and `clearValue`/`clearBubble` were `protected` and committed
+synchronously.
+
+**Why one seam answers both.** Clearing is a COMMIT, not a request: it
+writes the empty value, marks the field touched and emits `saved` in one
+synchronous go. A consumer cannot intercept a commit that already happened,
+so "confirm, then clear" through an output + veto would mean
+clear → persist → undo — a real backend write for a cancelled gesture. The
+control hands the commit over instead: the template context carries the
+clear CALLBACK, and the consumer calls it when their dialog resolves. No
+two-way protocol, no cancelable-event contract, no premature `saved`.
+
+**The shape** — the established slot idiom (`prefixTemplate` /
+`suffixTemplate` / `hintTemplate` / `menuTemplate`), dual-channel:
+
+```html
+<angular-inline-text [(value)]="notes">
+  <ng-template editableClear let-clear let-label="label">
+    <button editableClear [attr.aria-label]="label" (clear)="confirm(clear)">✕</button>
+  </ng-template>
+</angular-inline-text>
+```
+
+- `clearTemplate` INPUT + `ng-template[editableClear]` content, on
+  `angular-inline-text`, `-number`, `-phone`, `-json`, `-date`, `-time`,
+  `-duration`. The wrappers (number, phone) re-declare the slot and forward
+  a `TemplateRef` — content queries don't pierce re-projection.
+- Context `EditableClearContext`:
+  `{ $implicit: clear, clear, side, label, focus }`. `side` is
+  `'start' | 'end'` on a range pair (the range controls stamp the template
+  once per side, each callback side-bound) and `null` on a single-value
+  field. `label` is the stock accessible name — the SAME string the default
+  button speaks, so the two can never drift. `focus` puts the keyboard back
+  on the field (the cleared SIDE, on a range pair) without the consumer
+  holding a reference to the control — which is what lets ONE button
+  component serve a whole page of mixed fields.
+- The control keeps everything it already owned: when the bubble may show
+  (not required/disabled/readonly/empty, not editing), where it anchors,
+  which side it grows from, and what clearing does.
+
+**Mat stays out.** The dialog is the consumer's — `MatDialog`, the house
+`EditableDialog`, a `confirm()`, anything. Same containment as
+`temporal-mat`: nothing mat-shaped entered the library.
+
+**Traps the seam documents** (all in `EditableClearTemplate`'s TSDoc):
+
+- Clear is an IDLE-only affordance — the bubble is hidden while editing —
+  so opening a modal never disturbs a live session, and the callback stays
+  valid however long the dialog takes.
+- The bubble is a HOVER overlay: by the time a dialog closes, the pointer
+  has left and the consumer's button is gone with it, so a modal's
+  restore-focus has nowhere to land. Call the context's `focus()` when the
+  dialog settles — on cancel as well as on clear. With MatDialog, also pass
+  `restoreFocus: false`: mat's own restoration runs AFTER `afterClosed`, so
+  left on it it simply undoes the `focus()` and drops the keyboard on the
+  body (verified in the browser).
+- `required` hides the bubble entirely (a guaranteed-doomed clear stays
+  unavailable) — a confirm-on-clear flow never appears on a required field.
+  Unchanged by this work; a decision if core ever wants one there.
+
+**Localized labels, incidentally.** `TemporalIntl.clearLabel(side)` grew an
+optional `noun` (defaulted to the date noun for existing callers) and a
+`durationLabel` signal, so time and duration stopped hard-coding English
+clear labels in their templates and a consumer's own button gets a
+localized name from the context for free. Same English output as before.
+
+**Demo — one button, sixteen fields.** `/patterns/form-grid` is the proof:
+a single `ConfirmClearButton` (mat icon button in `--mat-sys-error` — the M3
+equivalent of the library's own error color — opening a MatDialog) bound
+through ONE `<ng-template #confirmClear>` that every control in the grid
+passes as `[clearTemplate]`. Text, number, phone, date, time, duration and
+JSON all stamp the same button; the ranged date and time stamp it once per
+side and it labels itself from the context ("Clear end date"). Nothing in it
+knows which field it is clearing. Browser-verified end to end: cancel keeps
+the value and returns focus; confirm clears one side of a range
+(`{start, end: null}`) and returns focus to THAT side.
+
+**Tests** (+13, suite 384 → 397): the stock button still renders and clears;
+the template takes the slot over entirely; the consumer's click alone
+changes NOTHING (value, touched, `saved` all untouched — the point of the
+seam); the captured callback still clears after the bubble is torn down
+(the dialog case); per-side stamping with side-bound callbacks and per-side
+labels (date, time); `side: null` on single fields; and forwarding through
+the wrappers, where the confirmed clear settles as the wrapper's own empty
+(`null`, never the inner control's `''`) — number, phone, json, duration;
+plus focus restoration, including back to the cleared side of a range.
+
+**iusta mirror (absorption model — copy-paste, rename, then edit).**
+`editable-inline/bubble-menu/editable-clear.ts` first (it carries the
+context type and the directive), then the seven call-sites:
+`editable-inline`, `editable-number-v2`, `editable-telephone-number`,
+`editable-date-v2`, `editable-time`, `editable-time-duration`, and the JSON
+control if/when it lands. Watch for iusta's own `TemporalIntl` copy — the
+`clearLabel` signature moved.
+
 ## Later (needs real behavior, not just a declared input)
 
 - `pending` — block commit while async validation runs; "Validating…" hint in

@@ -26,7 +26,9 @@ import {
   EditableSuffix,
   BubbleMenu,
   EditableClearButton,
+  EditableClearTemplate,
   type BubbleMenuSide,
+  type EditableClearContext,
 } from 'angular-inline-select';
 import {
   parseTime,
@@ -47,6 +49,7 @@ import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf
 import {
   makeSideSessionChrome,
   makeClearBubbleVisibility,
+  makeClearContexts,
   makeShapeMemory,
   makeSideCore,
   sideSize,
@@ -910,6 +913,28 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   protected clearCanShowSingle = this.#clearVisibility.single;
   protected clearCanShowStart = this.#clearVisibility.start;
   protected clearCanShowEnd = this.#clearVisibility.end;
+
+  /**
+   * Consumer clear affordance — REPLACES the stock button in EVERY bubble
+   * this control stamps (both sides of a range, or the single field). See
+   * {@link EditableClearTemplate}: the context's callback is what makes a
+   * confirm-before-clear possible, since clearing IS the commit.
+   */
+  clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
+
+  private contentClear = contentChild(EditableClearTemplate);
+
+  protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
+
+  #clearContexts = makeClearContexts({
+    clear: (key) => this.clearBubble(key),
+    focus: (key) => this.#inputOf(key)?.focus(),
+    label: (side) => this.#intl.clearLabel(side, this.#intl.timeLabel().toLowerCase()),
+  });
+
+  protected clearContextSingle = this.#clearContexts.single;
+  protected clearContextStart = this.#clearContexts.start;
+  protected clearContextEnd = this.#clearContexts.end;
 
   /**
    * Clears one side from the idle hover bubble — a commit AND an interaction

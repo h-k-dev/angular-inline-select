@@ -82,6 +82,7 @@
   [ariaLabel]="ariaLabel()"
   [prefixTemplate]="consumerPrefixTpl() ?? (flag() ? flagTpl : undefined)"
   [suffixTemplate]="suffixTpl()"
+  [clearTemplate]="clearTpl()"
   [hintTemplate]="preview() ? previewTpl : undefined"
   [menuTemplate]="showCountryMenu() ? countryMenu : undefined"
   (touch)="touch.emit()"

@@ -180,5 +180,13 @@
   [contentOffset]="clearContentOffset()"
   [canShow]="bubbleMenuCanShow()"
 >
-  <button editableClearButton aria-label="Clear value" (clear)="clearValue($event)"></button>
+  @if (clearTpl(); as tpl) {
+    <ng-container *ngTemplateOutlet="tpl; context: clearContext" />
+  } @else {
+    <button
+      editableClearButton
+      [attr.aria-label]="clearLabel"
+      (clear)="clearValue($event)"
+    ></button>
+  }
 </bubble-menu>

@@ -42,6 +42,8 @@ export class TemporalIntl {
   /** Default accessible names, used when the consumer sets no `ariaLabel`. */
   readonly dateLabel = signal('Date');
   readonly timeLabel = signal('Time');
+  /** Names the duration field in its clear-button label (no `ariaLabel` default). */
+  readonly durationLabel = signal('Duration');
 
   /** The side words a ranged field appends to each input's accessible name. */
   readonly rangeStartLabel = signal('start');
@@ -59,9 +61,17 @@ export class TemporalIntl {
     return ranged ? `${base} ${this.#sideWord(side)}` : base;
   }
 
-  /** The clear-button accessible name (`'single'` → no side word). */
-  clearLabel(side: SideKey | 'single'): string {
-    const noun = this.dateLabel().toLowerCase();
+  /**
+   * The clear-button accessible name (`'single'` → no side word) — spoken by
+   * the stock button AND handed to a consumer's own affordance through the
+   * `editableClear` template context, so a custom clear button stays
+   * localized for free.
+   *
+   * `noun` is the field being cleared, lower-cased by the caller's convention
+   * (each control passes its own — "date", "time", "duration"); it defaults
+   * to the date noun for callers that predate the parameter.
+   */
+  clearLabel(side: SideKey | 'single', noun: string = this.dateLabel().toLowerCase()): string {
     return side === 'single' ? `Clear ${noun}` : `Clear ${this.#sideWord(side)} ${noun}`;
   }
 

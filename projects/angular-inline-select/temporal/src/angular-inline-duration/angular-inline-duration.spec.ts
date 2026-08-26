@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineDuration, type InlineDurationSaved } from './angular-inline-duration';
+import { EditableClear, EditableClearTemplate } from 'angular-inline-select';
 import {
   parseDuration,
   formatDuration,
@@ -85,8 +86,7 @@ function setup(): Harness {
   return {
     fixture,
     host: fixture.componentInstance,
-    input: () =>
-      fixture.nativeElement.querySelector('.inline-duration__input') as HTMLInputElement,
+    input: () => fixture.nativeElement.querySelector('.inline-duration__input') as HTMLInputElement,
   };
 }
 
@@ -181,7 +181,6 @@ describe('AngularInlineDuration (input rehost)', () => {
   });
 });
 
-
 // =============================================================================
 // Visually-hidden safety — the phantom-scroll regression guard
 // =============================================================================
@@ -196,5 +195,71 @@ describe('the aria-live announcer (visually hidden)', () => {
     expect(style.position).toBe('absolute');
     expect(style.top).toBe('0px');
     expect(style.left).toBe('0px');
+  });
+});
+
+// =============================================================================
+// Clear affordance — the consumer's own button
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineDuration, EditableClear, EditableClearTemplate],
+  template: `
+    <angular-inline-duration [(value)]="value" (saved)="sessions.push($event)">
+      <ng-template editableClear let-clear let-label="label" let-side="side">
+        <button
+          editableClear
+          class="confirm-clear"
+          [attr.aria-label]="label"
+          [attr.data-side]="side"
+          (clear)="request(clear)"
+        >
+          ✕
+        </button>
+      </ng-template>
+    </angular-inline-duration>
+  `,
+})
+class DurationClearHost {
+  value = signal<number | null>(5400);
+  sessions: InlineDurationSaved[] = [];
+
+  /** Stands in for a confirmation dialog: capture the callback, resolve later. */
+  pending: (() => void) | null = null;
+
+  request(clear: () => void) {
+    this.pending = clear;
+  }
+}
+
+describe('AngularInlineDuration — clear affordance', () => {
+  it('stamps the consumer template and hands the commit over', () => {
+    const fixture = TestBed.createComponent(DurationClearHost);
+    fixture.detectChanges();
+
+    fixture.nativeElement
+      .querySelector('.inline-duration')!
+      .dispatchEvent(new MouseEvent('mouseenter'));
+    fixture.detectChanges();
+
+    const button = document.querySelector<HTMLButtonElement>(
+      '.editable-bubble button.confirm-clear',
+    );
+    expect(button).not.toBeNull();
+    // Single-valued: no side to distinguish, and the label names the field.
+    expect(button!.getAttribute('data-side')).toBeNull();
+    expect(button!.getAttribute('aria-label')).toBe('Clear duration');
+
+    button!.dispatchEvent(new MouseEvent('click'));
+    fixture.detectChanges();
+
+    const host = fixture.componentInstance;
+    expect(host.value()).toBe(5400);
+
+    host.pending!();
+    fixture.detectChanges();
+
+    expect(host.value()).toBeNull();
+    expect(host.sessions).toEqual([{ value: null, changed: true }]);
   });
 });

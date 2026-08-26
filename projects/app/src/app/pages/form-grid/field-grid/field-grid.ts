@@ -40,6 +40,9 @@ import { EditableMenu } from '../../../../../../angular-inline-select/src/lib/an
 import { EditableErrorTemplate } from '../../../../../../angular-inline-select/src/lib/angular-inline-text/editable-error';
 import { AngularInlineJson } from '../../../../../../angular-inline-select/json/src/angular-inline-json';
 
+// The page's own clear affordance — one button for every field in the grid.
+import { ConfirmClearButton } from '../confirm-clear/confirm-clear-button';
+
 // Secondary entry points
 import { AngularInlinePhone, createLibphonenumberCodec } from 'angular-inline-select/phone';
 import metadata from 'libphonenumber-js/metadata.min.json';
@@ -161,6 +164,9 @@ function initialRecord(): RecordModel {
 
     // Tab-to-accept scope
     EditableScope,
+
+    // The page's clear affordance
+    ConfirmClearButton,
   ],
 })
 export class FieldGrid {

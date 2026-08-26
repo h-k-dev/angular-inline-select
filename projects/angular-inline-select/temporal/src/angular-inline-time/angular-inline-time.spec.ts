@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineTime, type InlineTimeSaved } from './angular-inline-time';
+import { EditableClear, EditableClearTemplate } from 'angular-inline-select';
 import {
   parseTime,
   parseTimeDraft,
@@ -584,7 +585,9 @@ describe('AngularInlineTime two-field range', () => {
     r.host.native.set(true);
     r.fixture.detectChanges();
 
-    const native = r.fixture.nativeElement.querySelector('.inline-time__native') as HTMLInputElement;
+    const native = r.fixture.nativeElement.querySelector(
+      '.inline-time__native',
+    ) as HTMLInputElement;
     (native as HTMLInputElement & { showPicker: () => void }).showPicker = () => {};
 
     // Open the picker FOR THE END (native mode: the field's own click).
@@ -837,7 +840,6 @@ describe('AngularInlineTime with the seconds format', () => {
   });
 });
 
-
 // =============================================================================
 // Visually-hidden safety — the phantom-scroll regression guard
 // =============================================================================
@@ -852,5 +854,74 @@ describe('the aria-live announcer (visually hidden)', () => {
     expect(style.position).toBe('absolute');
     expect(style.top).toBe('0px');
     expect(style.left).toBe('0px');
+  });
+});
+
+// =============================================================================
+// Clear affordance — the consumer's own button, per side
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineTime, EditableClear, EditableClearTemplate],
+  template: `
+    <angular-inline-time [(value)]="value" [ranged]="true" (saved)="sessions.push($event)">
+      <ng-template editableClear let-clear let-label="label" let-side="side">
+        <button
+          editableClear
+          class="confirm-clear"
+          [attr.aria-label]="label"
+          [attr.data-side]="side"
+          (clear)="request(side, clear)"
+        >
+          ✕
+        </button>
+      </ng-template>
+    </angular-inline-time>
+  `,
+})
+class TimeClearHost {
+  value = signal<InlineTimeValue>({ start: at('09:00'), end: at('17:30') });
+  sessions: InlineTimeSaved[] = [];
+
+  /** Stands in for a confirmation dialog: capture the callback, resolve later. */
+  pending = new Map<string, () => void>();
+
+  request(side: string | null, clear: () => void) {
+    this.pending.set(side ?? 'single', clear);
+  }
+}
+
+describe('AngularInlineTime — clear affordance', () => {
+  it('stamps the consumer template per side and hands the commit over', () => {
+    const fixture = TestBed.createComponent(TimeClearHost);
+    fixture.detectChanges();
+
+    const inputs = [
+      ...fixture.nativeElement.querySelectorAll('.inline-time__input'),
+    ] as HTMLElement[];
+    for (const input of inputs) input.dispatchEvent(new MouseEvent('mouseenter'));
+    fixture.detectChanges();
+
+    const buttons = [
+      ...document.querySelectorAll<HTMLButtonElement>('.editable-bubble button.confirm-clear'),
+    ];
+    expect(buttons.map((b) => [b.getAttribute('data-side'), b.getAttribute('aria-label')])).toEqual(
+      [
+        ['start', 'Clear start time'],
+        ['end', 'Clear end time'],
+      ],
+    );
+
+    buttons[0].dispatchEvent(new MouseEvent('click'));
+    fixture.detectChanges();
+
+    const host = fixture.componentInstance;
+    expect(host.value()).toEqual({ start: at('09:00'), end: at('17:30') });
+
+    host.pending.get('start')!();
+    fixture.detectChanges();
+
+    expect(host.value()).toEqual({ start: null, end: at('17:30') });
+    expect(host.sessions.at(-1)).toMatchObject({ changed: true, side: 'start' });
   });
 });

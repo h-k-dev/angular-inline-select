@@ -129,6 +129,18 @@ const AFFIX_INPUTS: ApiMember[] = [
   },
 ];
 
+/**
+ * The clear seam — one input, every variant. Range controls (date, time)
+ * stamp the template once per side.
+ */
+const CLEAR_TEMPLATE_INPUT: ApiMember = {
+  name: 'clearTemplate',
+  type: 'TemplateRef<EditableClearContext> | undefined',
+  default: 'undefined',
+  description:
+    'Replaces the stock clear button inside the hover bubble; direct consumers use `ng-template[editableClear]` content instead. The context — { $implicit: clear, clear, side, label, focus } — hands over the clear CALLBACK, so a consumer can confirm in a dialog first and commit only on yes (clearing is a commit: it writes, touches, and emits saved in one go); focus puts the keyboard back on the field once the dialog closes. See the Form Grid pattern for one button serving every field.',
+};
+
 const ARIA_LABEL_INPUT: ApiMember = {
   name: 'ariaLabel',
   type: 'string | undefined',
@@ -241,7 +253,8 @@ const CHROME_TOKENS: TokenGroup = {
     },
     {
       token: '--editable-panel-border-color',
-      fallback: 'color-mix(in oklch, var(--mat-sys-on-surface, #000) 20%, var(--mat-sys-surface-container, #fff))',
+      fallback:
+        'color-mix(in oklch, var(--mat-sys-on-surface, #000) 20%, var(--mat-sys-surface-container, #fff))',
       description: 'Panel card border.',
     },
     {
@@ -328,7 +341,8 @@ const CHROME_TOKENS: TokenGroup = {
     {
       token: '--editable-bubble-pad',
       fallback: 'calc(var(--mat-sys-inner-spacing, 16px) * 0.75)',
-      description: 'Transparent pad around the floating bubble — the visual gap and the forgiving hit halo.',
+      description:
+        'Transparent pad around the floating bubble — the visual gap and the forgiving hit halo.',
     },
     {
       token: '--editable-text-action-background',
@@ -462,12 +476,14 @@ const JSON_SURFACE_TOKENS: TokenGroup = {
     {
       token: '--editable-dialog-width',
       fallback: 'min(600px, 100%)',
-      description: 'Width of the editing dialog card (the readable default; full-screen on touch/narrow viewports).',
+      description:
+        'Width of the editing dialog card (the readable default; full-screen on touch/narrow viewports).',
     },
     {
       token: '--editable-json-syntax-property',
       fallback: 'light-dark(#0550ae, #79c0ff) — GitHub Primer',
-      description: 'Editor syntax color: object keys. Every syntax fallback follows the app color-scheme via light-dark().',
+      description:
+        'Editor syntax color: object keys. Every syntax fallback follows the app color-scheme via light-dark().',
     },
     {
       token: '--editable-json-syntax-string',
@@ -482,7 +498,8 @@ const JSON_SURFACE_TOKENS: TokenGroup = {
     {
       token: '--editable-json-syntax-keyword',
       fallback: 'light-dark(#0550ae, #79c0ff) — GitHub Primer',
-      description: 'Editor syntax color: true/false/null (GitHub renders JSON constants in the same accent as keys).',
+      description:
+        'Editor syntax color: true/false/null (GitHub renders JSON constants in the same accent as keys).',
     },
     {
       token: '--editable-json-syntax-invalid',
@@ -565,6 +582,7 @@ export const DOCS: Record<string, SectionDocs> = {
               'Opt-in character filter, tested against one character at a time. Rejected characters never reach the draft, so the bound field never observes them. Covers keystrokes and paste on both surfaces; drop and IME only once the panel is open (on the resting display neither delivers text at all — the payload is discarded and the field elevates empty-handed). On the resting display a keystroke the filter erases does not even open the editor: only a mutation elevates. Rejection is silent and unannounced. Filters, does not validate.',
           },
           ...AFFIX_INPUTS,
+          CLEAR_TEMPLATE_INPUT,
           {
             name: 'hintTemplate',
             type: 'TemplateRef<unknown> | undefined',
@@ -661,12 +679,14 @@ export const DOCS: Record<string, SectionDocs> = {
               'Number → display string for the in-flow text. Unset, it derives from decimalSeparator.',
           },
           ...AFFIX_INPUTS,
+          CLEAR_TEMPLATE_INPUT,
         ],
         outputs: [
           {
             name: 'savedModelChange',
             type: '{ value: number | null }',
-            description: 'The consumer commit event: once per changed settlement, with the numeric model.',
+            description:
+              'The consumer commit event: once per changed settlement, with the numeric model.',
           },
           {
             name: 'saved',
@@ -701,7 +721,8 @@ export const DOCS: Record<string, SectionDocs> = {
             name: 'codec',
             type: 'PhoneCodec',
             default: '— (required)',
-            description: 'The parsing/formatting engine. Required — the component ships no engine of its own.',
+            description:
+              'The parsing/formatting engine. Required — the component ships no engine of its own.',
           },
           {
             name: 'defaultCountry',
@@ -748,12 +769,14 @@ export const DOCS: Record<string, SectionDocs> = {
           },
           ARIA_LABEL_INPUT,
           ...AFFIX_INPUTS,
+          CLEAR_TEMPLATE_INPUT,
         ],
         outputs: [
           {
             name: 'savedModelChange',
             type: '{ value: string | null }',
-            description: 'The consumer commit event: once per changed settlement, with the E.164 model.',
+            description:
+              'The consumer commit event: once per changed settlement, with the E.164 model.',
           },
           {
             name: 'saved',
@@ -818,7 +841,8 @@ export const DOCS: Record<string, SectionDocs> = {
             name: 'clearBubbleSide',
             type: 'BubbleMenuSide | undefined',
             default: 'undefined',
-            description: "Which edge the clear bubble grows from. Unset, the leaf role decides ('start' for inline-start leaves), else 'end'.",
+            description:
+              "Which edge the clear bubble grows from. Unset, the leaf role decides ('start' for inline-start leaves), else 'end'.",
           },
           {
             name: 'locale',
@@ -851,6 +875,7 @@ export const DOCS: Record<string, SectionDocs> = {
             description: 'Clock source — injectable for tests and fixed-time demos.',
           },
           ...AFFIX_INPUTS,
+          CLEAR_TEMPLATE_INPUT,
         ],
         outputs: [
           {
@@ -869,7 +894,8 @@ export const DOCS: Record<string, SectionDocs> = {
       {
         name: 'AngularInlineTime',
         selector: 'angular-inline-time',
-        summary: 'Inline time (and time-range) editing with an optional picker list or native input.',
+        summary:
+          'Inline time (and time-range) editing with an optional picker list or native input.',
         models: [
           {
             name: 'value',
@@ -910,7 +936,8 @@ export const DOCS: Record<string, SectionDocs> = {
             name: 'clearBubbleSide',
             type: 'BubbleMenuSide | undefined',
             default: 'undefined',
-            description: "Which edge the clear bubble grows from. Unset, the leaf role decides ('start' for inline-start leaves), else 'end'.",
+            description:
+              "Which edge the clear bubble grows from. Unset, the leaf role decides ('start' for inline-start leaves), else 'end'.",
           },
           {
             name: 'locale',
@@ -955,6 +982,7 @@ export const DOCS: Record<string, SectionDocs> = {
             description: 'Clock source — injectable for tests and fixed-time demos.',
           },
           ...AFFIX_INPUTS,
+          CLEAR_TEMPLATE_INPUT,
         ],
         outputs: [
           {
@@ -996,7 +1024,8 @@ export const DOCS: Record<string, SectionDocs> = {
             name: 'clearBubbleSide',
             type: 'BubbleMenuSide | undefined',
             default: 'undefined',
-            description: "Which edge the clear bubble grows from. Unset, the leaf role decides ('start' for inline-start leaves), else 'end'.",
+            description:
+              "Which edge the clear bubble grows from. Unset, the leaf role decides ('start' for inline-start leaves), else 'end'.",
           },
           {
             name: 'durationFormat',
@@ -1011,6 +1040,7 @@ export const DOCS: Record<string, SectionDocs> = {
             description: 'Snap committed values to a multiple of this many seconds (1 = off).',
           },
           ...AFFIX_INPUTS,
+          CLEAR_TEMPLATE_INPUT,
         ],
         outputs: [
           {
@@ -1118,6 +1148,7 @@ export const DOCS: Record<string, SectionDocs> = {
               'Consumer error content (the mat-error analogue) as a TEMPLATE — the session UI renders in a portaled dialog component where element projection cannot reach. Content sugar: `ng-template[editableError]`. Takes over the error slot entirely; without it the control renders message-carrying errors itself.',
           },
           ...AFFIX_INPUTS,
+          CLEAR_TEMPLATE_INPUT,
         ],
         outputs: [
           {

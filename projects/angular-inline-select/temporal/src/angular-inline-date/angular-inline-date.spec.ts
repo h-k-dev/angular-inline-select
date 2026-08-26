@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineDate, type InlineDateSaved } from './angular-inline-date';
+import { EditableClear, EditableClearTemplate } from 'angular-inline-select';
 import {
   parseDateInput,
   formatIsoDate,
@@ -241,6 +242,47 @@ class DateShapeHost {
 
   saved: DateSavedDetails[] = [];
   sessions: InlineDateSaved[] = [];
+}
+
+@Component({
+  imports: [AngularInlineDate, EditableClear, EditableClearTemplate],
+  template: `
+    <angular-inline-date
+      [(value)]="value"
+      [ranged]="ranged()"
+      locale="en"
+      [now]="now"
+      (saved)="sessions.push($event)"
+    >
+      <ng-template editableClear let-clear let-label="label" let-side="side" let-focus="focus">
+        <button
+          editableClear
+          class="confirm-clear"
+          [attr.aria-label]="label"
+          [attr.data-side]="side"
+          (clear)="request(side, clear, focus)"
+        >
+          ✕
+        </button>
+      </ng-template>
+    </angular-inline-date>
+  `,
+})
+class DateClearHost {
+  value = signal<InlineDateValue>(null);
+  ranged = signal(false);
+  now = () => NOW;
+
+  sessions: InlineDateSaved[] = [];
+
+  /** Stands in for a confirmation dialog: capture the callbacks, resolve later. */
+  pending = new Map<string, () => void>();
+  restoreFocus = new Map<string, () => void>();
+
+  request(side: string | null, clear: () => void, focus: () => void) {
+    this.pending.set(side ?? 'single', clear);
+    this.restoreFocus.set(side ?? 'single', focus);
+  }
 }
 
 interface Harness<T> {
@@ -831,5 +873,92 @@ describe('the aria-live announcer (visually hidden)', () => {
     expect(style.position).toBe('absolute');
     expect(style.top).toBe('0px');
     expect(style.left).toBe('0px');
+  });
+});
+
+// =============================================================================
+// Clear affordance — the consumer's own button, per side
+// =============================================================================
+
+describe('AngularInlineDate — clear affordance', () => {
+  let h: Harness<DateClearHost>;
+
+  beforeEach(() => {
+    h = setupHost(DateClearHost);
+  });
+
+  /** Hovers an element so its clear bubble (a CDK overlay) renders. */
+  function hover(origin: Element) {
+    origin.dispatchEvent(new MouseEvent('mouseenter'));
+    h.fixture.detectChanges();
+  }
+
+  function customButtons(): HTMLButtonElement[] {
+    return [
+      ...document.querySelectorAll<HTMLButtonElement>('.editable-bubble button.confirm-clear'),
+    ];
+  }
+
+  it('stamps the consumer template per side, each labelled and side-tagged', () => {
+    h.host.ranged.set(true);
+    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.fixture.detectChanges();
+
+    hover(h.start());
+    hover(h.end()!);
+
+    const sides = customButtons().map((b) => [
+      b.getAttribute('data-side'),
+      b.getAttribute('aria-label'),
+    ]);
+    expect(sides).toEqual([
+      ['start', 'Clear start date'],
+      ['end', 'Clear end date'],
+    ]);
+    expect(document.querySelector('.editable-bubble button.editable-action-clear')).toBeNull();
+  });
+
+  it('the handed-over callback is side-bound: the other side is NEVER nuked', () => {
+    h.host.ranged.set(true);
+    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.fixture.detectChanges();
+
+    hover(h.end()!);
+    customButtons()[0].dispatchEvent(new MouseEvent('click'));
+    h.fixture.detectChanges();
+
+    // Nothing committed yet — the consumer is still deciding (dialog open).
+    expect(h.host.value()).toEqual({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    expect(h.host.sessions).toEqual([]);
+
+    h.host.pending.get('end')!();
+    h.fixture.detectChanges();
+
+    expect(h.host.value()).toEqual({ start: db('2026-05-12'), end: null });
+    expect(h.host.sessions.at(-1)).toMatchObject({ changed: true });
+
+    // Focus returns to the side that was cleared, not to the pair's head.
+    h.host.restoreFocus.get('end')!();
+    expect(document.activeElement).toBe(h.end());
+  });
+
+  it('a single field reports no side and clears the whole value', () => {
+    h.host.value.set(db('2026-05-12'));
+    h.fixture.detectChanges();
+
+    hover(h.fixture.nativeElement.querySelector('.inline-date'));
+
+    const button = customButtons()[0];
+    expect(button.getAttribute('data-side')).toBeNull();
+    expect(button.getAttribute('aria-label')).toBe('Clear date');
+
+    button.dispatchEvent(new MouseEvent('click'));
+    h.fixture.detectChanges();
+    expect(h.host.value()).toEqual(db('2026-05-12'));
+
+    h.host.pending.get('single')!();
+    h.fixture.detectChanges();
+
+    expect(h.host.value()).toBeNull();
   });
 });

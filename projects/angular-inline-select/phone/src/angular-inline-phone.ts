@@ -20,8 +20,10 @@ import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 import {
   AngularInlineText,
+  EditableClearTemplate,
   EditablePrefix,
   EditableSuffix,
+  type EditableClearContext,
   type InlineTextSaved,
 } from 'angular-inline-select';
 
@@ -64,11 +66,19 @@ export interface InlinePhoneSaved {
   imports: [AngularInlineText, OverlayModule, NgTemplateOutlet],
   templateUrl: './angular-inline-phone.html',
   styles: `
-    :host { display: inline; }
-    .country-name { flex: 1 1 auto; }
-    .country-dial { color: var(--mat-sys-on-surface-variant, #5f6368); font-variant-numeric: tabular-nums; }
+    :host {
+      display: inline;
+    }
+    .country-name {
+      flex: 1 1 auto;
+    }
+    .country-dial {
+      color: var(--mat-sys-on-surface-variant, #5f6368);
+      font-variant-numeric: tabular-nums;
+    }
     .country-empty {
-      padding: calc(var(--mat-sys-inner-spacing, 16px) / 4) calc(var(--mat-sys-inner-spacing, 16px) / 2);
+      padding: calc(var(--mat-sys-inner-spacing, 16px) / 4)
+        calc(var(--mat-sys-inner-spacing, 16px) / 2);
       color: var(--mat-sys-on-surface-variant, #5f6368);
     }
 
@@ -193,6 +203,18 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     () => this.prefixTemplate() ?? this.contentPrefix()?.templateRef,
   );
 
+  /**
+   * Consumer clear affordance — forwarded verbatim to the inner control,
+   * which owns the bubble. Clearing through its context callback lands here
+   * as a normal settlement (`null`, never a raw draft). Same re-projection
+   * reason as the affixes.
+   */
+  clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
+
+  private contentClear = contentChild(EditableClearTemplate);
+
+  protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
+
   /** Form Value Contract: touch — forwarded from the inner control. */
   touch = output<void>();
 
@@ -237,7 +259,9 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
   });
 
   /** The engine's live interpretation of the current draft. Public — consumers render from it. */
-  readonly parseResult = computed(() => this.codec().parse(this.innerValue(), this.defaultCountry()));
+  readonly parseResult = computed(() =>
+    this.codec().parse(this.innerValue(), this.defaultCountry()),
+  );
 
   /** The parse gate: structurally unreadable input cannot commit. */
   readonly parseFailed = computed(() => this.parseResult()?.ok === false);
@@ -379,7 +403,8 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
           country,
           name: this.#nameOf(names, country),
           // Lower-cased match keys: localized name + English name + ISO code.
-          match: `${this.#nameOf(names, country)}\n${this.#nameOf(this.#regionNamesEn, country)}\n${country}`.toLowerCase(),
+          match:
+            `${this.#nameOf(names, country)}\n${this.#nameOf(this.#regionNamesEn, country)}\n${country}`.toLowerCase(),
           dialCode,
           flag: countryFlagEmoji(country),
           insert: `+${dialCode} `,
@@ -404,8 +429,7 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     return all
       .filter(
         (option) =>
-          option.match.includes(q) ||
-          (digits.length > 0 && option.dialCode.startsWith(digits)),
+          option.match.includes(q) || (digits.length > 0 && option.dialCode.startsWith(digits)),
       )
       .slice(0, 60);
   }

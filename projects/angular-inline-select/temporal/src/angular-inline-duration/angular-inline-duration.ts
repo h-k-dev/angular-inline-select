@@ -28,8 +28,10 @@ import {
   EditablePrefix,
   EditableSuffix,
   type BubbleMenuSide,
+  type EditableClearContext,
   BubbleMenu,
   EditableClearButton,
+  EditableClearTemplate,
 } from 'angular-inline-select';
 import {
   parseDuration,
@@ -491,6 +493,30 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
       !this.editing() &&
       !this.isEmpty(),
   );
+
+  /**
+   * Consumer clear affordance — REPLACES the stock button inside the bubble.
+   * See {@link EditableClearTemplate}: the context's callback is what makes a
+   * confirm-before-clear possible, since clearing IS the commit. Duration is
+   * always single-valued, so the context's `side` is always `null`.
+   */
+  clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
+
+  private contentClear = contentChild(EditableClearTemplate);
+
+  protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
+
+  #clearCallback = () => this.clearBubble();
+
+  #focusCallback = () => this.focus();
+
+  protected clearContext = computed<EditableClearContext>(() => ({
+    $implicit: this.#clearCallback,
+    clear: this.#clearCallback,
+    side: null,
+    label: this.#intl.clearLabel('single', this.#intl.durationLabel().toLowerCase()),
+    focus: this.#focusCallback,
+  }));
 
   /**
    * Clears the field from the idle hover bubble — a commit AND an interaction

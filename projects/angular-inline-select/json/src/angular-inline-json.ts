@@ -27,6 +27,8 @@ import {
   BubbleMenu,
   EDITABLE_SCOPE,
   EditableClearButton,
+  EditableClearTemplate,
+  type EditableClearContext,
   EditableDialog,
   EditableDialogRef,
   EditableErrorTemplate,
@@ -608,6 +610,29 @@ export class AngularInlineJson implements FormValueControl<string> {
   // ---------------------------------------------------------------------------
   // Clear affordance (the floating bubble lives in BubbleMenu)
   // ---------------------------------------------------------------------------
+  /**
+   * Consumer clear affordance — REPLACES the stock button inside the bubble.
+   * See {@link EditableClearTemplate}: the context callback is what makes a
+   * confirm-before-clear possible (clearing IS the commit).
+   */
+  clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
+
+  private contentClear = contentChild(EditableClearTemplate);
+
+  protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
+
+  /** The stock accessible name — the context's `label`, and the default button's. */
+  protected readonly clearLabel = 'Clear value';
+
+  /** Stable context object — an async confirmation calls into a live control. */
+  protected readonly clearContext: EditableClearContext = {
+    $implicit: () => this.clearValue(),
+    clear: () => this.clearValue(),
+    side: null,
+    label: this.clearLabel,
+    focus: () => this.focus(),
+  };
+
   protected bubbleMenuCanShow = computed(
     () =>
       !this.required() &&
@@ -617,9 +642,11 @@ export class AngularInlineJson implements FormValueControl<string> {
       !this.editing(),
   );
 
-  protected clearValue(event: Event) {
-    event.preventDefault();
-    event.stopPropagation();
+  protected clearValue(event?: Event) {
+    // Absent when a consumer's own affordance calls through the template
+    // context — possibly long after its click (a confirmation dialog).
+    event?.preventDefault();
+    event?.stopPropagation();
     if (this.editing()) return;
 
     this.value.set('');

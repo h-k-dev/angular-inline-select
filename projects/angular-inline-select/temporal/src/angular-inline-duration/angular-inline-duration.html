@@ -50,7 +50,15 @@
 
 <!-- Floating clear affordance — anchored to the whole field. -->
 <bubble-menu [origin]="field" [side]="effectiveClearBubbleSide()" [canShow]="clearCanShow()">
-  <button editableClearButton aria-label="Clear duration" (clear)="clearBubble()"></button>
+  @if (clearTpl(); as tpl) {
+    <ng-container *ngTemplateOutlet="tpl; context: clearContext()" />
+  } @else {
+    <button
+      editableClearButton
+      [attr.aria-label]="clearContext().label"
+      (clear)="clearBubble()"
+    ></button>
+  }
 </bubble-menu>
 
 <ng-template

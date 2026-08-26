@@ -9,6 +9,7 @@ import {
   type InlineTextWrapBehavior,
 } from './angular-inline-text';
 import { EditableSuffix } from './editable-affix';
+import { EditableClear, EditableClearTemplate } from '../bubble-menu/editable-clear';
 import { detectSlashToken } from './editable-menu';
 import { replayEdit, filterChars, getSelectionOffsets, setCaretOffset } from './caret';
 
@@ -105,6 +106,43 @@ class FilteredHost {
   allowed = signal<RegExp | undefined>(/[0-9]/);
 }
 
+@Component({
+  imports: [AngularInlineText, EditableClear, EditableClearTemplate],
+  template: `
+    <angular-inline-text
+      [(value)]="value"
+      (saved)="sessions.push($event)"
+      (touch)="touchCount = touchCount + 1"
+    >
+      <ng-template editableClear let-clear let-label="label" let-side="side" let-focus="focus">
+        <button
+          editableClear
+          class="confirm-clear"
+          [attr.aria-label]="label"
+          [attr.data-side]="side"
+          (clear)="request(clear, focus)"
+        >
+          ✕
+        </button>
+      </ng-template>
+    </angular-inline-text>
+  `,
+})
+class ConfirmClearHost {
+  value = signal('initial');
+  sessions: InlineTextSaved[] = [];
+  touchCount = 0;
+
+  /** Stands in for a confirmation dialog: capture the callbacks, resolve later. */
+  pending: (() => void) | null = null;
+  restoreFocus: (() => void) | null = null;
+
+  request(clear: () => void, focus: () => void) {
+    this.pending = clear;
+    this.restoreFocus = focus;
+  }
+}
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -157,6 +195,23 @@ async function typeText(h: Harness<unknown>, text: string) {
   editor.textContent = text;
   editor.dispatchEvent(new Event('input', { bubbles: true }));
   h.fixture.detectChanges();
+}
+
+/** Hovers the field so the clear bubble (a CDK overlay) renders. */
+function hoverField(h: Harness<unknown>) {
+  h.display().closest('.editable-text__field')!.dispatchEvent(new MouseEvent('mouseenter'));
+  h.fixture.detectChanges();
+}
+
+/** Un-hovers and waits out the bubble's grace timer, as a real pointer would. */
+async function leaveField(h: Harness<unknown>) {
+  h.display().closest('.editable-text__field')!.dispatchEvent(new MouseEvent('mouseleave'));
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  h.fixture.detectChanges();
+}
+
+function bubbleAction(selector: string): HTMLButtonElement | null {
+  return document.querySelector<HTMLButtonElement>(`.editable-bubble ${selector}`);
 }
 
 function accept(h: Harness<unknown>) {
@@ -521,13 +576,17 @@ describe('AngularInlineText — affix templates', () => {
     await elevate(h);
 
     // Second instance beside the editor (in the overlay), outside the contenteditable
-    const inPanel = document.querySelector('.editable-panel__line .editable-text__affix--suffix .unit');
+    const inPanel = document.querySelector(
+      '.editable-panel__line .editable-text__affix--suffix .unit',
+    );
     expect(inPanel?.textContent).toBe('kg');
     expect(h.editor()?.contains(inPanel!)).toBe(false);
   });
 
   it('the affix is decorative: aria-hidden and not in the committed value', async () => {
-    const affix = h.fixture.nativeElement.querySelector('.editable-text__affix--suffix') as HTMLElement;
+    const affix = h.fixture.nativeElement.querySelector(
+      '.editable-text__affix--suffix',
+    ) as HTMLElement;
     expect(affix.getAttribute('aria-hidden')).toBe('true');
 
     await typeText(h, '25');
@@ -535,6 +594,86 @@ describe('AngularInlineText — affix templates', () => {
     h.fixture.detectChanges();
 
     expect(h.host.value()).toBe('25');
+  });
+});
+
+describe('AngularInlineText — clear affordance', () => {
+  it('renders the stock button, which clears on click', () => {
+    const h = setup(ValueBindingHost);
+    hoverField(h);
+
+    const stock = bubbleAction('button.editable-action-clear');
+    expect(stock).not.toBeNull();
+    expect(stock!.getAttribute('aria-label')).toBe('Clear value');
+
+    stock!.dispatchEvent(new MouseEvent('click'));
+    h.fixture.detectChanges();
+
+    expect(h.host.value()).toBe('');
+    expect(h.host.sessions).toEqual([{ value: '', changed: true }]);
+  });
+
+  it('an editableClear template takes the slot over entirely', () => {
+    const h = setup(ConfirmClearHost);
+    hoverField(h);
+
+    const custom = bubbleAction('button.confirm-clear');
+    expect(custom).not.toBeNull();
+    expect(bubbleAction('button.editable-action-clear')).toBeNull();
+
+    // The context labels the button for free; a single-value field has no side.
+    expect(custom!.getAttribute('aria-label')).toBe('Clear value');
+    expect(custom!.getAttribute('data-side')).toBeNull();
+  });
+
+  it("hands the commit over: the consumer's click alone changes nothing", () => {
+    const h = setup(ConfirmClearHost);
+    hoverField(h);
+
+    bubbleAction('button.confirm-clear')!.dispatchEvent(new MouseEvent('click'));
+    h.fixture.detectChanges();
+
+    // THE POINT OF THE SEAM: clearing is a commit, so a confirmation that has
+    // not happened yet must not have reached the bound value, the field's
+    // touched state, or a consumer's persist path.
+    expect(h.host.value()).toBe('initial');
+    expect(h.host.sessions).toEqual([]);
+    expect(h.host.touchCount).toBe(0);
+    expect(typeof h.host.pending).toBe('function');
+  });
+
+  it('the captured callback still clears after the bubble is gone (the dialog case)', async () => {
+    const h = setup(ConfirmClearHost);
+    hoverField(h);
+
+    bubbleAction('button.confirm-clear')!.dispatchEvent(new MouseEvent('click'));
+    h.fixture.detectChanges();
+
+    // A modal takes the pointer away: the hover bubble — and the consumer's
+    // own button with it — is torn down while the dialog is open.
+    await leaveField(h);
+    expect(bubbleAction('button.confirm-clear')).toBeNull();
+
+    h.host.pending!();
+    h.fixture.detectChanges();
+
+    expect(h.host.value()).toBe('');
+    expect(h.host.sessions).toEqual([{ value: '', changed: true }]);
+    expect(h.host.touchCount).toBe(1);
+  });
+
+  it('the context restores focus to the field a dismissed bubble took away', async () => {
+    const h = setup(ConfirmClearHost);
+    hoverField(h);
+
+    bubbleAction('button.confirm-clear')!.dispatchEvent(new MouseEvent('click'));
+    h.fixture.detectChanges();
+    await leaveField(h);
+
+    // The modal's own restore-focus has nowhere to land — the button it would
+    // restore to died with the bubble. The context puts it back on the field.
+    h.host.restoreFocus!();
+    expect(document.activeElement).toBe(h.display());
   });
 });
 
@@ -637,7 +776,6 @@ describe('AngularInlineText — isSingleLine vs wrapBehavior', () => {
     expect(h.editor()!.classList.contains('editable-text__display--no-wrap')).toBe(false);
   });
 });
-
 
 // =============================================================================
 // Character filtering
@@ -784,7 +922,6 @@ describe('AngularInlineText — allowedChars', () => {
     expect(h.host.value()).toBe('7');
   });
 });
-
 
 // =============================================================================
 // Filtering: per-keystroke path, caret, IME, paste

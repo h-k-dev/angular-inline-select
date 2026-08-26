@@ -12,6 +12,8 @@ import {
   type WritableSignal,
 } from '@angular/core';
 
+import type { EditableClearContext } from 'angular-inline-select';
+
 import { TemporalIntl } from './temporal-intl';
 
 /**
@@ -114,8 +116,7 @@ export function makeClearBubbleVisibility(options: {
   range: Signal<{ start: unknown; end: unknown }>;
 }): { single: Signal<boolean>; start: Signal<boolean>; end: Signal<boolean> } {
   const guards = computed(
-    () =>
-      !options.required() && !options.disabled() && !options.readonly() && !options.editing(),
+    () => !options.required() && !options.disabled() && !options.readonly() && !options.editing(),
   );
 
   return {
@@ -125,6 +126,51 @@ export function makeClearBubbleVisibility(options: {
     }),
     start: computed(() => guards() && options.range().start !== null),
     end: computed(() => guards() && options.range().end !== null),
+  };
+}
+
+/**
+ * The `editableClear` template contexts — one per bubble a temporal control
+ * can stamp (`single`, `start`, `end`). The control keeps owning WHAT a clear
+ * does; this only packages the handover: a side-bound callback, the side, and
+ * the localized label (also what the STOCK button speaks, so the two can
+ * never drift).
+ *
+ * The callbacks are bound ONCE, outside the computed: a consumer's clear can
+ * resolve long after the stamp (a confirmation dialog), and a re-created
+ * callback would re-render their button under the pointer for a locale
+ * change that has nothing to do with it.
+ */
+export function makeClearContexts(options: {
+  clear: (key: SideKey) => void;
+  label: (side: SideKey | 'single') => string;
+  focus: (key: SideKey) => void;
+}): {
+  single: Signal<EditableClearContext>;
+  start: Signal<EditableClearContext>;
+  end: Signal<EditableClearContext>;
+} {
+  const clearStart = () => options.clear('start');
+  const clearEnd = () => options.clear('end');
+  const focusStart = () => options.focus('start');
+  const focusEnd = () => options.focus('end');
+
+  const context = (
+    clear: () => void,
+    focus: () => void,
+    side: SideKey | null,
+    key: SideKey | 'single',
+  ): Signal<EditableClearContext> =>
+    computed(() => ({ $implicit: clear, clear, side, label: options.label(key), focus }));
+
+  return {
+    // A single field clears the whole value — which IS the start side
+    // internally (shape-echo), but the consumer is told `null`: there is no
+    // other side to distinguish it from.
+    single: context(clearStart, focusStart, null, 'single'),
+    start: context(clearStart, focusStart, 'start', 'start'),
+    // Focus returns to the side that was cleared, not to the pair's head.
+    end: context(clearEnd, focusEnd, 'end', 'end'),
   };
 }
 

@@ -16,6 +16,7 @@ import {
   type InlineTextSaved,
 } from '../angular-inline-text/angular-inline-text';
 import { EditablePrefix, EditableSuffix } from '../angular-inline-text/editable-affix';
+import { EditableClearTemplate, type EditableClearContext } from '../bubble-menu/editable-clear';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineNumberSaved {
@@ -171,6 +172,19 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
   protected suffixTpl = computed(() => this.suffixTemplate() ?? this.contentSuffix()?.templateRef);
 
   /**
+   * Consumer clear affordance — forwarded verbatim to the inner control,
+   * which owns the bubble (and whose context callback clears THROUGH this
+   * wrapper: the empty commit arrives here as a normal settlement). Same
+   * re-projection reason as the affixes: input for composition,
+   * `ng-template[editableClear]` content for direct use.
+   */
+  clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
+
+  private contentClear = contentChild(EditableClearTemplate);
+
+  protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
+
+  /**
    * Which decimal separator the draft accepts and the idle text shows.
    * `'both'` takes either while typing and settles on the dot.
    *
@@ -219,9 +233,7 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
   format = input<((value: number | null) => string) | undefined>(undefined);
 
   /** The effective codec: an explicit override, else the separator's own. */
-  protected activeParse = computed(
-    () => this.parse() ?? makeParseNumber(this.decimalSeparator()),
-  );
+  protected activeParse = computed(() => this.parse() ?? makeParseNumber(this.decimalSeparator()));
   protected activeFormat = computed(
     () => this.format() ?? makeFormatNumber(this.decimalSeparator()),
   );

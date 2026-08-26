@@ -87,10 +87,26 @@
 
     <!-- Range: a bubble per side, each opening OUTWARD (start→left, end→right). -->
     <bubble-menu [origin]="startInput" side="start" [canShow]="clearCanShowStart()">
-      <button editableClearButton aria-label="Clear start time" (clear)="clearBubble('start')"></button>
+      @if (clearTpl(); as tpl) {
+        <ng-container *ngTemplateOutlet="tpl; context: clearContextStart()" />
+      } @else {
+        <button
+          editableClearButton
+          [attr.aria-label]="clearContextStart().label"
+          (clear)="clearBubble('start')"
+        ></button>
+      }
     </bubble-menu>
     <bubble-menu [origin]="endInput" side="end" [canShow]="clearCanShowEnd()">
-      <button editableClearButton aria-label="Clear end time" (clear)="clearBubble('end')"></button>
+      @if (clearTpl(); as tpl) {
+        <ng-container *ngTemplateOutlet="tpl; context: clearContextEnd()" />
+      } @else {
+        <button
+          editableClearButton
+          [attr.aria-label]="clearContextEnd().label"
+          (clear)="clearBubble('end')"
+        ></button>
+      }
     </bubble-menu>
   }
 
@@ -120,8 +136,20 @@
 
 <!-- Single field: one bubble anchored to the whole field, clearing the value. -->
 @if (!twoFields()) {
-  <bubble-menu [origin]="field" [side]="effectiveClearBubbleSide()" [canShow]="clearCanShowSingle()">
-    <button editableClearButton aria-label="Clear time" (clear)="clearBubble('start')"></button>
+  <bubble-menu
+    [origin]="field"
+    [side]="effectiveClearBubbleSide()"
+    [canShow]="clearCanShowSingle()"
+  >
+    @if (clearTpl(); as tpl) {
+      <ng-container *ngTemplateOutlet="tpl; context: clearContextSingle()" />
+    } @else {
+      <button
+        editableClearButton
+        [attr.aria-label]="clearContextSingle().label"
+        (clear)="clearBubble('start')"
+      ></button>
+    }
   </bubble-menu>
 }
 

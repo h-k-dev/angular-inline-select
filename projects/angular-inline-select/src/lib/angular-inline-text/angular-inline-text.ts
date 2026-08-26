@@ -32,7 +32,11 @@ import { EditablePrefix, EditableSuffix } from './editable-affix';
 import { EditableHint } from './editable-hint';
 import { EditableMenu, detectSlashToken, type SlashToken } from './editable-menu';
 import { BubbleMenu } from '../bubble-menu/bubble-menu';
-import { EditableClearButton } from '../bubble-menu/editable-clear';
+import {
+  EditableClearButton,
+  EditableClearTemplate,
+  type EditableClearContext,
+} from '../bubble-menu/editable-clear';
 
 interface ValueNormalizationDetails {
   value: string;
@@ -1125,6 +1129,35 @@ export class AngularInlineText implements FormValueControl<string> {
   // ---------------------------------------------------------------------------
 
   /**
+   * Consumer clear affordance — REPLACES the stock button inside the bubble.
+   * Same dual channel as the other slots: input for composition (number and
+   * phone forward theirs here), `ng-template[editableClear]` content for
+   * direct use. See {@link EditableClearTemplate} for the confirm-before-
+   * clear recipe the context callback exists for.
+   */
+  clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
+
+  private contentClear = contentChild(EditableClearTemplate);
+
+  protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
+
+  /** The stock accessible name — the context's `label`, and the default button's. */
+  protected readonly clearLabel = 'Clear value';
+
+  /**
+   * The `editableClear` context. A STABLE object (the callback is a bound
+   * field, the label a constant): stamping it never re-creates the consumer's
+   * button, so a clear confirmed asynchronously calls into a live control.
+   */
+  protected readonly clearContext: EditableClearContext = {
+    $implicit: () => this.clearValue(),
+    clear: () => this.clearValue(),
+    side: null,
+    label: this.clearLabel,
+    focus: () => this.focus(),
+  };
+
+  /**
    * Whether the clear bubble may show — every term EXCEPT hover (the bubble
    * owns that): never for empty/required/locked fields or while editing.
    * `required()` keeps the bubble hidden — a guaranteed-doomed clear stays
@@ -1217,9 +1250,11 @@ export class AngularInlineText implements FormValueControl<string> {
    * value surfaces through the idle error state immediately. `required()`
    * keeps hiding the bubble — a guaranteed-doomed clear stays unavailable.
    */
-  protected clearValue(event: Event) {
-    event.preventDefault();
-    event.stopPropagation();
+  protected clearValue(event?: Event) {
+    // Absent when a consumer's own affordance calls through the template
+    // context — possibly long after its click (a confirmation dialog).
+    event?.preventDefault();
+    event?.stopPropagation();
 
     // Clear is an idle-only affordance (the bubble is hidden while editing).
     // Guard anyway: committing '' mid-session would strand `previous` at the

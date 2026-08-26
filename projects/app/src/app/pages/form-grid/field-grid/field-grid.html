@@ -1,4 +1,21 @@
 <!--
+  ONE consumer clear button for the whole grid — the `editableClear` seam.
+  The field hands over three things and nothing else: its `clear` path, its own
+  accessible `label`, and `focus` to put the keyboard back when the dialog
+  closes. Nothing here knows which field it is clearing, which is why a single
+  template serves text, number, phone, date, time, duration and JSON alike:
+  every variant stamps it in its own hover bubble, and a ranged date or time
+  stamps it once per side (the context's `side` says which).
+
+  Clearing IS a commit, so the field hands the commit over rather than
+  announcing it afterwards: nothing is written, touched or `saved` until the
+  dialog comes back yes.
+-->
+<ng-template #confirmClear let-clear let-label="label" let-focus="focus">
+  <app-confirm-clear [clear]="clear" [label]="label" [focusField]="focus" />
+</ng-template>
+
+<!--
   A description list, laid out as a grid: `.field-grid__row` is `display:
   contents`, so every <dt>/<dd> is a grid item of the SAME grid and all labels
   share one column track. That is what keeps the values aligned down the card —
@@ -24,6 +41,7 @@
     <dt class="field-grid__label">Project</dt>
     <dd class="field-grid__value">
       <angular-inline-text
+        [clearTemplate]="confirmClear"
         [formField]="recordForm.project"
         [isSingleLine]="true"
         placeholder="Project name…"
@@ -48,6 +66,7 @@
     <dt class="field-grid__label">Summary</dt>
     <dd class="field-grid__value">
       <angular-inline-text
+        [clearTemplate]="confirmClear"
         [formField]="recordForm.summary"
         placeholder="Add a description…"
         [normalizeValue]="true"
@@ -69,6 +88,7 @@
     <dt class="field-grid__label">Budget</dt>
     <dd class="field-grid__value">
       <angular-inline-number
+        [clearTemplate]="confirmClear"
         [formField]="recordForm.budget"
         [format]="budgetFormat"
         placeholder="Budget…"
@@ -90,6 +110,7 @@
     <dt class="field-grid__label">Telephone</dt>
     <dd class="field-grid__value">
       <angular-inline-phone
+        [clearTemplate]="confirmClear"
         #telephone
         [formField]="recordForm.telephone"
         [codec]="codec"
@@ -113,6 +134,7 @@
     <dt class="field-grid__label">Deadline</dt>
     <dd class="field-grid__value">
       <angular-inline-date
+        [clearTemplate]="confirmClear"
         #deadline
         [formField]="recordForm.deadline"
         placeholder="Deadline…"
@@ -133,6 +155,7 @@
     <dt class="field-grid__label">Metadata</dt>
     <dd class="field-grid__value">
       <angular-inline-json
+        [clearTemplate]="confirmClear"
         [formField]="recordForm.metadata"
         ariaLabel="Record metadata"
         (saved)="logEmit('metadata.saved', $event)"
@@ -150,6 +173,7 @@
     <dt class="field-grid__label">Status</dt>
     <dd class="field-grid__value">
       <angular-inline-text
+        [clearTemplate]="confirmClear"
         [formField]="recordForm.status"
         [isSingleLine]="true"
         placeholder="Status…"
@@ -189,6 +213,7 @@
     <dt class="field-grid__label">Reference</dt>
     <dd class="field-grid__value">
       <angular-inline-text
+        [clearTemplate]="confirmClear"
         [formField]="recordForm.reference"
         [isSingleLine]="true"
         wrapBehavior="noWrap"
@@ -205,6 +230,7 @@
     <dt class="field-grid__label">Callsign</dt>
     <dd class="field-grid__value">
       <angular-inline-text
+        [clearTemplate]="confirmClear"
         [formField]="recordForm.callsign"
         [isSingleLine]="true"
         [allowedChars]="callsignChars"
@@ -228,6 +254,7 @@
     <dt class="field-grid__label">Cable</dt>
     <dd class="field-grid__value">
       <angular-inline-number
+        [clearTemplate]="confirmClear"
         [formField]="recordForm.cable"
         decimalSeparator=","
         placeholder="Length…"
@@ -244,6 +271,7 @@
     <dt class="field-grid__label">Crew</dt>
     <dd class="field-grid__value">
       <angular-inline-number
+        [clearTemplate]="confirmClear"
         [formField]="recordForm.crew"
         placeholder="Crew…"
         ariaLabel="Crew count"
@@ -257,6 +285,7 @@
     <dt class="field-grid__label">Mobile</dt>
     <dd class="field-grid__value">
       <angular-inline-phone
+        [clearTemplate]="confirmClear"
         #mobile
         [formField]="recordForm.mobile"
         [codec]="codec"
@@ -281,6 +310,7 @@
     <dt class="field-grid__label">Vacation</dt>
     <dd class="field-grid__value">
       <angular-inline-date
+        [clearTemplate]="confirmClear"
         [formField]="recordForm.vacation"
         [ranged]="true"
         ariaLabel="Vacation dates"
@@ -294,6 +324,7 @@
     <dt class="field-grid__label">Kickoff</dt>
     <dd class="field-grid__value">
       <angular-inline-time
+        [clearTemplate]="confirmClear"
         [formField]="recordForm.kickoff"
         locale="en-u-hc-h23"
         placeholder="Kickoff…"
@@ -308,6 +339,7 @@
     <dt class="field-grid__label">Shift</dt>
     <dd class="field-grid__value">
       <angular-inline-time
+        [clearTemplate]="confirmClear"
         [formField]="recordForm.shift"
         [ranged]="true"
         locale="en-u-hc-h23"
@@ -322,6 +354,7 @@
     <dt class="field-grid__label">Estimate</dt>
     <dd class="field-grid__value">
       <angular-inline-duration
+        [clearTemplate]="confirmClear"
         [formField]="recordForm.estimate"
         durationFormat="h:mm"
         [step]="60"
