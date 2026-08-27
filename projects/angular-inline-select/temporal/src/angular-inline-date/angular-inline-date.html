@@ -20,6 +20,7 @@
     #startInput
     class="inline-date__input"
     [class.inline-date__input--reverted]="revertFlash() === 'start'"
+    [class.inline-date__input--unresolved]="!resolved().start"
     type="text"
     autocomplete="off"
     autocapitalize="off"
@@ -48,6 +49,7 @@
       #endInput
       class="inline-date__input"
       [class.inline-date__input--reverted]="revertFlash() === 'end'"
+      [class.inline-date__input--unresolved]="!resolved().end"
       type="text"
       autocomplete="off"
       autocapitalize="off"

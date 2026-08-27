@@ -9,6 +9,7 @@ import {
   contentChild,
   inject,
   input,
+  linkedSignal,
   model,
   output,
   signal,
@@ -57,7 +58,13 @@ import {
   type InternalDateRange,
 } from './date-codec';
 import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
-import { dayToDbEntry, dayEndToDbEntry, localDayOf, toDateTime } from '../datetime/db-entry';
+import {
+  dayToDbEntry,
+  dayEndToDbEntry,
+  localDayOf,
+  toDateTime,
+  type DbDateTime,
+} from '../datetime/db-entry';
 import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
 import {
   makeSideSessionChrome,
@@ -72,6 +79,17 @@ import {
 } from '../side-session';
 import { TemporalIntl } from '../temporal-intl';
 import { Calendar } from './calendar/calendar';
+
+/**
+ * The `resolved` verdict, per side: `true` when that side's BOUND entry is
+ * readable or empty, `false` while an injected entry (e.g. a backend
+ * `'0000-00-00 00:00:00'`) is present but unreadable. A single-string
+ * binding speaks through `start`; `end` idles at `true` there.
+ */
+export interface DateResolvedState {
+  start: boolean;
+  end: boolean;
+}
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineDateSaved {
@@ -88,6 +106,13 @@ export interface InlineDateSaved {
 interface DateSide extends SideCore<IsoDate> {
   /** The committed day at session start — what Escape and snap-back restore. */
   baselineDay: IsoDate | null;
+  /**
+   * The UNRESOLVED raw entry at session start (`null` when the baseline was
+   * a readable day or empty). When set, Escape and snap-back restore THIS
+   * verbatim — a `baselineDay` of `null` over an occupied value must never
+   * settle to `null` (that would be the swallow this control refuses).
+   */
+  baselineRaw: DbDateTime | null;
   /**
    * The draft's codec reading, CACHED per side (`null` empty, `undefined`
    * unreadable) — the one parse per keystroke every consumer (live channel,
@@ -122,6 +147,13 @@ interface DateSide extends SideCore<IsoDate> {
  * typed draft per keystroke); ArrowDown hands focus to the grid; a pick
  * COMMITS the focused side — and hands the session to the empty other side
  * when picking a range.
+ *
+ * An UNRESOLVED injected value (a bound entry the codec cannot read — a
+ * backend `'0000-00-00 00:00:00'`) is neither swallowed nor dismissed: the
+ * raw entry displays verbatim under the error underline, `resolved` carries
+ * the per-side verdict (and the acknowledge seam), and Escape/snap-back
+ * restore the raw entry — only an actual commit or clear replaces it.
+ * Date-only; duration and time have no such gate.
  */
 @Component({
   selector: 'angular-inline-date',
@@ -335,14 +367,27 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * One canonical internal model, always: `{ start, end }` as LOCAL
    * calendar DAYS — the user-facing side; DB entries live only at the
    * value boundary.
+   *
+   * A WRITABLE view (22.1 `linkedSignal`, custom `set`): reads derive from
+   * `value`, and writing a day range routes SYNCHRONOUSLY back through the
+   * shape echo into `value` — every commit path speaks days, and the DB
+   * conversion lives in exactly one place. Echo-equal writes are dropped,
+   * so the write-back can never loop.
    */
-  readonly internalRange = computed<InternalDateRange>(() => {
-    const zone = this.effectiveZone();
-    const { start, end } = toInternalRange(this.value());
-    return {
-      start: start === null ? null : localDayOf(start, zone),
-      end: end === null ? null : localDayOf(end, zone),
-    };
+  readonly internalRange = linkedSignal<InlineDateValue, InternalDateRange>({
+    source: this.value,
+    computation: (value) => {
+      const zone = this.effectiveZone();
+      const { start, end } = toInternalRange(value);
+      return {
+        start: start === null ? null : localDayOf(start, zone),
+        end: end === null ? null : localDayOf(end, zone),
+      };
+    },
+    set: (range) => {
+      const echoed = this.#daysToDbShape(range, this.shape());
+      if (!dateValuesEqual(echoed, this.value())) this.value.set(echoed);
+    },
   });
 
   /** The value boundary, outbound: local days → DB entries in the echoed shape. */
@@ -358,6 +403,69 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     return { start, end: echoed.end == null ? null : dayEndToDbEntry(echoed.end, zone) };
   }
 
+  // -- Unresolved injected values (display, never swallow) -----------------------
+
+  /**
+   * The bound value's RAW per-side entries (`''` normalized to `null`) —
+   * what the consumer actually handed us, BEFORE the codec's verdict. The
+   * `internalRange`/`#rawRange` pair is what makes an UNRESOLVED injected
+   * value (a backend `'0000-00-00 00:00:00'`) visible instead of swallowed:
+   * its day reads `null`, but the raw entry keeps existing here.
+   */
+  readonly #rawRange = computed<InternalDateRange>(() => {
+    const { start, end } = toInternalRange(this.value());
+    return { start: start || null, end: end || null };
+  });
+
+  /** A side's codec verdict on the BOUND value: raw present but unreadable. */
+  #sideUnresolved(key: SideKey): boolean {
+    return this.#rawRange()[key] !== null && this.internalRange()[key] === null;
+  }
+
+  /** The raw entry a session must restore when its baseline day reads `null` but the value wasn't empty. */
+  #unresolvedRawOf(key: SideKey): DbDateTime | null {
+    return this.#sideUnresolved(key) ? this.#rawRange()[key] : null;
+  }
+
+  /**
+   * Whether the BOUND value resolved through the codec, PER SIDE (see
+   * `DateResolvedState`) — a `false` side shows its raw entry VERBATIM
+   * under the error underline rather than swallowing or dismissing it; a
+   * commit, clear, or fresh injection re-derives the verdict. THE one
+   * mechanism of the unresolved feature: the template classes,
+   * `aria-invalid` and consumers all read this signal.
+   *
+   * Writable — the ACKNOWLEDGE seam: `resolved.set({ start: true, end:
+   * true })` lifts the flag without touching the value (the raw entry
+   * stays on display, quietly). The custom `set` (22.1) clamps writes to
+   * acknowledgements: a side whose entry actually reads fine can never be
+   * flagged `false` — only the codec issues that verdict. Sourced on the
+   * unresolved RAW entries — not booleans — so a DIFFERENT bad injection
+   * re-derives the verdict even after an acknowledgement of the previous
+   * one. Date-only — duration and time have no such gate.
+   */
+  readonly resolved = linkedSignal<
+    { start: DbDateTime | null; end: DbDateTime | null },
+    DateResolvedState
+  >({
+    source: computed(() => ({
+      start: this.#unresolvedRawOf('start'),
+      // A single-string binding mirrors its raw into `end` INTERNALLY; the
+      // verdict speaks the CONSUMER's shape, where no end side exists.
+      end: this.twoFields() ? this.#unresolvedRawOf('end') : null,
+    })),
+    computation: (unresolved) => ({
+      start: unresolved.start === null,
+      end: unresolved.end === null,
+    }),
+    equal: (a, b) => a.start === b.start && a.end === b.end,
+    set: (next, rawSet) =>
+      rawSet({
+        start: next.start || this.#unresolvedRawOf('start') === null,
+        end: next.end || !this.twoFields() || this.#unresolvedRawOf('end') === null,
+      }),
+  });
+
   // -- The two sides -----------------------------------------------------------
 
   readonly #startSide = this.#makeSide('start');
@@ -369,12 +477,19 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   #makeSide(key: SideKey): DateSide {
     const committed = computed(() => this.internalRange()[key]);
-    const display = computed(() => formatIsoDate(committed(), this.locale()));
+    const display = computed(() => {
+      const day = committed();
+      if (day !== null) return formatIsoDate(day, this.locale());
+
+      // An unresolved injected value displays VERBATIM — never swallowed.
+      return this.#rawRange()[key] ?? '';
+    });
     const core = makeSideCore(key, committed, display);
 
     return {
       ...core,
       baselineDay: null,
+      baselineRaw: null,
       parsed: computed(() =>
         parseDateInput(core.draft(), this.now()(), this.locale(), this.effectiveZone()),
       ),
@@ -439,9 +554,12 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     () => this.isInvalid() && (this.effectiveTouched() || this.#selfTouched()),
   );
 
-  /** Public: whether the field holds no value at all (both sides empty). */
+  /**
+   * Public: whether the field holds no value at all (both sides empty).
+   * Reads the RAW range — an unresolved injected value counts as content.
+   */
   readonly isEmpty = computed(() => {
-    const { start, end } = this.internalRange();
+    const { start, end } = this.#rawRange();
     return start === null && end === null;
   });
 
@@ -521,7 +639,11 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   protected ariaInvalidOf(key: SideKey): boolean {
     const side = this.#side(key);
-    return this.errorsVisible() || (side.open() && side.saveAttempted() && this.parseFailed());
+    return (
+      this.errorsVisible() ||
+      !this.resolved()[key] ||
+      (side.open() && side.saveAttempted() && this.parseFailed())
+    );
   }
 
   // -- The live channel ---------------------------------------------------------
@@ -533,6 +655,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     // session on the next keystroke.
     if (!side.open()) {
       side.baselineDay = side.committed();
+      side.baselineRaw = this.#unresolvedRawOf(key);
       side.open.set(true);
     }
 
@@ -560,7 +683,26 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
         ? { start: day, end: current.end }
         : { start: current.start, end: day };
 
-    const echoed = this.#daysToDbShape(next, this.shape());
+    // The linked view carries the write back (echoed shape, deduped).
+    this.internalRange.set(next);
+  }
+
+  /**
+   * Restores a side's RAW bound entry verbatim (same slot logic as
+   * `#writeSideDay`, but the entry bypasses the day view — it has no day) —
+   * the un-swallow: an unresolved injected value survives Escape and
+   * snap-back exactly as it arrived, error underline and all.
+   */
+  #writeSideRaw(key: SideKey, raw: DbDateTime) {
+    const current = toInternalRange(this.value());
+    const moveWhole = !this.twoFields() || (key === 'start' && this.shape() === 'start-only');
+    const next: InternalDateRange = moveWhole
+      ? { start: raw, end: raw }
+      : key === 'start'
+        ? { start: raw, end: current.end }
+        : { start: current.start, end: raw };
+
+    const echoed = echoDateShape(next, this.shape());
     if (!dateValuesEqual(echoed, this.value())) this.value.set(echoed);
   }
 
@@ -577,6 +719,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const side = this.#side(key);
     if (!side.open()) {
       side.baselineDay = side.committed();
+      side.baselineRaw = this.#unresolvedRawOf(key);
       side.dirty = false;
       side.saveAttempted.set(false);
       side.open.set(true);
@@ -679,8 +822,16 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       day = parsed === undefined ? side.baselineDay : parsed;
     }
 
+    // A baseline restoration (Escape, snap-back) over an UNRESOLVED injected
+    // value restores the RAW entry — never the `null` its day reads as: that
+    // write would be the swallow this control refuses.
+    const baselineRaw = side.baselineRaw;
+    const restoresRaw =
+      !untouched && (options.revert || snappedBack) && day === null && baselineRaw !== null;
+
     if (!untouched) {
-      this.#writeSideDay(key, day);
+      if (restoresRaw) this.#writeSideRaw(key, baselineRaw!);
+      else this.#writeSideDay(key, day);
 
       // A typed commit sorts like a calendar pick (iusta-style): a date
       // pair never lands inverted — days carry no overnight reading (that
@@ -691,20 +842,24 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
         day = side.committed();
       }
     }
-    const changed = !untouched && day !== side.baselineDay;
+    // Settling away from an unresolved baseline changed the value even when
+    // both days read `null` (raw → parsed day, raw → deliberately cleared).
+    const changed =
+      !untouched && !restoresRaw && (day !== side.baselineDay || baselineRaw !== null);
     side.dirty = false;
 
     if (options.keepOpen) {
       // Enter / pick settle in place: the session continues on the new baseline.
       side.baselineDay = day;
-      side.draft.set(formatIsoDate(day, this.locale()));
+      side.baselineRaw = this.#unresolvedRawOf(key);
+      side.draft.set(side.display());
       side.saveAttempted.set(false);
     } else {
       side.open.set(false);
       side.saveAttempted.set(false);
     }
 
-    if (snappedBack) this.#chrome.announceRevert(key, formatIsoDate(day, this.locale()));
+    if (snappedBack) this.#chrome.announceRevert(key, side.display());
 
     this.#selfTouched.set(true);
     this.touch.emit();
@@ -833,6 +988,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const side = this.#side(key);
     if (!side.open()) {
       side.baselineDay = side.committed();
+      side.baselineRaw = this.#unresolvedRawOf(key);
       side.open.set(true);
     }
 
@@ -857,7 +1013,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const { start, end } = this.internalRange();
     if (start !== null && end !== null && start > end) {
       // ISO days compare lexicographically.
-      this.value.set(this.#daysToDbShape({ start: end, end: start }, this.shape()));
+      this.internalRange.set({ start: end, end: start });
     }
   }
 
@@ -867,12 +1023,12 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    */
   #commitBothSides(startDay: IsoDate | null, endDay: IsoDate | null) {
     const before = this.value();
-    const echoed = this.#daysToDbShape({ start: startDay, end: endDay }, this.shape());
-    if (!dateValuesEqual(echoed, before)) this.value.set(echoed);
+    this.internalRange.set({ start: startDay, end: endDay });
 
     for (const key of ['start', 'end'] as const) {
       const side = this.#side(key);
       side.baselineDay = side.committed();
+      side.baselineRaw = this.#unresolvedRawOf(key);
       side.draft.set(side.display());
       side.dirty = false;
       side.saveAttempted.set(false);
@@ -980,7 +1136,8 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     disabled: this.effectiveDisabled,
     readonly: this.effectiveReadonly,
     editing: this.editing,
-    range: this.internalRange,
+    // The RAW range: an unresolved injected value still offers its clear.
+    range: this.#rawRange,
   });
 
   protected clearCanShowSingle = this.#clearVisibility.single;
@@ -1026,6 +1183,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
     for (const side of [this.#startSide, this.#endSide]) {
       side.baselineDay = side.committed();
+      side.baselineRaw = this.#unresolvedRawOf(side.key);
       side.draft.set(side.display());
       side.dirty = false;
       side.saveAttempted.set(false);
@@ -1056,8 +1214,13 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       const side = this.#side(key);
       if (!side.open()) continue;
 
-      this.#writeSideDay(key, side.baselineDay);
+      if (side.baselineDay === null && side.baselineRaw !== null) {
+        this.#writeSideRaw(key, side.baselineRaw);
+      } else {
+        this.#writeSideDay(key, side.baselineDay);
+      }
       side.baselineDay = side.committed();
+      side.baselineRaw = this.#unresolvedRawOf(key);
       side.draft.set(side.display());
       side.saveAttempted.set(false);
     }

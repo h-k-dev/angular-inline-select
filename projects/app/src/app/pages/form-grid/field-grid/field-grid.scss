@@ -82,6 +82,14 @@ mat-icon[inline] {
   color: var(--mat-sys-on-surface-variant);
 }
 
+// The unresolved-value caption next to the audit field: the control already
+// wears the error underline; this only names the situation.
+.field-grid__unresolved {
+  margin-inline-start: 0.75ch;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-error);
+}
+
 // -----------------------------------------------------------------------------
 // Card controls
 // -----------------------------------------------------------------------------

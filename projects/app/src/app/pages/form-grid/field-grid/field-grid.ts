@@ -74,6 +74,7 @@ export interface RecordModel {
   telephone: string | null;
   mobile: string | null;
   deadline: string | null;
+  audit: string | null;
   vacation: IsoDateRange | null;
   kickoff: string | null;
   shift: DbTimeRange | null;
@@ -112,6 +113,10 @@ function initialRecord(): RecordModel {
     telephone: '+49301234567',
     mobile: null,
     deadline: dayToDbEntry('2026-07-20'),
+    // An INVALID backend entry (MySQL's zero-date classic) — the date control
+    // shows it verbatim under the error underline and reports it through
+    // `resolved` instead of swallowing it.
+    audit: '0000-00-00 00:00:00',
     vacation: { start: dayToDbEntry('2026-07-21'), end: dayEndToDbEntry('2026-07-24') },
     kickoff: composeDbEntry('2026-07-20', '09:30'),
     shift: {

@@ -51,6 +51,15 @@
 }
 
 /*
+    An UNRESOLVED injected value (bound entry the codec can't read): shown
+    verbatim under the error underline — per side, so the intact half of a
+    range keeps its normal color. Same family rule: color only, dashed stays.
+  */
+.inline-date__input--unresolved {
+  border-bottom-color: var(--editable-text-error-color, var(--mat-sys-error, #dc3545));
+}
+
+/*
     BARE CHROME — a generic seam, not a mat one: the HOSTING CONTAINER
     declares it draws the chrome (underline, error color, label), so the
     control's own underline rests. Applied as host classes by whoever

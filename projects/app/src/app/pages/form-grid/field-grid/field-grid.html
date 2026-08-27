@@ -150,6 +150,37 @@
     </dd>
   </div>
 
+  <!--
+    An INVALID value injected from the backend (MySQL's zero-date). The date
+    control neither swallows nor dismisses it: the raw entry displays verbatim
+    under the mat-sys-error underline, and the writable `resolved` signal
+    carries the per-side verdict — committing a real date (or clearing)
+    resolves it; `resolved.set({ start: true, end: true })` would acknowledge
+    it without touching the value.
+  -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Audit</dt>
+    <dd class="field-grid__value">
+      <angular-inline-date
+        [clearTemplate]="confirmClear"
+        #audit
+        [formField]="recordForm.audit"
+        placeholder="Audit date…"
+        ariaLabel="Audit date"
+        (saved)="logEmit('audit.saved', $event)"
+      >
+        <span editable-error>
+          @if (audit.parseFailed()) {
+            That doesn’t read as a date — try “24.12.2026”, “24.12.” or “2026-12-24”.
+          }
+        </span>
+      </angular-inline-date>
+      @if (!audit.resolved().start) {
+        <span class="field-grid__unresolved">unreadable backend value — type or pick a date</span>
+      }
+    </dd>
+  </div>
+
   <!-- JSON: a bounded preview that elevates into a real CodeMirror editor. -->
   <div class="field-grid__row">
     <dt class="field-grid__label">Metadata</dt>

@@ -1,5 +1,6 @@
 import { Component, signal, type Type } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineDate, type InlineDateSaved } from './angular-inline-date';
@@ -960,5 +961,127 @@ describe('AngularInlineDate — clear affordance', () => {
     h.fixture.detectChanges();
 
     expect(h.host.value()).toBeNull();
+  });
+});
+
+// =============================================================================
+// Unresolved injected values — display, never swallow (see `resolved`)
+// =============================================================================
+
+describe('AngularInlineDate — unresolved injected values', () => {
+  // MySQL's zero-date classic: occupied, unreadable, and very much real.
+  const RAW = '0000-00-00 00:00:00';
+
+  let h: Harness<DateShapeHost>;
+  let control: AngularInlineDate;
+
+  beforeEach(() => {
+    h = setupHost(DateShapeHost);
+    control = h.fixture.debugElement.query(By.directive(AngularInlineDate)).componentInstance;
+  });
+
+  afterEach(async () => {
+    await blurAway(h);
+  });
+
+  function inject(value: InlineDateValue) {
+    h.host.value.set(value);
+    h.fixture.detectChanges();
+  }
+
+  it('displays an unreadable injected value VERBATIM with the error underline — resolved reports it', () => {
+    inject(RAW);
+
+    expect(h.start().value).toBe(RAW);
+    expect(h.start().classList).toContain('inline-date__input--unresolved');
+    expect(h.start().getAttribute('aria-invalid')).toBe('true');
+    // The single-string shape speaks through `start`; no end side exists.
+    expect(control.resolved()).toEqual({ start: false, end: true });
+    expect(control.isEmpty()).toBe(false);
+  });
+
+  it('valid and empty injections resolve; a range flags only its broken side', () => {
+    inject(db('2026-05-12'));
+    expect(control.resolved()).toEqual({ start: true, end: true });
+
+    inject(null);
+    expect(control.resolved()).toEqual({ start: true, end: true });
+
+    h.host.ranged.set(true);
+    inject({ start: db('2026-05-12'), end: RAW });
+    expect(control.resolved()).toEqual({ start: true, end: false });
+    expect(h.start().classList).not.toContain('inline-date__input--unresolved');
+    expect(h.end()!.classList).toContain('inline-date__input--unresolved');
+    expect(h.end()!.value).toBe(RAW);
+  });
+
+  it('committing a real date over the raw entry resolves it', () => {
+    inject(RAW);
+
+    type(h, h.start(), '24.12.2026');
+    press(h, h.start(), 'Enter');
+
+    expect(h.host.value()).toBe(db('2026-12-24'));
+    expect(control.resolved()).toEqual({ start: true, end: true });
+    expect(h.host.sessions).toEqual([{ value: db('2026-12-24'), changed: true }]);
+    expect(h.start().classList).not.toContain('inline-date__input--unresolved');
+  });
+
+  it('Escape restores the RAW entry — never the null its day reads as', () => {
+    inject(RAW);
+
+    type(h, h.start(), '24.12.2026');
+    expect(h.host.value()).toBe(db('2026-12-24')); // live channel
+
+    press(h, h.start(), 'Escape'); // stage 1 peels the panel
+    press(h, h.start(), 'Escape'); // stage 2 reverts — to the raw, not null
+
+    expect(h.host.value()).toBe(RAW);
+    expect(h.start().value).toBe(RAW);
+    expect(control.resolved()).toEqual({ start: false, end: true });
+    expect(h.host.sessions).toEqual([{ value: RAW, changed: false }]);
+  });
+
+  it('blur with an unreadable draft snaps back to the raw entry', async () => {
+    inject(RAW);
+
+    type(h, h.start(), 'not a date!');
+    await blurAway(h);
+
+    expect(h.host.value()).toBe(RAW);
+    expect(h.start().value).toBe(RAW);
+    expect(h.host.sessions).toEqual([{ value: RAW, changed: false }]);
+  });
+
+  it('deliberately clearing the draft commits null — a changed settlement', () => {
+    inject(RAW);
+
+    type(h, h.start(), '');
+    press(h, h.start(), 'Enter');
+
+    expect(h.host.value()).toBeNull();
+    expect(control.resolved()).toEqual({ start: true, end: true });
+    expect(h.host.sessions).toEqual([{ value: null, changed: true }]);
+  });
+
+  it('resolved is writable (acknowledge), clamps to the codec, and re-derives per injection', () => {
+    inject(RAW);
+    expect(control.resolved()).toEqual({ start: false, end: true });
+
+    control.resolved.set({ start: true, end: true });
+    h.fixture.detectChanges();
+    expect(h.start().classList).not.toContain('inline-date__input--unresolved');
+    // The raw entry stays on display — acknowledged, not swallowed.
+    expect(h.start().value).toBe(RAW);
+
+    // The custom-set clamp: only the codec can flag a side unresolved.
+    inject(db('2026-05-12'));
+    control.resolved.set({ start: false, end: false });
+    expect(control.resolved()).toEqual({ start: true, end: true });
+
+    // A DIFFERENT bad injection re-derives even after an acknowledgement.
+    inject('another-bad-entry');
+    expect(control.resolved()).toEqual({ start: false, end: true });
+    expect(h.start().classList).toContain('inline-date__input--unresolved');
   });
 });
