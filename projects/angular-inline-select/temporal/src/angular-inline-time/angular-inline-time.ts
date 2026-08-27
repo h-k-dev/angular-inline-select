@@ -425,7 +425,15 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   #makeSide(key: SideKey): TimeSide {
     const committed = computed(() => this.internalRange()[key]);
     const display = computed(() => this.#wallClockOf(committed()));
-    const core = makeSideCore(key, committed, display);
+    // The live channel rides the draft setter: every USER write resolves and
+    // flows a readable instant into the value — typed input and the OS
+    // picker share it, no write site can forget the resolve half.
+    const core = makeSideCore(key, committed, display, () => {
+      const resolved = this.#resolveDraft(key);
+      if (resolved === undefined) return;
+
+      this.internalRange.update((range) => ({ ...range, [key]: resolved.instant }));
+    });
 
     return {
       ...core,
@@ -608,14 +616,9 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   protected handleInput(key: SideKey, raw: string) {
     this.#openSession(key);
     const side = this.#side(key);
-    side.draft.set(raw); // the setter marks the side dirty
+    side.draft.set(raw); // the setter marks dirty AND runs the live resolve
     side.saveAttempted.set(false);
     this.#panelDismissed.set(false);
-
-    const resolved = this.#resolveDraft(key);
-    if (resolved === undefined) return;
-
-    this.internalRange.update((range) => ({ ...range, [key]: resolved.instant }));
   }
 
   // -- Focus flow -------------------------------------------------------------------
@@ -877,13 +880,8 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     const side = this.#side(key);
 
     if (side.open()) {
-      side.draft.set(raw); // the setter marks the side dirty
+      side.draft.set(raw); // the setter marks dirty AND runs the live resolve
       this.#panelDismissed.set(false);
-
-      const resolved = this.#resolveDraft(key);
-      if (resolved !== undefined) {
-        this.internalRange.update((range) => ({ ...range, [key]: resolved.instant }));
-      }
       return;
     }
 

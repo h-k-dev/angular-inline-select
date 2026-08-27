@@ -47,4 +47,44 @@ describe('makeSideCore — the draft/dirty clamp', () => {
     expect(side.draft()).toBe('externally moved');
     expect(side.dirty()).toBe(false);
   });
+
+  describe('the live-channel hook (onUserWrite)', () => {
+    function hooked() {
+      const display = signal('committed');
+      const writes: string[] = [];
+      const side = makeSideCore<string>('start', signal(null), display, () => {
+        writes.push(side.draft());
+      });
+      side.open.set(true);
+      return { side, display, writes };
+    }
+
+    it('fires on a USER write, synchronously, with the new draft in place', () => {
+      const { side, writes } = hooked();
+
+      side.draft.set('typed');
+
+      expect(writes).toEqual(['typed']);
+      expect(side.dirty()).toBe(true); // dirty is marked BEFORE the hook runs
+    });
+
+    it('restore() never fires it', () => {
+      const { side, writes } = hooked();
+      side.draft.set('typed');
+
+      side.restore();
+
+      expect(writes).toEqual(['typed']);
+      expect(side.draft()).toBe('committed');
+    });
+
+    it('a source-driven reset never fires it', () => {
+      const { side, display, writes } = hooked();
+      side.open.set(false);
+
+      display.set('externally moved');
+
+      expect(writes).toEqual([]);
+    });
+  });
 });

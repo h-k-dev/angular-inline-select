@@ -198,7 +198,13 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
     computation: (source, prev) => (this.#open() ? (prev?.value ?? source) : source),
     set: (value, rawSet) => {
       rawSet(value);
-      if (!this.#restoring) this.#dirty = true;
+      if (this.#restoring) return;
+
+      this.#dirty = true;
+      // The live channel: readable drafts flow into the model in the same
+      // synchronous push (unsnapped — rounding is settlement's job).
+      const parsed = parseDuration(value, this.durationFormat());
+      if (parsed !== undefined && parsed !== this.value()) this.value.set(parsed);
     },
   });
 
@@ -336,15 +342,12 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
     this.#open.set(true);
   }
 
-  /** Every keystroke: readable drafts flow into the model live (unsnapped). */
+  /** Every keystroke: the draft setter marks dirty and runs the live parse. */
   protected handleInput(raw: string) {
     this.#openSession();
-    this.draft.set(raw); // the setter marks the session dirty
+    this.draft.set(raw);
     this.#saveAttempted.set(false);
     this.#panelDismissed.set(false);
-
-    const parsed = parseDuration(raw, this.durationFormat());
-    if (parsed !== undefined && parsed !== this.value()) this.value.set(parsed);
   }
 
   // -- Focus flow -------------------------------------------------------------------

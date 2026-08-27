@@ -128,6 +128,16 @@ editor (flat string), never a *document* editor, and stays that way:
   audited against core dev @ `2b517ffe` — the gate is one `npm ci`
   (package.json AND lockfile are at 22.1; only node_modules lags at 21.2,
   whose `linkedSignal` typings lack `set`).
+- **Custom-setter round 2 — live channels ARE the setters.**
+  `makeSideCore` gained an `onUserWrite` hook the draft setter invokes in
+  the same synchronous push as marking dirty (restore/source resets fire
+  neither; 3 specs). DATE and TIME moved their per-side live resolve into
+  it — typed input and the OS picker now share one unforgeable path — and
+  DURATION's live parse moved into its own draft setter. Date rides along:
+  the move-whole slot law extracted to one `#sideSlots` shared by the day
+  view and the raw-restore path (which stays outside `internalRange` on
+  purpose — the day-typed view would swallow the unresolved raw). All 410
+  pre-existing behavioral specs passed unchanged.
 
 Verified against `@angular/forms/signals` 22.0: `touched`/`invalid`/`hidden`
 are auto-bound custom-control inputs; `touch` → `markAsTouched()`;

@@ -23,21 +23,23 @@ this dev — only the local `node_modules` is stale (21.2.12, whose
 
 ## 1. Why bother (and what's urgent)
 
-One item is a LIVE BUG in core, not a style port:
+One item is a LIVE INCONSISTENCY in core, not a style port — with a
+correction from the deeper audit: core has NO shape memory (shape is the
+explicit `isRanged` input), so the upstream shape-flip cannot happen here.
+What core's direct writes break instead is the WIRE FORMAT of the day
+channel: `range-group.ts:360-361`/`:375`/`:382` write **UTC DB entries**
+into day leaves whose own commits emit the LEGACY LOCAL string
+(`DATE_FORMAT_ISO`) — so a consumer reading the day leaf's `value` sees
+format A after a user commit and format B after a group sync, and a
+user's day commit is actively REWRITTEN from local string to DB entry by
+the group's re-mirror (core's own group spec documented this: "the group
+re-mirrors the day leaf as a DB entry"). Routing writes through the
+leaf's `internalRange` makes the leaf's boundary the single truth: one
+format both paths, and the re-mirror after a leaf's own commit becomes a
+no-op instead of a rewrite.
 
-`core/editables/temporal/range-group.ts:360-361` (and `:375`, `:382` in
-`syncDayLeaves`) write **bare strings** into the day leaves' `value`:
-
-```ts
-dayCtl()?.value.set(startValue === null ? null : dayToDbEntry(localDayOf(startValue, zone())!, zone()));
-```
-
-Shape memory re-infers the leaf's emission shape from every `value` write —
-so a `{ start }`-bound day leaf gets silently re-declared string-shaped by
-its own group on the first push-down. Upstream this is now spec-pinned
-(`range-group.spec.ts` — "leaf shape preservation"; the assertion FAILS
-against the old code). Whether a core consumer binds a day leaf with an
-object shape today decides urgency, not whether the hazard exists.
+(Upstream the same root cause DID flip shapes, because upstream has shape
+memory — spec-pinned there as "leaf shape preservation".)
 
 Everything else converts write-path invariants from reviewer discipline
 into structure: the conversion/parse/flag lives in the signal's own setter,
@@ -190,6 +192,33 @@ Upstream references: `angular-inline-number.ts`, `angular-inline-phone.ts`.
 - The payoff site is REAL on this dev: `editable-telephone-number.ts:464`
   (`innerValue.set('+${option.dialCode} ')` in the country pick) bypasses
   the parse today, same as upstream did — the setter closes it for free.
+
+## 3b. ROUND 2 — live channels into the setters (`onUserWrite`)
+
+Shipped upstream after the first absorption round; core's copies (already
+ported to `internal.update(...)` call sites) have the SAME follow-up:
+
+- `side-session.ts` — `makeSideCore` gains an optional `onUserWrite`
+  callback, invoked by the draft's setter in the same synchronous push as
+  marking dirty. `restore()` and source-driven resets trigger neither.
+  Three specs pin the contract (fires with the new draft in place; restore
+  silent; source reset silent).
+- `editable-date-v2.ts` / `editable-time.ts` — each side's live resolve
+  (readable draft → model write) moves OUT of `handleInput` (and time's
+  OS-pick handler — the site that previously duplicated the resolve block)
+  INTO the `makeSideCore` hook: typed input and picker share one
+  unforgeable path.
+- `editable-time-duration.ts` — the live `parseDuration → value.set` moves
+  from `handleInput` into the draft's own setter (guarded by the restoring
+  latch; restore parses back to the current value and dedupes to a no-op).
+- date-only cleanup that rides along: the move-whole slot law extracted to
+  ONE `#sideSlots` helper shared by the day view and the raw-restore path
+  (`#writeSideRaw` stays deliberately OUTSIDE `internalRange` — the
+  day-typed view would read an unreadable entry as null and swallow the
+  very value the falsie feature preserves; the comment says so in place).
+
+The equivalence bar repeated upstream: every pre-existing behavioral spec
+passed unchanged after the relocation.
 
 ## 4. Specs to carry over
 

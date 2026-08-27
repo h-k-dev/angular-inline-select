@@ -484,7 +484,12 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       // An unresolved injected value displays VERBATIM — never swallowed.
       return this.#rawRange()[key] ?? '';
     });
-    const core = makeSideCore(key, committed, display);
+    // The live channel rides the draft setter: every USER write resolves and
+    // flows a readable day into the value — no keystroke path can forget it.
+    const core = makeSideCore<IsoDate>(key, committed, display, () => {
+      const day = this.#side(key).parsed();
+      if (day !== undefined) this.#writeSideDay(key, day);
+    });
 
     return {
       ...core,
@@ -659,12 +664,9 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       side.open.set(true);
     }
 
-    side.draft.set(raw); // the setter marks the side dirty
+    side.draft.set(raw); // the setter marks dirty AND runs the live resolve
     side.saveAttempted.set(false);
     this.overlayOpen.set(true);
-
-    const day = side.parsed();
-    if (day !== undefined) this.#writeSideDay(key, day);
   }
 
   /**
@@ -674,16 +676,28 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * a distinct end (and grows the key, per the echo).
    */
   #writeSideDay(key: SideKey, day: IsoDate | null) {
-    const current = this.internalRange();
-    const moveWhole = !this.twoFields() || (key === 'start' && this.shape() === 'start-only');
-    const next: InternalDateRange = moveWhole
-      ? { start: day, end: day }
-      : key === 'start'
-        ? { start: day, end: current.end }
-        : { start: current.start, end: day };
-
     // The linked view carries the write back (echoed shape, deduped).
-    this.internalRange.set(next);
+    this.internalRange.set(this.#sideSlots(key, day, this.internalRange()));
+  }
+
+  /**
+   * One side's write, slotted into the pair — the ONE copy of the
+   * move-whole law: in the one-key `{ start }` shape (and single mode) the
+   * end is a MIRROR, not data, so a start edit moves the range whole; only
+   * an END edit creates a distinct end. Generic because the day view and
+   * the raw-restore path slot DIFFERENT payloads through the same law.
+   */
+  #sideSlots<T>(
+    key: SideKey,
+    value: T | null,
+    current: { start: T | null; end: T | null },
+  ): { start: T | null; end: T | null } {
+    const moveWhole = !this.twoFields() || (key === 'start' && this.shape() === 'start-only');
+    return moveWhole
+      ? { start: value, end: value }
+      : key === 'start'
+        ? { start: value, end: current.end }
+        : { start: current.start, end: value };
   }
 
   /**
@@ -693,14 +707,11 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * snap-back exactly as it arrived, error underline and all.
    */
   #writeSideRaw(key: SideKey, raw: DbDateTime) {
-    const current = toInternalRange(this.value());
-    const moveWhole = !this.twoFields() || (key === 'start' && this.shape() === 'start-only');
-    const next: InternalDateRange = moveWhole
-      ? { start: raw, end: raw }
-      : key === 'start'
-        ? { start: raw, end: current.end }
-        : { start: current.start, end: raw };
-
+    // Slotted by the same move-whole law as the day view — but echoed
+    // VERBATIM, deliberately outside `internalRange`: the day-typed view
+    // would read the unreadable entry as `null` and swallow the very value
+    // this path exists to preserve.
+    const next = this.#sideSlots(key, raw, toInternalRange(this.value()));
     const echoed = echoDateShape(next, this.shape());
     if (!dateValuesEqual(echoed, this.value())) this.value.set(echoed);
   }

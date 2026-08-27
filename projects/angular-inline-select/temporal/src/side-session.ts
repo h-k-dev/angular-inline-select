@@ -78,11 +78,20 @@ export interface SideCore<T> {
   readonly saveAttempted: WritableSignal<boolean>;
 }
 
-/** Builds a side's shared core — the frozen-draft discipline included. */
+/**
+ * Builds a side's shared core — the frozen-draft discipline included.
+ *
+ * `onUserWrite` is the LIVE CHANNEL hook: the draft's setter invokes it in
+ * the same synchronous push as marking dirty, so the control's live resolve
+ * (readable draft → model) can never be forgotten at a write site — the
+ * same law the number/phone `innerValue` setters enforce. `restore()` and
+ * source-driven resets trigger neither.
+ */
 export function makeSideCore<T>(
   key: SideKey,
   committed: Signal<T | null>,
   display: Signal<string>,
+  onUserWrite?: () => void,
 ): SideCore<T> {
   const open = signal(false);
   const dirty = signal(false);
@@ -93,7 +102,10 @@ export function makeSideCore<T>(
     computation: (source, prev) => (open() ? (prev?.value ?? source) : source),
     set: (value, rawSet) => {
       rawSet(value);
-      if (!restoring) dirty.set(true);
+      if (restoring) return;
+
+      dirty.set(true);
+      onUserWrite?.();
     },
   });
 
