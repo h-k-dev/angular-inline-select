@@ -240,7 +240,7 @@ export class AngularInlineText implements FormValueControl<string> {
   saved = output<InlineTextSaved>();
 
   /** Whether the field is elevated (an edit session is open). Two-way bindable. */
-  editing = model<boolean>(false);
+  editing = model(false);
 
   /**
    * Whether the VALUE is a single line: no line break may exist in it. Enter
@@ -248,7 +248,7 @@ export class AngularInlineText implements FormValueControl<string> {
    * Says nothing about how the text is PAINTED — a single-line value may still
    * wrap over several visual lines (`wrapBehavior`).
    */
-  isSingleLine = input<boolean>(false);
+  isSingleLine = input(false);
 
   /**
    * SINGLE-LINE only — how the in-flow display handles a width constraint:
@@ -267,7 +267,7 @@ export class AngularInlineText implements FormValueControl<string> {
     this.isSingleLine() ? this.wrapBehavior() : 'wrap',
   );
 
-  placeholder = input<string>('N/A');
+  placeholder = input('N/A');
 
   /** Accessible name for the field (contenteditable has no native label association). */
   ariaLabel = input<string | undefined>(undefined);

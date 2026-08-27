@@ -213,7 +213,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   invalid = input(false);
   hidden = input(false);
 
-  placeholder = input<string>('time');
+  placeholder = input('time');
   /**
    * End-field placeholder override. Unset, a FULLY EMPTY range shows the
    * placeholder on both sides; once a start exists the end side switches
@@ -267,7 +267,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   readonly effectiveZone = computed(() => this.zone() ?? this.#zoneDefault?.());
 
   /** Granularity of the native picker, in seconds (forwarded to its `step`). */
-  step = input<number>(60);
+  step = input(60);
 
   /**
    * T3 — native picker bounds, forwarded to the OS input's `min`/`max`

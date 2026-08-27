@@ -152,7 +152,7 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
   invalid = input(false);
   hidden = input(false);
 
-  placeholder = input<string>('N/A');
+  placeholder = input('N/A');
 
   /** Accessible name for the field (contenteditable has no native label association). */
   ariaLabel = input<string | undefined>(undefined);

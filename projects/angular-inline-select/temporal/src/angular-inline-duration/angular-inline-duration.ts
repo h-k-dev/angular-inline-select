@@ -97,7 +97,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   invalid = input(false);
   hidden = input(false);
 
-  placeholder = input<string>('0:00');
+  placeholder = input('0:00');
 
   /**
    * The UNIFORM adapter surface (every temporal control exposes it): the
@@ -126,7 +126,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   durationFormat = input<DurationFormat>('h:mm');
 
   /** Snap committed values to a multiple of this many seconds (1 = off). */
-  step = input<number>(1);
+  step = input(1);
 
   /** Affix template passthrough (composition channel + content sugar). */
   prefixTemplate = input<TemplateRef<unknown> | undefined>(undefined);

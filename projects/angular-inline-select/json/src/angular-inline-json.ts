@@ -132,15 +132,15 @@ export class AngularInlineJson implements FormValueControl<string> {
   touch = output<void>();
 
   /** Whether the field is elevated (an edit session is open). Two-way bindable. */
-  editing = model<boolean>(false);
+  editing = model(false);
 
-  placeholder = input<string>('null');
+  placeholder = input('null');
 
   /** Accessible name for the field (the preview has no native label association). */
   ariaLabel = input<string | undefined>(undefined);
 
   /** Idle-preview budget: hard cap on rendered VISUAL lines at the current width. */
-  maxPreviewLines = input<number>(5);
+  maxPreviewLines = input(5);
 
   /** Affix templates — same dual channel (input or `ng-template[editablePrefix/Suffix]` content) as every inline control. */
   prefixTemplate = input<TemplateRef<unknown> | undefined>(undefined);
