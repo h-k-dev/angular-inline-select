@@ -175,9 +175,9 @@ describe('DateTimeRangeGroup', () => {
 
     expect(h.host.end()).toBe(at('2026-07-31', '00:30'));
     expect(h.group().endDayOffset()).toBe(10);
-    expect(
-      h.fixture.nativeElement.querySelector('.time-day-badge')?.textContent?.trim(),
-    ).toBe('+10');
+    expect(h.fixture.nativeElement.querySelector('.time-day-badge')?.textContent?.trim()).toBe(
+      '+10',
+    );
   });
 
   it('committing a duration MOVES the end instant; multi-day lengths grow the badge', async () => {
@@ -407,8 +407,7 @@ function boundSetup<T>(type: Type<T>) {
   return {
     fixture,
     host: fixture.componentInstance,
-    inputs: () =>
-      [...fixture.nativeElement.querySelectorAll(LEAF_INPUTS)] as HTMLInputElement[],
+    inputs: () => [...fixture.nativeElement.querySelectorAll(LEAF_INPUTS)] as HTMLInputElement[],
   };
 }
 
@@ -656,7 +655,12 @@ interface HeadlessRow {
     @for (row of rows; track row.id) {
       <div class="headless-row">
         <angular-inline-date [rangeDay]="row.group" locale="en" [now]="now" />
-        <angular-inline-time [ranged]="true" [rangeTimes]="row.group" locale="en-u-hc-h23" [now]="now" />
+        <angular-inline-time
+          [ranged]="true"
+          [rangeTimes]="row.group"
+          locale="en-u-hc-h23"
+          [now]="now"
+        />
         <angular-inline-duration [rangeLength]="row.group" />
       </div>
     }
@@ -771,5 +775,67 @@ describe('createTemporalRangeGroup (headless, by-reference roles)', () => {
       '06:00',
       '09:00',
     ]);
+  });
+});
+
+// =============================================================================
+// Leaf writes route through the leaves' writable internal views — the group
+// can no longer flip the shape a consumer bound (the old direct
+// `value.set(<string>)` silently re-declared a `{ start }`-bound day leaf as
+// string-shaped on its first push-down).
+// =============================================================================
+
+@Component({
+  imports: [
+    AngularInlineDate,
+    AngularInlineTime,
+    DateTimeRangeGroup,
+    RangeDay,
+    RangeStart,
+    RangeEnd,
+  ],
+  template: `
+    <div dateTimeRangeGroup>
+      <angular-inline-date rangeDay [(value)]="day" locale="en" [now]="now" />
+      <angular-inline-time rangeStart [(value)]="start" locale="en-u-hc-h23" [now]="now" />
+      <angular-inline-time rangeEnd [(value)]="end" locale="en-u-hc-h23" [now]="now" />
+    </div>
+  `,
+})
+class ShapeBoundDayHost {
+  day = signal<{ start: string | null } | string | null>({ start: dayToDbEntry('2026-07-21') });
+  start = signal<string | null>(at('2026-07-21', '21:00'));
+  end = signal<string | null>(at('2026-07-22', '06:00'));
+  now = () => NOW;
+}
+
+describe('DateTimeRangeGroup — leaf shape preservation', () => {
+  it('a { start }-bound day leaf keeps its object shape through group propagation', async () => {
+    const fixture = TestBed.createComponent(ShapeBoundDayHost);
+    fixture.detectChanges();
+    const host = fixture.componentInstance;
+
+    // Move the stay's day through the START leaf (an explicit ISO paste —
+    // never re-anchored), so the group re-mirrors the day leaf.
+    const startInput = fixture.nativeElement.querySelectorAll(
+      '.inline-time__input',
+    )[0] as HTMLInputElement;
+    startInput.focus();
+    fixture.detectChanges();
+    startInput.value = '2026-07-23T21:00';
+    startInput.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+    startInput.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    );
+    fixture.detectChanges();
+    startInput.blur();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    // The day leaf moved WITH the instant — and stayed the consumer's shape.
+    const day = host.day();
+    expect(typeof day).toBe('object');
+    expect((day as { start: string }).start).toBe(dayToDbEntry('2026-07-23'));
   });
 });

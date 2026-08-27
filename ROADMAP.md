@@ -111,6 +111,23 @@ editor (flat string), never a *document* editor, and stays that way:
   `/patterns/form-grid`; consumer/integration doc:
   `GUIDELINE-EDITABLE-SCOPE.md` (includes the phase-2 LLM-suggestion
   contract sketch — `suggestion` ghost text + two-stage Tab).
+- **Custom-setter adoption (22.1 `linkedSignal` `set`).** Write-path
+  invariants moved from call-site discipline into the signals themselves,
+  synchronously and effect-free: TIME's `internalRange` became a writable
+  view (echo + dedupe in the setter; the positional `#writeInstants` pairs
+  deleted — per-side writes are `update(r => ({...r, [key]: x}))`); the
+  RANGE GROUP writes leaves through their writable internals (`writeDayLeaf`
+  — fixes a REAL bug: bare-string day-leaf writes silently flipped a
+  `{ start }`-bound leaf's shape via shape memory; spec-pinned); NUMBER and
+  PHONE `innerValue` setters absorb the parse half (phone's country-menu
+  dial-code seed no longer bypasses the codec); the SIDE-SESSION draft
+  setter marks `dirty` unforgeably with `restore()` as the one non-user
+  write (duration mirrors privately). All 404 pre-existing specs passed
+  unchanged + 4 new (`side-session.spec.ts` clamp trio, group shape
+  preservation). Core porting map: `GUIDELINE-SETTER-ABSORPTION.md`,
+  audited against core dev @ `2b517ffe` — the gate is one `npm ci`
+  (package.json AND lockfile are at 22.1; only node_modules lags at 21.2,
+  whose `linkedSignal` typings lack `set`).
 
 Verified against `@angular/forms/signals` 22.0: `touched`/`invalid`/`hidden`
 are auto-bound custom-control inputs; `touch` → `markAsTouched()`;

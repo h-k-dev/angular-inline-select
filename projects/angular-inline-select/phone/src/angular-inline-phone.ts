@@ -256,6 +256,21 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
       return this.codec().format(canonical, this.displayFormat(), this.defaultCountry());
     },
     computation: (source, prev) => (this.innerEditing() ? (prev?.value ?? source) : source),
+    // The live channel IS the setter (22.1): every raw write parses, and a
+    // readable draft flows into the model as E.164 synchronously — direct
+    // writes (the country menu's dial-code seed) go through the same gate
+    // as keystrokes, no site can forget the parse half.
+    set: (raw, rawSet) => {
+      rawSet(raw);
+
+      const result = this.codec().parse(raw, this.defaultCountry());
+      if (result === null) {
+        if (this.canonical() !== null) this.value.set(null);
+        return;
+      }
+
+      if (result.ok && result.e164 !== this.canonical()) this.value.set(result.e164);
+    },
   });
 
   /** The engine's live interpretation of the current draft. Public — consumers render from it. */
@@ -332,20 +347,13 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
   });
 
   /**
-   * Live channel: every keystroke parses. Readable drafts flow into the
-   * model as E.164 (schema validators see the canonical value mid-draft),
-   * unreadable ones hold the last good value and raise the parse gate.
+   * Live channel: every keystroke parses — the work lives in `innerValue`'s
+   * custom `set`, so readable drafts flow into the model as E.164 (schema
+   * validators see the canonical value mid-draft) while unreadable ones
+   * hold the last good value and raise the parse gate.
    */
   protected handleInnerValue(raw: string) {
     this.innerValue.set(raw);
-
-    const result = this.codec().parse(raw, this.defaultCountry());
-    if (result === null) {
-      if (this.canonical() !== null) this.value.set(null);
-      return;
-    }
-
-    if (result.ok && result.e164 !== this.canonical()) this.value.set(result.e164);
   }
 
   /** Retype the settled session: raw strings inside, E.164 outside. */

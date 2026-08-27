@@ -644,6 +644,61 @@ describe('AngularInlineDate with a display zone (T6)', () => {
   });
 });
 
+describe('AngularInlineDate — the consumer restore path (the value channel)', () => {
+  let h: Harness<DateShapeHost>;
+
+  beforeEach(() => {
+    h = setupHost(DateShapeHost);
+    h.host.value.set(db('2026-05-12'));
+    h.fixture.detectChanges();
+  });
+
+  afterEach(async () => {
+    await blurAway(h);
+  });
+
+  it('a LATE consumer restore (backend rejected the commit) is accepted silently', async () => {
+    // The user commits a new day — the consumer ships it to the backend.
+    type(h, h.start(), '24.12.2026');
+    h.start().dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    );
+    await blurAway(h);
+
+    expect(h.host.value()).toBe(db('2026-12-24'));
+    const settledSessions = h.host.sessions.length;
+
+    // The backend says no — the consumer applies the OLD value again, later.
+    h.host.value.set(db('2026-05-12'));
+    h.fixture.detectChanges();
+
+    // Accepted through the value channel: display re-derives, and NOTHING
+    // else runs — no session, no settle events, no error state.
+    expect(h.start().value).toBe('May 12, 2026');
+    expect(h.host.sessions.length).toBe(settledSessions);
+    expect(h.panel()).toBeNull();
+  });
+
+  it('an ALREADY-RESTORED value absorbs the consumer restore as a no-op (no restore chain)', async () => {
+    // An unreadable draft snaps back on blur — the control restored itself.
+    type(h, h.start(), 'not a date');
+    await blurAway(h);
+
+    expect(h.host.value()).toBe(db('2026-05-12'));
+    expect(h.start().value).toBe('May 12, 2026');
+    const settledSessions = h.host.sessions.length;
+
+    // The consumer's own restore arrives later with the same old value —
+    // it must not re-run anything: same value in, silence out.
+    h.host.value.set(db('2026-05-12'));
+    h.fixture.detectChanges();
+
+    expect(h.start().value).toBe('May 12, 2026');
+    expect(h.host.sessions.length).toBe(settledSessions);
+    expect(h.panel()).toBeNull();
+  });
+});
+
 describe('AngularInlineDate two-field range', () => {
   let h: Harness<DateShapeHost>;
 

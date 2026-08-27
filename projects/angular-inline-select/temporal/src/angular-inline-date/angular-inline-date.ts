@@ -659,8 +659,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       side.open.set(true);
     }
 
-    side.draft.set(raw);
-    side.dirty = true;
+    side.draft.set(raw); // the setter marks the side dirty
     side.saveAttempted.set(false);
     this.overlayOpen.set(true);
 
@@ -720,7 +719,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     if (!side.open()) {
       side.baselineDay = side.committed();
       side.baselineRaw = this.#unresolvedRawOf(key);
-      side.dirty = false;
+      side.dirty.set(false);
       side.saveAttempted.set(false);
       side.open.set(true);
     }
@@ -806,7 +805,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
     // An untouched session settles where the value stands — no re-derive,
     // no write (see DateSide.dirty).
-    const untouched = !options.revert && options.resolve === undefined && !side.dirty;
+    const untouched = !options.revert && options.resolve === undefined && !side.dirty();
 
     let day: IsoDate | null;
     let snappedBack = false;
@@ -846,13 +845,13 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     // both days read `null` (raw → parsed day, raw → deliberately cleared).
     const changed =
       !untouched && !restoresRaw && (day !== side.baselineDay || baselineRaw !== null);
-    side.dirty = false;
+    side.dirty.set(false);
 
     if (options.keepOpen) {
       // Enter / pick settle in place: the session continues on the new baseline.
       side.baselineDay = day;
       side.baselineRaw = this.#unresolvedRawOf(key);
-      side.draft.set(side.display());
+      side.restore();
       side.saveAttempted.set(false);
     } else {
       side.open.set(false);
@@ -1029,8 +1028,8 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       const side = this.#side(key);
       side.baselineDay = side.committed();
       side.baselineRaw = this.#unresolvedRawOf(key);
-      side.draft.set(side.display());
-      side.dirty = false;
+      side.restore();
+      side.dirty.set(false);
       side.saveAttempted.set(false);
     }
 
@@ -1184,8 +1183,8 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     for (const side of [this.#startSide, this.#endSide]) {
       side.baselineDay = side.committed();
       side.baselineRaw = this.#unresolvedRawOf(side.key);
-      side.draft.set(side.display());
-      side.dirty = false;
+      side.restore();
+      side.dirty.set(false);
       side.saveAttempted.set(false);
     }
 
@@ -1221,7 +1220,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       }
       side.baselineDay = side.committed();
       side.baselineRaw = this.#unresolvedRawOf(key);
-      side.draft.set(side.display());
+      side.restore();
       side.saveAttempted.set(false);
     }
 

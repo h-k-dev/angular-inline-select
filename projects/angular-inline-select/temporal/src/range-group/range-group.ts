@@ -77,10 +77,7 @@ export interface TemporalRangeValue {
   duration?: number | null;
 }
 
-function sameTemporalValue(
-  a: TemporalRangeValue | null,
-  b: TemporalRangeValue | null,
-): boolean {
+function sameTemporalValue(a: TemporalRangeValue | null, b: TemporalRangeValue | null): boolean {
   if (a === null || b === null) return a === b;
   return a.start === b.start && a.end === b.end && a.duration === b.duration;
 }
@@ -296,10 +293,7 @@ export function createTemporalRangeGroup(
 
     const duration = length();
     if (duration !== null) {
-      return Math.max(
-        0,
-        localDayDiff(startValue, shiftDbEntry(startValue, duration), zone()) ?? 0,
-      );
+      return Math.max(0, localDayDiff(startValue, shiftDbEntry(startValue, duration), zone()) ?? 0);
     }
 
     return 0;
@@ -320,36 +314,60 @@ export function createTemporalRangeGroup(
   const timeRange = computed<ComposedTimeRange | null>(() => {
     const startValue = start();
     const endValue = end();
-    return startValue !== null && endValue !== null
-      ? { start: startValue, end: endValue }
-      : null;
+    return startValue !== null && endValue !== null ? { start: startValue, end: endValue } : null;
   });
 
   // -- Write helpers -----------------------------------------------------------
 
+  // Every leaf write goes through the leaf's own WRITABLE internal view
+  // (the 22.1 custom-set linkedSignal): the value-boundary conversion and
+  // the shape echo stay the leaf's business, so a group write can never
+  // flip the shape a consumer bound (the old direct `value.set(<string>)`
+  // silently re-declared a `{ start }`-bound leaf as string-shaped).
+
   function writeStart(next: DbDateTime) {
     const control = startCtl();
-    if (control && control.value() !== next) control.value.set(next);
+    if (control && control.internalRange().start !== next) {
+      control.internalRange.update((range) => ({ ...range, start: next }));
+    }
 
     const times = timesCtl();
     if (times && times.internalRange().start !== next) {
-      times.value.set({ start: next, end: times.internalRange().end });
+      times.internalRange.update((range) => ({ ...range, start: next }));
     }
   }
 
   function writeEnd(next: DbDateTime) {
+    // A single `rangeEnd` leaf holds its instant in the internal START slot.
     const control = endCtl();
-    if (control && control.value() !== next) control.value.set(next);
+    if (control && control.internalRange().start !== next) {
+      control.internalRange.update((range) => ({ ...range, start: next }));
+    }
 
     const times = timesCtl();
     if (times && times.internalRange().end !== next) {
-      times.value.set({ start: times.internalRange().start, end: next });
+      times.internalRange.update((range) => ({ ...range, end: next }));
     }
   }
 
   function writeLength(next: number | null) {
     const control = lengthCtl();
     if (control && control.value() !== next) control.value.set(next);
+  }
+
+  /**
+   * Renders an instant's LOCAL day onto a day leaf, through the leaf's own
+   * writable day view — the day→DB conversion (and its zone) is the leaf's
+   * one implementation, no longer re-implemented here.
+   */
+  function writeDayLeaf(control: AngularInlineDate | null, instant: DbDateTime | null) {
+    if (control === null) return;
+
+    const day = instant === null ? null : localDayOf(instant, zone());
+    const current = control.internalRange();
+    if (current.start !== day || current.end !== day) {
+      control.internalRange.set({ start: day, end: day });
+    }
   }
 
   /** Writes the bound value onto the leaf surfaces (no-ops on equal values). */
@@ -365,41 +383,28 @@ export function createTemporalRangeGroup(
             ? diffDbEntrySeconds(startValue, endValue)
             : null;
 
-    startCtl()?.value.set(startValue);
-    endCtl()?.value.set(endValue);
-    // The ranged pair speaks the object shape — both endpoints in one value.
-    timesCtl()?.value.set(
-      startValue === null && endValue === null ? null : { start: startValue, end: endValue },
-    );
+    startCtl()?.internalRange.set({ start: startValue, end: null });
+    endCtl()?.internalRange.set({ start: endValue, end: null });
+    // The ranged pair: both endpoints in one internal write, echoed by the leaf.
+    timesCtl()?.internalRange.set({ start: startValue, end: endValue });
     lengthCtl()?.value.set(duration);
-    dayCtl()?.value.set(
-      startValue === null ? null : dayToDbEntry(localDayOf(startValue, zone())!, zone()),
-    );
-    endDayCtl()?.value.set(
-      endValue === null ? null : dayToDbEntry(localDayOf(endValue, zone())!, zone()),
-    );
+    writeDayLeaf(dayCtl(), startValue);
+    writeDayLeaf(endDayCtl(), endValue);
   }
 
   /**
    * The day leaves are RENDERINGS of the instants' date parts — after any
    * propagation that may have moved an instant's day (an ISO paste, a
    * multi-day duration, an end-day commit), they re-mirror. Writes go
-   * through `value` (no `saved`), equality-guarded: no cascades.
+   * through the leaf's writable day view (no `saved`; the echo dedupes):
+   * no cascades.
    */
   function syncDayLeaves() {
     const startValue = start();
-    const dayControl = dayCtl();
-    if (dayControl && startValue !== null) {
-      const next = dayToDbEntry(localDayOf(startValue, zone())!, zone());
-      if (!Object.is(dayControl.value(), next)) dayControl.value.set(next);
-    }
+    if (startValue !== null) writeDayLeaf(dayCtl(), startValue);
 
     const endValue = end();
-    const endDayControl = endDayCtl();
-    if (endDayControl && endValue !== null) {
-      const next = dayToDbEntry(localDayOf(endValue, zone())!, zone());
-      if (!Object.is(endDayControl.value(), next)) endDayControl.value.set(next);
-    }
+    if (endValue !== null) writeDayLeaf(endDayCtl(), endValue);
   }
 
   // `undefined` = baseline not captured yet (never emitted-against).
@@ -552,11 +557,7 @@ export function createTemporalRangeGroup(
       }
       if (endValue !== null) {
         writeEnd(
-          composeDbEntry(
-            addLocalDays(typedDay, offset),
-            localTimeOf(endValue, zone())!,
-            zone(),
-          ),
+          composeDbEntry(addLocalDays(typedDay, offset), localTimeOf(endValue, zone())!, zone()),
         );
       }
     }
@@ -842,10 +843,7 @@ function provideLeafState(withErrors: boolean) {
         invalid: computed(() => group?.invalid() ?? false),
         // Consumer errors + the group's OWN ordering verdict, end leaves only.
         errors: withErrors
-          ? computed(() => [
-              ...(group?.errors() ?? []),
-              ...(core()?.orderingErrors() ?? []),
-            ])
+          ? computed(() => [...(group?.errors() ?? []), ...(core()?.orderingErrors() ?? [])])
           : NO_ERRORS,
       };
     },
@@ -1011,7 +1009,8 @@ export class RangeEnd {
     const di = inject(DateTimeRangeGroup, { optional: true });
     control.touch.subscribe(() => di?.touch.emit());
     control.saved.subscribe((session) => {
-      if (session.changed) this.resolvedCore()?.endCommitted(session.dayOverflow, session.explicitDay);
+      if (session.changed)
+        this.resolvedCore()?.endCommitted(session.dayOverflow, session.explicitDay);
     });
   }
 }

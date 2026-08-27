@@ -279,6 +279,15 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
   protected innerValue = linkedSignal<string, string>({
     source: () => this.activeFormat()(this.numericValue()),
     computation: (source, prev) => (this.editing() ? (prev?.value ?? source) : source),
+    // The live channel IS the setter (22.1): every raw write parses, and a
+    // parseable draft flows into the model synchronously — no write site
+    // can forget the other half.
+    set: (raw, rawSet) => {
+      rawSet(raw);
+
+      const parsed = this.activeParse()(raw);
+      if (parsed !== undefined && parsed !== this.numericValue()) this.value.set(parsed);
+    },
   });
 
   /**
@@ -297,15 +306,13 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
   );
 
   /**
-   * Live channel: every keystroke parses. Parseable drafts flow into the
-   * model as numbers — schema rules like `min`/`max` validate mid-draft —
-   * while unparseable ones hold the last good value and raise the parse gate.
+   * Live channel: every keystroke parses — the work lives in `innerValue`'s
+   * custom `set`, so parseable drafts flow into the model as numbers
+   * (schema rules like `min`/`max` validate mid-draft) while unparseable
+   * ones hold the last good value and raise the parse gate.
    */
   protected handleInnerValue(raw: string) {
     this.innerValue.set(raw);
-
-    const parsed = this.activeParse()(raw);
-    if (parsed !== undefined && parsed !== this.numericValue()) this.value.set(parsed);
   }
 
   /** Retype the settled session: strings inside, numbers outside. */

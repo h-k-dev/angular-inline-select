@@ -47,16 +47,33 @@ export interface SideCore<T> {
   /**
    * The input's text: user-owned while a session is open (frozen linkedSignal
    * — a value write mid-session never rewrites text under the caret), the
-   * committed display otherwise.
+   * committed display otherwise. Its custom `set` (22.1) marks `dirty` in
+   * the same synchronous step — a write through this setter IS user input;
+   * the one non-user write is `restore()`.
    */
   readonly draft: WritableSignal<string>;
   /**
    * Whether the USER touched the draft since the last settlement. An
    * untouched session settles WHERE THE VALUE STANDS — re-deriving it from
    * the draft would undo external writes (a group re-anchoring this leaf)
-   * with stale session state.
+   * with stale session state. SET by the draft's own setter (unforgeable —
+   * no call site can write a draft and forget the flag); session
+   * boundaries clear it explicitly.
    */
-  dirty: boolean;
+  readonly dirty: WritableSignal<boolean>;
+  /**
+   * Re-renders the committed display into the draft WITHOUT marking dirty —
+   * the restore half of the typed/restored distinction (settle-in-place,
+   * clear, revert, reset).
+   *
+   * NOTE this is only the INTERNAL frozen-draft refresh. The consumer's
+   * restore path is the VALUE CHANNEL itself: a late write of the old
+   * value (backend rejection, intertwined logic) flows in through the
+   * linked source — and when the control already restored it (snap-back),
+   * the equality dedupe at every layer absorbs the write as a silent
+   * no-op. No restore chain re-runs.
+   */
+  restore(): void;
   /** Enter was pressed on an unreadable draft — reveals the parse-gate error. */
   readonly saveAttempted: WritableSignal<boolean>;
 }
@@ -68,12 +85,28 @@ export function makeSideCore<T>(
   display: Signal<string>,
 ): SideCore<T> {
   const open = signal(false);
+  const dirty = signal(false);
+
+  let restoring = false;
   const draft = linkedSignal<string, string>({
     source: display,
     computation: (source, prev) => (open() ? (prev?.value ?? source) : source),
+    set: (value, rawSet) => {
+      rawSet(value);
+      if (!restoring) dirty.set(true);
+    },
   });
 
-  return { key, committed, display, open, draft, dirty: false, saveAttempted: signal(false) };
+  const restore = () => {
+    restoring = true;
+    try {
+      draft.set(display());
+    } finally {
+      restoring = false;
+    }
+  };
+
+  return { key, committed, display, open, draft, dirty, restore, saveAttempted: signal(false) };
 }
 
 /** Content-sized input width, placeholder-floored — no layout shift. */

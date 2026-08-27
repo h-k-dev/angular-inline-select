@@ -5,6 +5,7 @@ import {
   contentChild,
   inject,
   input,
+  linkedSignal,
   model,
   output,
   signal,
@@ -380,14 +381,23 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   /** Object shapes render the start–end input pair; a string renders one field. */
   protected twoFields = this.#shapeMemory.twoFields;
 
-  /** One canonical internal model, always: per-side DB-entry instants. */
-  readonly internalRange = computed<InternalTimeRange>(() => toInternalTimeRange(this.value()));
-
-  /** The value boundary, outbound: per-side instants → the echoed shape. */
-  #writeInstants(start: DbDateTime | null, end: DbDateTime | null) {
-    const echoed = echoTimeShape({ start, end }, this.shape());
-    if (!timeValuesEqual(echoed, this.value())) this.value.set(echoed);
-  }
+  /**
+   * One canonical internal model, always: per-side DB-entry instants.
+   *
+   * A WRITABLE view (22.1 `linkedSignal`, custom `set`) — the date control's
+   * pattern: reads derive from `value`, and writing a side routes
+   * SYNCHRONOUSLY back through the shape echo into `value`. Every commit
+   * path updates the side it owns and the echo + dedupe live in exactly one
+   * place — no positional (start, end) pairs threaded through call sites.
+   */
+  readonly internalRange = linkedSignal<InlineTimeValue, InternalTimeRange>({
+    source: this.value,
+    computation: (value) => toInternalTimeRange(value),
+    set: (range) => {
+      const echoed = echoTimeShape(range, this.shape());
+      if (!timeValuesEqual(echoed, this.value())) this.value.set(echoed);
+    },
+  });
 
   /**
    * A side's wall-clock display. The default format is Intl-localized;
@@ -563,7 +573,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
 
     side.baselineValue = this.value();
     side.anchorDay = this.#anchorDay();
-    side.dirty = false;
+    side.dirty.set(false);
     side.saveAttempted.set(false);
     this.#panelDismissed.set(false);
     side.open.set(true);
@@ -598,17 +608,14 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   protected handleInput(key: SideKey, raw: string) {
     this.#openSession(key);
     const side = this.#side(key);
-    side.draft.set(raw);
-    side.dirty = true;
+    side.draft.set(raw); // the setter marks the side dirty
     side.saveAttempted.set(false);
     this.#panelDismissed.set(false);
 
     const resolved = this.#resolveDraft(key);
     if (resolved === undefined) return;
 
-    const current = this.internalRange();
-    if (key === 'start') this.#writeInstants(resolved.instant, current.end);
-    else this.#writeInstants(current.start, resolved.instant);
+    this.internalRange.update((range) => ({ ...range, [key]: resolved.instant }));
   }
 
   // -- Focus flow -------------------------------------------------------------------
@@ -679,7 +686,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
       end = rollDbEntryForward(start, end, this.effectiveZone());
     }
 
-    this.#writeInstants(start, end);
+    this.internalRange.set({ start, end });
   }
 
   #settle(key: SideKey, options: { revert?: boolean; keepOpen?: boolean } = {}) {
@@ -687,7 +694,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     if (!side.open()) return;
 
     // An untouched session settles where the value stands (see TimeSide.dirty).
-    const untouched = !options.revert && !side.dirty;
+    const untouched = !options.revert && !side.dirty();
 
     let dayOverflow = 0;
     let explicitDay = false;
@@ -711,12 +718,12 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     }
 
     const changed = !untouched && !timeValuesEqual(this.value(), side.baselineValue);
-    side.dirty = false;
+    side.dirty.set(false);
 
     if (options.keepOpen) {
       side.baselineValue = this.value();
       side.anchorDay = this.#anchorDay();
-      side.draft.set(side.display());
+      side.restore();
       side.saveAttempted.set(false);
     } else {
       side.open.set(false);
@@ -870,15 +877,12 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     const side = this.#side(key);
 
     if (side.open()) {
-      side.draft.set(raw);
-      side.dirty = true;
+      side.draft.set(raw); // the setter marks the side dirty
       this.#panelDismissed.set(false);
 
       const resolved = this.#resolveDraft(key);
       if (resolved !== undefined) {
-        const current = this.internalRange();
-        if (key === 'start') this.#writeInstants(resolved.instant, current.end);
-        else this.#writeInstants(current.start, resolved.instant);
+        this.internalRange.update((range) => ({ ...range, [key]: resolved.instant }));
       }
       return;
     }
@@ -950,14 +954,12 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     if (this.editing()) return;
 
     const before = this.value();
-    const current = this.internalRange();
-    if (key === 'start') this.#writeInstants(null, current.end);
-    else this.#writeInstants(current.start, null);
+    this.internalRange.update((range) => ({ ...range, [key]: null }));
 
     for (const side of [this.#startSide, this.#endSide]) {
       side.baselineValue = this.value();
-      side.draft.set(side.display());
-      side.dirty = false;
+      side.restore();
+      side.dirty.set(false);
       side.saveAttempted.set(false);
     }
 
@@ -992,8 +994,8 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
 
       if (!timeValuesEqual(side.baselineValue, this.value())) this.value.set(side.baselineValue);
       side.baselineValue = this.value();
-      side.draft.set(side.display());
-      side.dirty = false;
+      side.restore();
+      side.dirty.set(false);
       side.saveAttempted.set(false);
     }
 

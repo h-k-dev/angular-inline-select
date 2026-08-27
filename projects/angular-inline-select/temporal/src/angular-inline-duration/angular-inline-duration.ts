@@ -189,12 +189,30 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
 
   /**
    * The input's text: user-owned while the session is open (frozen
-   * linkedSignal), the committed display otherwise.
+   * linkedSignal), the committed display otherwise. The custom `set` (22.1)
+   * marks `#dirty` in the same synchronous step — a write through the
+   * setter IS user input; the one non-user write is `#restoreDraft()`.
    */
   protected draft = linkedSignal<string, string>({
     source: this.display,
     computation: (source, prev) => (this.#open() ? (prev?.value ?? source) : source),
+    set: (value, rawSet) => {
+      rawSet(value);
+      if (!this.#restoring) this.#dirty = true;
+    },
   });
+
+  #restoring = false;
+
+  /** Re-renders the committed display into the draft WITHOUT marking dirty. */
+  #restoreDraft() {
+    this.#restoring = true;
+    try {
+      this.draft.set(this.display());
+    } finally {
+      this.#restoring = false;
+    }
+  }
 
   /** The committed VALUE at session start — what Escape and snap-back restore. */
   #baselineValue: number | null = null;
@@ -203,7 +221,8 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
    * Whether the USER touched the draft since the last settlement. An
    * untouched session settles WHERE THE VALUE STANDS — re-deriving it from
    * the draft would undo external writes (a group moving this length) with
-   * stale session state.
+   * stale session state. Set by the draft's own setter — no call site can
+   * write a draft and forget the flag.
    */
   #dirty = false;
 
@@ -320,8 +339,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   /** Every keystroke: readable drafts flow into the model live (unsnapped). */
   protected handleInput(raw: string) {
     this.#openSession();
-    this.draft.set(raw);
-    this.#dirty = true;
+    this.draft.set(raw); // the setter marks the session dirty
     this.#saveAttempted.set(false);
     this.#panelDismissed.set(false);
 
@@ -385,7 +403,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
 
     if (options.keepOpen) {
       this.#baselineValue = value;
-      this.draft.set(this.display());
+      this.#restoreDraft();
       this.#saveAttempted.set(false);
     } else {
       this.#open.set(false);
@@ -529,7 +547,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
 
     this.value.set(null);
     this.#baselineValue = null;
-    this.draft.set(this.display());
+    this.#restoreDraft();
     this.#saveAttempted.set(false);
 
     this.#selfTouched.set(true);
@@ -549,7 +567,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
     if (!this.#open()) return;
 
     if (this.#baselineValue !== this.value()) this.value.set(this.#baselineValue);
-    this.draft.set(this.display());
+    this.#restoreDraft();
     this.#saveAttempted.set(false);
     this.#panelDismissed.set(true);
   }
