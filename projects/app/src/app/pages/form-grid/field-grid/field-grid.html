@@ -129,6 +129,35 @@
     </dd>
   </div>
 
+  <!--
+    Email: validated by the framework's own `email()` rule — the pragmatic
+    middle ground, not RFC 5322. `inputMode` asks mobile keyboards for the
+    @-row without changing a thing about the draft.
+  -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Email</dt>
+    <dd class="field-grid__value">
+      <angular-inline-text
+        [clearTemplate]="confirmClear"
+        [formField]="recordForm.email"
+        [isSingleLine]="true"
+        inputMode="email"
+        wrapBehavior="noWrap"
+        placeholder="name@example.com"
+        [normalizeValue]="true"
+        ariaLabel="Contact email"
+        (saved)="logEmit('email.saved', $event)"
+      >
+        <ng-template editablePrefix><mat-icon inline>alternate_email</mat-icon></ng-template>
+        <span editable-error>
+          @if (emailMalformed()) {
+            That doesn’t read as an email address — “name@example.com”.
+          }
+        </span>
+      </angular-inline-text>
+    </dd>
+  </div>
+
   <!-- Date: typed or picked; the model is the UTC ISO DB entry. -->
   <div class="field-grid__row">
     <dt class="field-grid__label">Deadline</dt>

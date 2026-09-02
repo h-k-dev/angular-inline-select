@@ -12,6 +12,7 @@ import {
   form,
   required,
   pattern,
+  email,
   min,
   max,
   maxLength,
@@ -73,6 +74,7 @@ export interface RecordModel {
   crew: number | null;
   telephone: string | null;
   mobile: string | null;
+  email: string;
   deadline: string | null;
   audit: string | null;
   vacation: IsoDateRange | null;
@@ -112,6 +114,7 @@ function initialRecord(): RecordModel {
     crew: 12,
     telephone: '+49301234567',
     mobile: null,
+    email: 'survey@aurora-observatory.example',
     deadline: dayToDbEntry('2026-07-20'),
     // An INVALID backend entry (MySQL's zero-date classic) — the date control
     // shows it verbatim under the error underline and reports it through
@@ -207,6 +210,15 @@ export class FieldGrid {
     required(path.project, { when: () => this.fieldRequired() });
     required(path.telephone, { when: () => this.fieldRequired() });
 
+    // The framework's own `email` validator: a PRAGMATIC check, deliberately
+    // not RFC 5322. It caps the local part and the whole address, insists on a
+    // single `@` with real domain labels either side, and stops there — no
+    // quoted locals, no address literals, no TLD list. Deliverability is the
+    // backend's verdict, not a regex's; this only catches the typo class
+    // ("no @", "trailing dot", "spaces"). It also passes an EMPTY value
+    // through, so `required` stays a separate, independent decision.
+    email(path.email);
+
     maxLength(path.summary, SUMMARY_MAX);
     pattern(path.callsign, /^[A-Z]{2,4}-\d{1,3}$/);
     min(path.budget, 0);
@@ -232,6 +244,13 @@ export class FieldGrid {
       .telephone()
       .errors()
       .some((error) => error.kind === 'required'),
+  );
+
+  protected emailMalformed = computed(() =>
+    this.recordForm
+      .email()
+      .errors()
+      .some((error) => error.kind === 'email'),
   );
 
   protected callsignPatternBroken = computed(() =>
