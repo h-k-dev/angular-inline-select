@@ -608,9 +608,18 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       buildDateCommands(this.now()(), this.locale(), this.effectiveZone()).slice(0, 3),
   );
 
+  /**
+   * Below the field first, above as a fallback; each side also tries an
+   * inline-END alignment so a panel near the inline-end screen edge flips
+   * instead of overflowing. Should nothing fit (narrow viewports), the
+   * template's `cdkConnectedOverlayPush` slides the panel inside the viewport
+   * margin rather than leaving it clipped.
+   */
   protected overlayPositions: ConnectedPosition[] = [
     { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
+    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 4 },
     { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
+    { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -4 },
   ];
 
   protected revertFlash = this.#chrome.revertFlash;

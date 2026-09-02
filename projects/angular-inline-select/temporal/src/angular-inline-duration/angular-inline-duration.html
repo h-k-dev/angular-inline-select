@@ -66,6 +66,8 @@
   [cdkConnectedOverlayOrigin]="origin"
   [cdkConnectedOverlayOpen]="panelOpen()"
   [cdkConnectedOverlayPositions]="overlayPositions"
+  [cdkConnectedOverlayViewportMargin]="8"
+  [cdkConnectedOverlayPush]="true"
   (overlayOutsideClick)="dismissPanel()"
 >
   <div #panel class="inline-duration__panel" (focusout)="handleFocusOut()">
