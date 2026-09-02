@@ -4,7 +4,7 @@
 
 **The field dictates, the component renders.** `angular-inline-text` is a
 `FormValueControl` — it should own no state the `FormUiControl` contract has a
-word for. Its only private state is the *session* concepts signal forms does
+word for. Its only private state is the _session_ concepts signal forms does
 not model: the draft (living in the `value` channel), the session baseline,
 the open panel, and `saveAttempted`.
 
@@ -17,13 +17,13 @@ Mat-form-field split, applied throughout: the **consumer decides what errors
 say** (projected `[editable-error]`, the `mat-error` analogue), the **field
 decides when they show** (`invalid && (touched || saveAttempted)`).
 
-Guiding precedent: `MatInput`. It implements `MatFormFieldControl` with *no*
+Guiding precedent: `MatInput`. It implements `MatFormFieldControl` with _no_
 value ownership — value restoration is the form's job; the control only keeps
 its presentation state honest. Signal forms improves on its `ngDoCheck`
 error-state polling by delivering `touched`/`invalid` as inputs.
 
-**Guardrail — the ProseMirror line.** `angular-inline-text` is a *value*
-editor (flat string), never a *document* editor, and stays that way:
+**Guardrail — the ProseMirror line.** `angular-inline-text` is a _value_
+editor (flat string), never a _document_ editor, and stays that way:
 
 1. The editable contains characters only — every adornment (affixes, flag,
    preview, menu) renders OUTSIDE the contenteditable.
@@ -50,14 +50,14 @@ editor (flat string), never a *document* editor, and stays that way:
   analogues — never `touched()` checks.
 - **Contract adoption** (`touched`, `invalid`, `hidden` inputs + `reset()`).
   `errorsVisible = isInvalid && (touched() || #selfTouched() ||
-  #saveAttempted())` — the field's touched verdict wins, `#selfTouched`
+#saveAttempted())` — the field's touched verdict wins, `#selfTouched`
   covers the `[(value)]`/standalone modes. `isInvalid = invalid() ||
-  errors().length > 0`. `hidden` collapses the host. `reset()` is
+errors().length > 0`. `hidden` collapses the host. `reset()` is
   presentation-only (MatInput precedent) plus the one draft-control extra:
   an open draft is discarded back to the baseline with no `touch`, no
   `saved`, no `reverted`, no focus stealing (`#wasOpen = false; accepted =
-  true; editing.set(false)`).
-- **`localForm` and `localModel` removed.** The draft *is* the `value`
+true; editing.set(false)`).
+- **`localForm` and `localModel` removed.** The draft _is_ the `value`
   channel; component state collapsed to `value` + derived `previous` +
   reveal flags. `previous` is a `linkedSignal` frozen on `editing()` (never
   field `dirty` — sticky, would never thaw), pinned by a read in `elevate()`
@@ -159,7 +159,7 @@ fate stays open — it is the only carrier of the discarded draft text;
 decide separately if it ever matters.)
 
 Open convergence note: iusta's temporal `savedModelChange` payloads are
-richer *details* objects (Luxon `DateSavedDetails`/`TimeSavedDetails`)
+richer _details_ objects (Luxon `DateSavedDetails`/`TimeSavedDetails`)
 while the sandbox emits the raw value — same DNA, different plumage.
 Whether the details shape upstreams into the sandbox (Luxon is already
 contained in `/temporal`) is an open Phase-6 question.
@@ -172,10 +172,10 @@ Sharing happens at exactly two seams:
 1. **The contract.** Every control is its own `FormValueControl<T>`; the
    `FormField` directive treats them identically.
 2. **Composition.** A control that is "text plus a value translation"
-   *contains* an `<angular-inline-text>` in its template and translates at
+   _contains_ an `<angular-inline-text>` in its template and translates at
    the boundary. It forwards the contract in, retypes the events out.
 
-If a future control needs the session machinery *without* being text-shaped
+If a future control needs the session machinery _without_ being text-shaped
 (inline-select…), that is the trigger to extract headless primitives — a
 `createEditSession()` factory of functions and signals, not a class
 hierarchy. Not before.
@@ -247,8 +247,13 @@ forwarded by `angular-inline-number`:
   generic attr input on editable-text) for mobile keyboards.
 - Contract `min`/`max`/`step`-style inputs — meaningful for numbers (unlike
   text); auto-bound by the field, surfaced as hints.
-- Intl codec preset (locale grouping/decimal comma) shipped as an opt-in
-  `parse`/`format` pair.
+- ~~Intl codec preset (locale grouping/decimal comma) shipped as an opt-in
+  `parse`/`format` pair.~~ **Shipped** as `utils/locale-number`
+  (`formatLocaleNumber`/`parseLocaleNumber`/`makeLocaleNumberCodec`, standalone
+  and exported) plus the control's own `locale` + `numberFormatOptions`
+  inputs; `decimalSeparator` is superseded while `locale` is set. Grouping
+  must look like grouping (`1.5` under `de` is a parse error, not fifteen),
+  precision defaults to the widest so a display never rewrites the model.
 
 ## Next up — `angular-inline-phone`
 
@@ -292,13 +297,13 @@ library.
    The control never imports libphonenumber-js; it consumes the codec.
    `PhoneParseResult` carries the full interpretation, not just pass/fail:
    `{ e164, country, dialCode, formatted }` on success plus a
-   `reason`/`warning` tier (see below) — the UI renders *what the engine
-   understood*, live.
+   `reason`/`warning` tier (see below) — the UI renders _what the engine
+   understood_, live.
 3. **Metadata injection into the adapter.** `libphonenumber-js/core` exports
    metadata-free functions; the metadata is an argument. Our adapter is a
    factory:
    ```ts
-   createLibphonenumberCodec(metadata) // consumer picks the payload
+   createLibphonenumberCodec(metadata); // consumer picks the payload
    ```
    Consumers choose `libphonenumber-js/metadata.min.json` (~all countries,
    validation-grade), `.max` (stricter type detection), `mobile`, or a
@@ -357,7 +362,7 @@ overrides it (parser detects).
   session is open, a hint line in the panel footer shows what the engine
   understood of the current draft, per keystroke: 🇩🇪 `+49` · "will save as
   +49 171 1234567" — or the parse reason. This delivers as-you-type
-  *visibility* with zero caret rewriting: the draft is never touched, the
+  _visibility_ with zero caret rewriting: the draft is never touched, the
   interpretation renders next to it. (Needs a small generic `editableHint`
   slot on `angular-inline-text` — hint template rendered in the panel
   footer; also future home for maxLength counters.)
@@ -369,7 +374,7 @@ overrides it (parser detects).
   allowed; business strictness (`isValid`, mobile-only) ships as
   signal-forms validators for the consumer's schema.
 - **Flag emoji as detection feedback, not decoration**: the built-in prefix
-  shows the *detected* country (falling back to `defaultCountry`), updating
+  shows the _detected_ country (falling back to `defaultCountry`), updating
   live — its job is deciphering `+49` vs `+21` at a glance, idle and while
   editing. No picker in the MVP.
 - **Example-number placeholders**: `numberType` input
@@ -424,8 +429,8 @@ seed of the future inline-select. Implemented exactly as designed below.
   option list in the panel) — the `createEditSession()` extraction trigger.
 
 **P4b — flag country picker (the primary / mobile gesture) — SHIPPED.** The
-slash menu is a keyboard *insert* gesture (great for fresh entry); changing
-the country of an *existing* number is a *transform* and needs the
+slash menu is a keyboard _insert_ gesture (great for fresh entry); changing
+the country of an _existing_ number is a _transform_ and needs the
 established phone-input gesture: an interactive flag opening a searchable
 list, preserving the national number. Both gestures share one option list.
 
@@ -487,7 +492,7 @@ min vs custom metadata.
 
 - E.164 out on accept (`getNumber(0)`) — unchanged, already the contract.
 - Numeric validation-error table (`TOO_SHORT`, `INVALID_COUNTRY_CODE`,
-  `IS_POSSIBLE_LOCAL_ONLY`, …) surfaced as *warnings*, never commit
+  `IS_POSSIBLE_LOCAL_ONLY`, …) surfaced as _warnings_, never commit
   blockers → the two-tier severity design above.
 - `formatOnDisplay: false` in production → confirms MVP skips draft
   reformatting.
@@ -530,6 +535,7 @@ migrations. The surprise finding: neither needed a new approach — both are
 for free (they render through the same panel/display chrome).
 
 **`angular-inline-duration`** — the number control's sibling:
+
 - Canonical value: **SECONDS** (`number | null`, matching the existing
   `m-editable-time-duration`); empty commits `null`.
 - Codec: colon notation positional by `durationFormat`
@@ -541,6 +547,7 @@ for free (they render through the same panel/display chrome).
   `intervalStep`); live preview reads the draft (`✓ 2 h 15 min`).
 
 **`angular-inline-date`** — the phone pattern applied to calendars:
+
 - Canonical value: **ISO `'yyyy-MM-dd'` (`| null`)** — the E.164 of dates:
   serializable, locale- and timezone-free. Luxon/Date live at consumer
   boundaries (the iusta date-v2 currently emits Luxon `DateTime` — the
@@ -659,9 +666,9 @@ replay, and the Selection-based paste fallback.
 
 ## Shipped — the clear seam (`editableClear`) — 2026-08-26
 
-**The ask (iusta core).** Two things, in one breath: *inject a custom clear
-button into every inline variant*, and *open a mat dialog when it is
-clicked*. The library had the first half only as styling
+**The ask (iusta core).** Two things, in one breath: _inject a custom clear
+button into every inline variant_, and _open a mat dialog when it is
+clicked_. The library had the first half only as styling
 (`[editableClear]`, the bare behavior directive) with no way to get the
 button INTO a control, and nothing at all for the second: every control
 hard-coded `<button editableClearButton>` inside its own `<bubble-menu>`,
@@ -781,7 +788,7 @@ control if/when it lands. Watch for iusta's own `TemporalIntl` copy — the
 
 ## Known deviations (owned, documented)
 
-- A `field.reset('new value')` issued *while a session is open* loses the
+- A `field.reset('new value')` issued _while a session is open_ loses the
   reset value: the control's draft rollback runs after the field's value
   write and restores the session baseline. Intentional — an open session's
   draft protection wins; reset a closed field to apply a value.

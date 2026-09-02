@@ -32,6 +32,7 @@ import {
 } from '../../../../../../angular-inline-select/src/lib/utils/editable-scope/editable-scope';
 import { AngularInlineText } from '../../../../../../angular-inline-select/src/lib/angular-inline-text/angular-inline-text';
 import { AngularInlineNumber } from '../../../../../../angular-inline-select/src/lib/angular-inline-number/angular-inline-number';
+import type { LocaleNumberOptions } from '../../../../../../angular-inline-select/src/lib/utils/locale-number/locale-number';
 import {
   EditablePrefix,
   EditableSuffix,
@@ -70,6 +71,7 @@ export interface RecordModel {
   reference: string;
   callsign: string;
   budget: number | null;
+  revenue: number | null;
   cable: number | string | null;
   crew: number | null;
   telephone: string | null;
@@ -110,6 +112,7 @@ function initialRecord(): RecordModel {
     reference: 'Junction Point Observatory / Western Rim / survey sector nine / dossier 4471-B',
     callsign: 'AUR-01',
     budget: 48500,
+    revenue: 1250000.5,
     cable: 48.5,
     crew: 12,
     telephone: '+49301234567',
@@ -280,6 +283,17 @@ export class FieldGrid {
   // ---------------------------------------------------------------------------
   // Slots
   // ---------------------------------------------------------------------------
+  /**
+   * Fixed two decimals for the revenue pair — `Intl` options, not a codec:
+   * the SAME model renders `1,250,000.50` under `en` and `1.250.000,50`
+   * under `de`. Precision is narrowed on purpose; left alone the locale codec
+   * keeps every digit so a display can never rewrite the model.
+   */
+  protected readonly revenueFormat: LocaleNumberOptions = {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  };
+
   /** Two decimals for the budget — the € lives in the suffix, outside the draft. */
   protected budgetFormat = (value: number | null): string =>
     value === null ? '' : value.toFixed(2);

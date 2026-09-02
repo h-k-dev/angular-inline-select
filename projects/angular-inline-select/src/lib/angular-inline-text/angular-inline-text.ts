@@ -26,7 +26,14 @@ import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 import { CdkConnectedOverlayConfig, ConnectedPosition, OverlayModule } from '@angular/cdk/overlay';
 import { A11yModule, _IdGenerator } from '@angular/cdk/a11y';
 
-import { getSelectionOffsets, setCaretOffset, replayEdit, filterChars } from './caret';
+import {
+  getSelectionOffsets,
+  setCaretOffset,
+  replayEdit,
+  filterChars,
+  alignCaret,
+  type SelectionOffsets,
+} from './caret';
 import { EDITABLE_SCOPE } from '../utils/editable-scope/editable-scope';
 import { EditablePrefix, EditableSuffix } from './editable-affix';
 import { EditableHint } from './editable-hint';
@@ -454,6 +461,19 @@ export class AngularInlineText implements FormValueControl<string> {
   allowedChars = input<RegExp | undefined>(undefined);
 
   /**
+   * Opt-in: the text an edit session OPENS with, when the idle display is a
+   * different RENDERING of the committed value. Given the committed text it
+   * returns the draft — the locale number wrapper hands `1.250.000,50` back
+   * as `1250000,5`, so nobody types around thousands groups. The display
+   * keeps its rendering (frozen at the baseline for the session); only the
+   * editor sees the draft, and a caret or selection in the display is
+   * carried over by aligning the two texts. `changed` compares the draft
+   * against the mapped baseline, and an unchanged save restores the
+   * rendering instead of committing the draft text.
+   */
+  draftText = input<((committed: string) => string) | undefined>(undefined);
+
+  /**
    * The active filter, or `null` when filtering is off. Stateful flags are
    * stripped once here (rather than per keystroke inside `filterChars`) so
    * the hot path allocates nothing.
@@ -545,7 +565,7 @@ export class AngularInlineText implements FormValueControl<string> {
    */
   normalization = computed((): ValueNormalizationDetails => {
     const value = this.value() ?? '';
-    const previous = this.previous();
+    const previous = this.draftBaseline();
 
     if (!this.normalizeValue()) {
       return {
@@ -639,6 +659,33 @@ export class AngularInlineText implements FormValueControl<string> {
     return allow ? filterChars(text, caret, allow) : { text, caret };
   }
 
+  /** The session baseline as the editor sees it — through `draftText` when set. */
+  protected draftBaseline = computed(() => {
+    const toDraft = this.draftText();
+    const baseline = this.previous();
+    return toDraft ? toDraft(baseline) : baseline;
+  });
+
+  /**
+   * What a session opens with: the committed text (or its `draftText`
+   * rendering) and the display's caret/selection carried into it.
+   */
+  protected openingDraft(): { text: string; selection: SelectionOffsets } {
+    const committed = this.value() ?? '';
+    const toDraft = this.draftText();
+    const text = toDraft ? toDraft(committed) : committed;
+
+    const raw = getSelectionOffsets(this.display().nativeElement) ?? {
+      start: committed.length,
+      end: committed.length,
+    };
+    const selection = toDraft
+      ? { start: alignCaret(committed, text, raw.start), end: alignCaret(committed, text, raw.end) }
+      : raw;
+
+    return { text, selection };
+  }
+
   /**
    * Whether a filtered edit came out as a no-op: the filter removed something
    * and what survived is the committed text. Nothing mutated, so nothing
@@ -664,18 +711,14 @@ export class AngularInlineText implements FormValueControl<string> {
     // gestures: elevate-unchanged, then cut again in the editor).
     if ((event as InputEvent).inputType === 'deleteByCut') return;
 
-    const committed = this.value() ?? '';
-    const selection = getSelectionOffsets(this.display().nativeElement) ?? {
-      start: committed.length,
-      end: committed.length,
-    };
+    const { text: committed, selection } = this.openingDraft();
 
     const replayed = replayEdit(committed, selection, event as InputEvent, this.isSingleLine());
 
     if (!replayed) {
       // An intent we cannot replay (undo, drop, formatting) — elevate
       // unchanged and let the editor handle it.
-      this.elevate(selection.start);
+      this.elevate(selection.start, committed);
       return;
     }
 
@@ -694,11 +737,7 @@ export class AngularInlineText implements FormValueControl<string> {
     if (this.disabled() || this.readonly() || this.editing()) return;
     event.preventDefault();
 
-    const committed = this.value() ?? '';
-    const selection = getSelectionOffsets(this.display().nativeElement) ?? {
-      start: committed.length,
-      end: committed.length,
-    };
+    const { text: committed, selection } = this.openingDraft();
 
     if (selection.start !== selection.end) {
       event.clipboardData?.setData('text/plain', committed.slice(selection.start, selection.end));
@@ -716,11 +755,7 @@ export class AngularInlineText implements FormValueControl<string> {
     let text = event.clipboardData?.getData('text/plain') ?? '';
     if (this.isSingleLine()) text = text.replace(/\r?\n+/g, ' ');
 
-    const committed = this.value() ?? '';
-    const selection = getSelectionOffsets(this.display().nativeElement) ?? {
-      start: committed.length,
-      end: committed.length,
-    };
+    const { text: committed, selection } = this.openingDraft();
 
     const draft = committed.slice(0, selection.start) + text + committed.slice(selection.end);
 
@@ -739,9 +774,8 @@ export class AngularInlineText implements FormValueControl<string> {
   protected handleCompositionStart() {
     if (this.disabled() || this.readonly() || this.editing()) return;
 
-    const committed = this.value() ?? '';
-    const selection = getSelectionOffsets(this.display().nativeElement);
-    this.elevate(selection?.start ?? committed.length);
+    const { text, selection } = this.openingDraft();
+    this.elevate(selection.start, text);
   }
 
   /** Panel attached: reset any stray display mutation, focus the editor, restore the caret. */
@@ -781,12 +815,17 @@ export class AngularInlineText implements FormValueControl<string> {
     const { value, changed } = this.normalization();
 
     if (!changed) {
+      // An unchanged draft under `draftText` is only a rendering of the
+      // baseline — the baseline is what settles, and what the display keeps.
+      const settled = this.draftText() ? this.previous() : value;
+      if ((this.value() ?? '') !== settled) this.value.set(settled);
+
       // Mark accepted so the detach safety net doesn't also run `revert()` —
       // the outcome is the same either way, but this keeps the accept/detach
       // ordering from mattering.
       this.accepted = true;
       this.close();
-      this.saved.emit({ value, changed: false });
+      this.saved.emit({ value: settled, changed: false });
       return;
     }
 
@@ -818,7 +857,7 @@ export class AngularInlineText implements FormValueControl<string> {
   protected revert() {
     const draft = this.value() ?? '';
     const baseline = this.previous();
-    const hadChanges = draft !== baseline;
+    const hadChanges = draft !== this.draftBaseline();
 
     // Roll back the live draft channel to the session baseline.
     if (draft !== baseline) this.value.set(baseline);
@@ -894,7 +933,10 @@ export class AngularInlineText implements FormValueControl<string> {
     const unregister = scope.register({
       host: this.#hostEl.nativeElement,
       entry: this.display().nativeElement,
-      beginEdit: () => this.elevate((this.value() ?? '').length),
+      beginEdit: () => {
+        const { text } = this.openingDraft();
+        this.elevate(text.length, text);
+      },
     });
     this.#scopeDestroyRef.onDestroy(unregister);
   });

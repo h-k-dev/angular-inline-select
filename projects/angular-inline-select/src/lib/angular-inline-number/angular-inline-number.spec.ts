@@ -77,6 +77,27 @@ class NumberRestrictedHost {
 }
 
 @Component({
+  imports: [AngularInlineNumber],
+  template: `
+    <angular-inline-number
+      [(value)]="value"
+      [locale]="locale()"
+      [numberFormatOptions]="options()"
+      [restrictInput]="restrict()"
+      decimalSeparator=","
+    />
+  `,
+})
+class NumberLocaleHost {
+  value = signal<number | string | null>(1250000.5);
+  locale = signal<string | undefined>('en');
+  options = signal<{ minimumFractionDigits?: number; maximumFractionDigits?: number } | undefined>(
+    undefined,
+  );
+  restrict = signal(false);
+}
+
+@Component({
   imports: [AngularInlineNumber, EditableClear, EditableClearTemplate],
   template: `
     <angular-inline-number [(value)]="value" (saved)="sessions.push($event)">
@@ -133,13 +154,17 @@ function setup<T>(hostType: new () => T): Harness<T> {
   };
 }
 
-/** Simulates an edit session: elevate via an intercepted keystroke, replace the draft. */
-async function typeText(h: Harness<unknown>, text: string) {
+/**
+ * Simulates an edit session: elevate via an intercepted keystroke, replace
+ * the draft. `seed` is the elevating character — pass one the field admits
+ * when `restrictInput` is on.
+ */
+async function typeText(h: Harness<unknown>, text: string, seed = 'x') {
   const display = h.display();
 
   const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
   Object.defineProperty(event, 'inputType', { value: 'insertText' });
-  Object.defineProperty(event, 'data', { value: 'x' });
+  Object.defineProperty(event, 'data', { value: seed });
 
   display.dispatchEvent(event);
   h.fixture.detectChanges();
@@ -500,5 +525,112 @@ describe('AngularInlineNumber — clear affordance', () => {
 
     expect(h.host.value()).toBeNull();
     expect(h.host.sessions).toEqual([{ value: null, changed: true }]);
+  });
+});
+
+describe('AngularInlineNumber — locale codec', () => {
+  let h: Harness<NumberLocaleHost>;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [NumberLocaleHost] });
+    h = setup(NumberLocaleHost);
+  });
+
+  it('renders the idle text grouped the way the locale writes it', () => {
+    expect(h.display().textContent).toBe('1,250,000.5');
+
+    h.host.locale.set('de');
+    h.fixture.detectChanges();
+    expect(h.display().textContent).toBe('1.250.000,5');
+  });
+
+  it('supersedes decimalSeparator while set, and hands back when unset', () => {
+    h.host.locale.set(undefined);
+    h.fixture.detectChanges();
+
+    // The host's decimalSeparator="," takes over again: no grouping, comma decimal.
+    expect(h.display().textContent).toBe('1250000,5');
+  });
+
+  it('applies Intl options — fixed decimals for money', () => {
+    h.host.options.set({ minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    h.fixture.detectChanges();
+    expect(h.display().textContent).toBe('1,250,000.50');
+  });
+
+  it('reads a grouped OR plain draft under the locale and commits a dot-decimal number', async () => {
+    h.host.locale.set('de');
+    h.fixture.detectChanges();
+
+    await typeText(h, '2.500,75');
+    expect(h.number().parseFailed()).toBe(false);
+    accept(h);
+    expect(h.host.value()).toBe(2500.75);
+    expect(h.display().textContent).toBe('2.500,75');
+
+    await typeText(h, '3000,5');
+    accept(h);
+    expect(h.host.value()).toBe(3000.5);
+    // The commit round-trips the codec: typed plain, displayed grouped.
+    expect(h.display().textContent).toBe('3.000,5');
+  });
+
+  it('raises the parse gate on the wrong mark instead of reading it as a group', async () => {
+    h.host.locale.set('de');
+    h.fixture.detectChanges();
+
+    await typeText(h, '1.5');
+    expect(h.number().parseFailed()).toBe(true);
+    // The model holds the last good value.
+    expect(h.host.value()).toBe(1250000.5);
+  });
+
+  it('the editor opens on the PLAIN number — no groups, no padded decimals', async () => {
+    h.host.locale.set('de');
+    h.host.options.set({ minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    h.fixture.detectChanges();
+    expect(h.display().textContent).toBe('1.250.000,50');
+
+    // Elevate with a real keystroke (no draft replacement): the editor holds
+    // the plain rendering plus the typed digit, the display keeps the groups.
+    const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
+    Object.defineProperty(event, 'inputType', { value: 'insertText' });
+    Object.defineProperty(event, 'data', { value: '0' });
+    h.display().dispatchEvent(event);
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(h.editor()?.textContent).toBe('1250000,50');
+    expect(h.display().textContent).toBe('1.250.000,50');
+    expect(h.number().parseFailed()).toBe(false);
+
+    accept(h);
+    expect(h.host.value()).toBe(1250000.5);
+    expect(h.display().textContent).toBe('1.250.000,50');
+  });
+
+  it('a display that never rounds cannot rewrite the model on save', async () => {
+    h.host.value.set(1.23456);
+    h.fixture.detectChanges();
+    expect(h.display().textContent).toBe('1.23456');
+
+    await typeText(h, '1.23456');
+    accept(h);
+    expect(h.host.value()).toBe(1.23456);
+  });
+
+  it("restrictInput widens by the locale's own separators", async () => {
+    h.host.locale.set('fr');
+    h.host.restrict.set(true);
+    h.fixture.detectChanges();
+
+    // fr groups with a (narrow no-break) space — the plain space must survive
+    // the filter so the grouped display pastes back into its own field.
+    await typeText(h, '1 000,5x', '1');
+    expect(h.inner().value()).toBe('1 000,5');
+    expect(h.number().parseFailed()).toBe(false);
+    accept(h);
+    expect(h.host.value()).toBe(1000.5);
   });
 });

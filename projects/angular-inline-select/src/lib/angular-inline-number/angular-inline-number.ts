@@ -17,6 +17,13 @@ import {
 } from '../angular-inline-text/angular-inline-text';
 import { EditablePrefix, EditableSuffix } from '../angular-inline-text/editable-affix';
 import { EditableClearTemplate, type EditableClearContext } from '../bubble-menu/editable-clear';
+import {
+  makeLocaleNumberCodec,
+  formatLocaleNumber,
+  parseLocaleNumber,
+  localeNumberChars,
+  type LocaleNumberOptions,
+} from '../utils/locale-number/locale-number';
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineNumberSaved {
@@ -221,21 +228,88 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
    */
   restrictInput = input(false);
 
-  /** The character class handed to the inner control, or `undefined` when off. */
-  protected allowedChars = computed(() => (this.restrictInput() ? NUMBER_CHARS : undefined));
+  /**
+   * The character class handed to the inner control, or `undefined` when
+   * off. Under a `locale` it widens by that locale's own separators, so the
+   * grouped display (`1 000,5`) pastes back into the field it came from.
+   */
+  protected allowedChars = computed(() => {
+    if (!this.restrictInput()) return undefined;
+
+    const locale = this.locale();
+    return locale === undefined ? NUMBER_CHARS : localeNumberChars(locale);
+  });
 
   /**
-   * The codec — override either half to localize beyond `decimalSeparator`
-   * (e.g. Intl grouping). `parse` returns `null` for empty and `undefined`
-   * for unparseable text. Left unset, both derive from `decimalSeparator`.
+   * Opt-in LOCALE codec — the same `locale` shape the temporal family takes.
+   * Set, the idle text and the draft follow `Intl.NumberFormat` for that
+   * locale: thousands grouped, the decimal mark the locale's own
+   * (`1,000.25` under `en`, `1.000,25` under `de`), and `decimalSeparator`
+   * is superseded. The model stays a dot-decimal `number` regardless; the
+   * locale never crosses the contract boundary. Unset — the default —
+   * nothing changes. The rules live in `utils/locale-number`
+   * (`parseLocaleNumber`/`formatLocaleNumber`), reusable outside the control.
+   */
+  locale = input<string | string[] | undefined>(undefined);
+
+  /**
+   * `Intl.NumberFormat` options for the locale codec — fraction digits,
+   * grouping, sign display. Ignored without `locale`. Precision defaults to
+   * the widest; narrow it deliberately (two fixed decimals for money).
+   */
+  numberFormatOptions = input<LocaleNumberOptions | undefined>(undefined);
+
+  /**
+   * The codec — override either half for shapes neither `locale` nor
+   * `decimalSeparator` covers. `parse` returns `null` for empty and
+   * `undefined` for unparseable text. Left unset, both derive from `locale`
+   * when set, else from `decimalSeparator`.
    */
   parse = input<((raw: string) => number | null | undefined) | undefined>(undefined);
   format = input<((value: number | null) => string) | undefined>(undefined);
 
-  /** The effective codec: an explicit override, else the separator's own. */
-  protected activeParse = computed(() => this.parse() ?? makeParseNumber(this.decimalSeparator()));
+  /** The locale codec, or `null` without a `locale`. */
+  private localeCodec = computed(() => {
+    const locale = this.locale();
+    return locale === undefined ? null : makeLocaleNumberCodec(locale, this.numberFormatOptions());
+  });
+
+  /**
+   * Under a locale the editor opens on the PLAIN number: grouping is a
+   * reading aid, not something to type around — a digit inserted into
+   * `1.250.000,50` would break a group and raise the parse gate. So the
+   * draft is `1250000,5`: no groups, no padded decimals, the locale's own
+   * decimal mark; the idle display keeps the grouped rendering. Without a
+   * locale the display already is the plain text.
+   *
+   * A pure function of the text it is handed, never of the live model: the
+   * inner control also maps the frozen session BASELINE through it to decide
+   * `changed`, and a draft that tracked the live value would always equal
+   * its own baseline.
+   */
+  protected draftText = computed(() => {
+    const locale = this.locale();
+    if (locale === undefined) return undefined;
+
+    const options = this.numberFormatOptions();
+    return (committed: string) => {
+      const parsed = parseLocaleNumber(committed, locale);
+      if (parsed === undefined) return committed;
+
+      return formatLocaleNumber(parsed, locale, {
+        ...options,
+        useGrouping: false,
+        minimumFractionDigits: 0,
+      });
+    };
+  });
+
+  /** The effective codec: an explicit override, else the locale's, else the separator's own. */
+  protected activeParse = computed(
+    () => this.parse() ?? this.localeCodec()?.parse ?? makeParseNumber(this.decimalSeparator()),
+  );
   protected activeFormat = computed(
-    () => this.format() ?? makeFormatNumber(this.decimalSeparator()),
+    () => this.format() ?? this.localeCodec()?.format ?? makeFormatNumber(this.decimalSeparator()),
   );
 
   /** Form Value Contract: touch — forwarded from the inner control. */

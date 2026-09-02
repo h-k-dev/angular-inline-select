@@ -11,7 +11,7 @@ import {
 import { EditableSuffix } from './editable-affix';
 import { EditableClear, EditableClearTemplate } from '../bubble-menu/editable-clear';
 import { detectSlashToken } from './editable-menu';
-import { replayEdit, filterChars, getSelectionOffsets, setCaretOffset } from './caret';
+import { replayEdit, filterChars, getSelectionOffsets, setCaretOffset, alignCaret } from './caret';
 
 // =============================================================================
 // Hosts — one per binding mode
@@ -146,6 +146,24 @@ class ConfirmClearHost {
 // =============================================================================
 // Helpers
 // =============================================================================
+
+@Component({
+  imports: [AngularInlineText],
+  template: `
+    <angular-inline-text
+      [(value)]="value"
+      [draftText]="toDraft"
+      [isSingleLine]="true"
+      (saved)="sessions.push($event)"
+    />
+  `,
+})
+class DraftTextHost {
+  /** The display is a grouped rendering; the editor works on the digits. */
+  value = signal<string>('1.250.000,50');
+  toDraft = (committed: string) => committed.replace(/\./g, '');
+  sessions: InlineTextSaved[] = [];
+}
 
 interface Harness<T> {
   fixture: ComponentFixture<T>;
@@ -1111,5 +1129,64 @@ describe('AngularInlineText — single-line newline strip', () => {
     expect(h.host.value()).toBe('a b');
     // The rewrite used to drop the caret entirely.
     expect(getSelectionOffsets(editor)?.start).toBe(3);
+  });
+});
+
+describe('alignCaret', () => {
+  it('carries a caret across removed characters', () => {
+    // 1.250.000,50 → 1250000,50: caret after "1.250." lands after "1250".
+    expect(alignCaret('1.250.000,50', '1250000,50', 6)).toBe(4);
+    expect(alignCaret('1.250.000,50', '1250000,50', 0)).toBe(0);
+    expect(alignCaret('1.250.000,50', '1250000,50', 12)).toBe(10);
+  });
+
+  it('clamps to the draft when the source runs longer', () => {
+    expect(alignCaret('1.250.000,50', '1250000,5', 12)).toBe(9);
+    expect(alignCaret('abc', 'abc', 99)).toBe(3);
+  });
+
+  it('is the identity when both texts are the same', () => {
+    expect(alignCaret('hello', 'hello', 3)).toBe(3);
+  });
+});
+
+describe('AngularInlineText — draftText (a rendering the editor does not type around)', () => {
+  let h: Harness<DraftTextHost>;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [DraftTextHost] });
+    h = setup(DraftTextHost);
+  });
+
+  it('opens the editor on the draft while the display keeps its rendering', async () => {
+    await elevate(h);
+
+    // The seed keystroke ('x') lands at the end of the DRAFT, not the display text.
+    expect(h.editor()?.textContent).toBe('1250000,50x');
+    expect(h.display().textContent).toBe('1.250.000,50');
+  });
+
+  it('an unchanged save restores the rendering instead of committing the draft', async () => {
+    await typeText(h, '1250000,50');
+    accept(h);
+
+    expect(h.host.value()).toBe('1.250.000,50');
+    expect(h.host.sessions.at(-1)).toEqual({ value: '1.250.000,50', changed: false });
+  });
+
+  it('a changed draft commits as typed — the parent renders it back', async () => {
+    await typeText(h, '2500,75');
+    accept(h);
+
+    expect(h.host.value()).toBe('2500,75');
+    expect(h.host.sessions.at(-1)?.changed).toBe(true);
+  });
+
+  it('discard rolls back to the rendering', async () => {
+    await typeText(h, '999');
+    cancel(h);
+
+    expect(h.host.value()).toBe('1.250.000,50');
+    expect(h.display().textContent).toBe('1.250.000,50');
   });
 });

@@ -105,6 +105,62 @@
     </dd>
   </div>
 
+  <!--
+    Locale number, twice: BOTH rows bind the SAME field, so one model reads
+    `1,250,000.50` under `en` and `1.250.000,50` under `de` — edit either and
+    the other reformats. `locale` is the whole opt-in (the temporal family's
+    shape); the model stays a dot-decimal number, and the grouped text reads
+    back as typed OR grouped. A dot in a German draft that is not a thousands
+    group (`1.5`) is a parse error, never a silent fifteen.
+  -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Revenue (en)</dt>
+    <dd class="field-grid__value">
+      <angular-inline-number
+        [clearTemplate]="confirmClear"
+        #revenueEn
+        [formField]="recordForm.revenue"
+        locale="en"
+        [numberFormatOptions]="revenueFormat"
+        [restrictInput]="true"
+        placeholder="Revenue…"
+        ariaLabel="Revenue in euros, English notation"
+        (saved)="logEmit('revenue.saved', $event)"
+      >
+        <ng-template editableSuffix><mat-icon inline>euro</mat-icon></ng-template>
+        <span editable-error>
+          @if (revenueEn.parseFailed()) {
+            That doesn’t read as a number in English notation — try “1,250,000.50”.
+          }
+        </span>
+      </angular-inline-number>
+    </dd>
+  </div>
+
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Revenue (de)</dt>
+    <dd class="field-grid__value">
+      <angular-inline-number
+        [clearTemplate]="confirmClear"
+        #revenueDe
+        [formField]="recordForm.revenue"
+        locale="de"
+        [numberFormatOptions]="revenueFormat"
+        [restrictInput]="true"
+        placeholder="Umsatz…"
+        ariaLabel="Revenue in euros, German notation"
+        (saved)="logEmit('revenue.saved', $event)"
+      >
+        <ng-template editableSuffix><mat-icon inline>euro</mat-icon></ng-template>
+        <span editable-error>
+          @if (revenueDe.parseFailed()) {
+            That doesn’t read as a number in German notation — try “1.250.000,50”.
+          }
+        </span>
+      </angular-inline-number>
+    </dd>
+  </div>
+
   <!-- Phone: the codec interprets, the flag prefix picks the country. -->
   <div class="field-grid__row">
     <dt class="field-grid__label">Telephone</dt>

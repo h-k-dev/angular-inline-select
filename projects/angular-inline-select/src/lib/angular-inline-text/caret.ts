@@ -166,3 +166,21 @@ export function filterChars(text: string, caret: number, allow: RegExp): Filtere
 
   return { text: out, caret: caret - shift };
 }
+
+/**
+ * Carries a caret from one rendering of a value to another: `draft` is
+ * `source` with characters removed (a grouped number and its plain form —
+ * `1.250.000,50` → `1250000,5`). Walks both in step, so the caret lands
+ * after the same characters it followed in the source. Characters the draft
+ * lacks are skipped; a caret past the draft's end clamps to it.
+ */
+export function alignCaret(source: string, draft: string, caret: number): number {
+  let j = 0;
+  const end = Math.min(caret, source.length);
+
+  for (let i = 0; i < end && j < draft.length; i++) {
+    if (source[i] === draft[j]) j++;
+  }
+
+  return j;
+}
