@@ -204,9 +204,36 @@
         ariaLabel="Contact email"
         (saved)="logEmit('email.saved', $event)"
       >
-        <ng-template editablePrefix><mat-icon inline>alternate_email</mat-icon></ng-template>
         <span editable-error>
           @if (emailMalformed()) {
+            That doesn’t read as an email address — “name@example.com”.
+          }
+        </span>
+      </angular-inline-text>
+    </dd>
+  </div>
+
+  <!--
+    The same email field, seeded with an INVALID backend value — the comparison
+    row for the valid email above. The value is perfectly readable; the form's
+    `email()` rule is what rejects it.
+  -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Billing email</dt>
+    <dd class="field-grid__value">
+      <angular-inline-text
+        [clearTemplate]="confirmClear"
+        [formField]="recordForm.billingEmail"
+        [isSingleLine]="true"
+        inputMode="email"
+        wrapBehavior="noWrap"
+        placeholder="name@example.com"
+        [normalizeValue]="true"
+        ariaLabel="Billing email"
+        (saved)="logEmit('billingEmail.saved', $event)"
+      >
+        <span editable-error>
+          @if (billingEmailMalformed()) {
             That doesn’t read as an email address — “name@example.com”.
           }
         </span>

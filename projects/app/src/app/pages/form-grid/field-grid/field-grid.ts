@@ -77,6 +77,7 @@ export interface RecordModel {
   telephone: string | null;
   mobile: string | null;
   email: string;
+  billingEmail: string;
   deadline: string | null;
   audit: string | null;
   vacation: IsoDateRange | null;
@@ -118,6 +119,10 @@ function initialRecord(): RecordModel {
     telephone: '+49301234567',
     mobile: null,
     email: 'survey@aurora-observatory.example',
+    // An INVALID backend email (no `@`) — the form's `email()` rule rejects it
+    // on arrival, before the field was ever touched. The valid `email` above
+    // is its side-by-side comparison.
+    billingEmail: 'billing.aurora-observatory.example',
     deadline: dayToDbEntry('2026-07-20'),
     // An INVALID backend entry (MySQL's zero-date classic) — the date control
     // shows it verbatim under the error underline and reports it through
@@ -221,6 +226,7 @@ export class FieldGrid {
     // ("no @", "trailing dot", "spaces"). It also passes an EMPTY value
     // through, so `required` stays a separate, independent decision.
     email(path.email);
+    email(path.billingEmail);
 
     maxLength(path.summary, SUMMARY_MAX);
     pattern(path.callsign, /^[A-Z]{2,4}-\d{1,3}$/);
@@ -252,6 +258,13 @@ export class FieldGrid {
   protected emailMalformed = computed(() =>
     this.recordForm
       .email()
+      .errors()
+      .some((error) => error.kind === 'email'),
+  );
+
+  protected billingEmailMalformed = computed(() =>
+    this.recordForm
+      .billingEmail()
       .errors()
       .some((error) => error.kind === 'email'),
   );

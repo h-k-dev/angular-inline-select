@@ -138,6 +138,20 @@ true; editing.set(false)`).
   view and the raw-restore path (which stays outside `internalRange` on
   purpose — the day-typed view would swallow the unresolved raw). All 410
   pre-existing behavioral specs passed unchanged.
+- **Custom-setter round 3 — per-session state is LINKED, not reset.**
+  `#sessionTouched` (the pre-valuation session touch) became a
+  `linkedSignal` sourced on `editing` with computation `() => false`: every
+  session flip — `elevate()`, an external `editing.set(true)`, any close —
+  recomputes it in the same synchronous pull; the pointer and the refused
+  save write `true` in between. The `emitTouchOnClose` effect lost its
+  opening branch and `reset()` its explicit clear. What stays an effect,
+  and why: the closing edge emits `touch` (an event, not state) and can
+  arrive through the two-way `editing` binding, which no setter observes;
+  `#selfTouched` records that TRANSITION and a linked derivation only
+  sees an edge when read on both sides of it — `errorsVisible` never reads
+  that branch while a session is open, so it would miss every close on a
+  valid field. One new spec pins the external-open reset; all 460
+  pre-existing specs passed unchanged.
 
 Verified against `@angular/forms/signals` 22.0: `touched`/`invalid`/`hidden`
 are auto-bound custom-control inputs; `touch` → `markAsTouched()`;

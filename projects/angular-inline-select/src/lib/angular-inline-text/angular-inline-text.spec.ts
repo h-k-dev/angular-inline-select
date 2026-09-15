@@ -430,7 +430,10 @@ describe('AngularInlineText — [(value)] binding', () => {
   });
 
   it('the bound touched status reveals the idle error state without interaction', () => {
-    h.host.errors.set([{ kind: 'pattern' }]);
+    // An EMPTY invalid value (the pristine `required` case): nothing was
+    // injected, so only the field's touched status reveals the error.
+    h.host.value.set('');
+    h.host.errors.set([{ kind: 'required' }]);
     h.fixture.detectChanges();
 
     const host = h.fixture.nativeElement.querySelector('angular-inline-text') as HTMLElement;
@@ -445,6 +448,61 @@ describe('AngularInlineText — [(value)] binding', () => {
 
     expect(host.classList.contains('editable-text--invalid')).toBe(true);
     expect(display.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  describe('an injected invalid value (a backend mistake)', () => {
+    const invalidClass = () =>
+      (
+        h.fixture.nativeElement.querySelector('angular-inline-text') as HTMLElement
+      ).classList.contains('editable-text--invalid');
+
+    beforeEach(() => {
+      // An occupied value the form rejects, untouched — it can only have
+      // been injected: `accept()` never commits an invalid draft.
+      h.host.errors.set([{ kind: 'email' }]);
+      h.fixture.detectChanges();
+    });
+
+    it('wears the error state on arrival, untouched, and keeps aria-invalid', () => {
+      expect(h.host.touched()).toBe(false);
+      expect(invalidClass()).toBe(true);
+      expect(h.display().getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('does not forge the touched status', () => {
+      expect(h.host.touchCount).toBe(0);
+    });
+
+    it('leaves the error at the door of a session until the session is touched', async () => {
+      // Opening the editor is not a mistake yet — and neither is typing
+      h.editable().editing.set(true);
+      h.fixture.detectChanges();
+      expect(invalidClass()).toBe(false);
+
+      await typeText(h, 'typing');
+      expect(invalidClass()).toBe(false);
+
+      // Still invalid per the bound errors: the attempt reveals them
+      accept(h);
+      expect(h.editable().editing()).toBe(true);
+      expect(invalidClass()).toBe(true);
+    });
+
+    it('wears the error state again when a discard restores the injected value', async () => {
+      await typeText(h, 'typing');
+
+      cancel(h);
+
+      expect(h.host.value()).toBe('initial');
+      expect(invalidClass()).toBe(true);
+    });
+
+    it('lifts the error state once the value is repaired', () => {
+      h.host.errors.set([]);
+      h.fixture.detectChanges();
+
+      expect(invalidClass()).toBe(false);
+    });
   });
 
   it('reset() discards an open draft back to the baseline with no emissions', async () => {
@@ -478,7 +536,7 @@ describe('AngularInlineText — [(value)] binding', () => {
 
     await typeText(h, 'invalid attempt');
 
-    // Pristine error state: invalid but not yet revealed
+    // Typing never reveals: the session is untouched
     expect(document.querySelector('.editable-panel__message--error')).toBeNull();
 
     accept(h);
@@ -490,6 +548,73 @@ describe('AngularInlineText — [(value)] binding', () => {
     expect(document.querySelector('.editable-panel__message--error')?.textContent?.trim()).toBe(
       'Taken',
     );
+  });
+
+  it('a pointer inside the panel is the session touch and reveals the errors', async () => {
+    h.host.errors.set([{ kind: 'server', message: 'Taken' }]);
+    h.fixture.detectChanges();
+
+    await typeText(h, 'invalid attempt');
+    expect(document.querySelector('.editable-panel__message--error')).toBeNull();
+
+    document
+      .querySelector('.editable-panel')!
+      .dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    h.fixture.detectChanges();
+
+    expect(document.querySelector('.editable-panel__message--error')?.textContent?.trim()).toBe(
+      'Taken',
+    );
+    // A session touch is not a field touch
+    expect(h.host.touchCount).toBe(0);
+  });
+
+  it('session state starts fresh: a touched field opens a quiet session', async () => {
+    h.host.errors.set([{ kind: 'server', message: 'Taken' }]);
+    h.host.touched.set(true);
+    h.fixture.detectChanges();
+
+    // Idle: touched + invalid = shown
+    const host = h.fixture.nativeElement.querySelector('angular-inline-text') as HTMLElement;
+    expect(host.classList.contains('editable-text--invalid')).toBe(true);
+
+    // Open and type: nothing of the user's to complain about yet
+    await typeText(h, 'still invalid');
+
+    expect(host.classList.contains('editable-text--invalid')).toBe(false);
+    expect(document.querySelector('.editable-panel__message--error')).toBeNull();
+
+    // A refused save reveals; the next session starts quiet again
+    accept(h);
+    expect(document.querySelector('.editable-panel__message--error')).not.toBeNull();
+
+    cancel(h);
+    await typeText(h, 'still invalid');
+    expect(document.querySelector('.editable-panel__message--error')).toBeNull();
+  });
+
+  it('the session touch resets on an EXTERNAL open too — linked to editing, no reset site', async () => {
+    h.host.errors.set([{ kind: 'server', message: 'Taken' }]);
+    h.fixture.detectChanges();
+
+    await typeText(h, 'still invalid');
+    accept(h);
+    expect(document.querySelector('.editable-panel__message--error')).not.toBeNull();
+    cancel(h);
+
+    // The phone flag picker's path: nobody calls `elevate()`, the session
+    // opens by a write to the `editing` model. The touch is still spent.
+    h.editable().editing.set(true);
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(document.querySelector('.editable-panel__message--error')).toBeNull();
+    expect(
+      (
+        h.fixture.nativeElement.querySelector('angular-inline-text') as HTMLElement
+      ).classList.contains('editable-text--invalid'),
+    ).toBe(false);
   });
 
   it('emits touch when the edit session closes', () => {
@@ -708,7 +833,7 @@ describe('AngularInlineText — projected [editable-error]', () => {
 
     await typeText(h, 'invalid attempt');
 
-    // Pristine error state: the whole slot stays hidden, projection included
+    // Untouched session: the whole slot stays hidden, projection included
     expect(document.querySelector('[editable-error]')).toBeNull();
 
     accept(h);

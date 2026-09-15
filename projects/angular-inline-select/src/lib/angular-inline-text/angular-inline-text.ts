@@ -495,10 +495,14 @@ export class AngularInlineText implements FormValueControl<string> {
    *
    * Frozen on `editing()`, never on field `dirty`: field-dirty is sticky
    * across sessions and a dirty-frozen baseline would never thaw.
+   *
+   * `elevate()` pins the baseline by reading this before it freezes. A
+   * session opened externally (`editing.set(true)`) may freeze on the FIRST
+   * read — then the value at that moment is the baseline, never `''`.
    */
   previous = linkedSignal<string, string>({
     source: () => this.value() ?? '',
-    computation: (source, prev) => (this.editing() ? (prev?.value ?? '') : source),
+    computation: (source, prev) => (this.editing() ? (prev?.value ?? source) : source),
   });
 
   isEmpty = computed(() => (this.value() ?? '') === '');
@@ -521,15 +525,62 @@ export class AngularInlineText implements FormValueControl<string> {
   protected displayText = computed(() => (this.editing() ? this.previous() : (this.value() ?? '')));
 
   /**
-   * Mat-form-field error state: errors exist as soon as validation fails, but
-   * they are only *shown* once the field was touched (a previous session
-   * closed) or the user attempted to save the current draft.
+   * An OCCUPIED value that fails validation while the draft still equals
+   * it: content this control never accepted (`accept()` refuses invalid
+   * drafts), so it was injected — a backend `'name.example'` email. The
+   * temporal `resolved` idea without a codec: the IDLE display wears the
+   * error on arrival and again when a discard restores the injected value.
+   * Idle only — inside a session the usual rules apply (touched or a save
+   * attempt), so opening the editor never greets the user with a message
+   * about a mistake they have not made yet. Presentation only — the
+   * field's `touched` is never forged, so `markAsTouched`/reset keep
+   * their meaning. Empty stays silent: a pristine `required` field is not
+   * an injected mistake.
+   */
+  #injectedInvalid = computed(() => !this.editing() && !this.isEmpty() && this.isInvalid());
+
+  /**
+   * Mat-form-field error state, split by surface. Errors exist as soon as
+   * validation fails; WHEN they show depends on where the user is:
+   *
+   * - Inside a session: once the SESSION was touched — a pointer went
+   *   down inside the panel, or a save was attempted. Typing alone never
+   *   reveals, and opening the editor from a red idle field is quiet
+   *   until then. Session-scoped: starts fresh with every session and
+   *   dies with it, Save or Discard alike — nothing carries over.
+   * - Idle: once the FIELD was touched (a session closed, `markAsTouched`)
+   *   or the value arrived invalid (see `#injectedInvalid`).
+   *
+   * `#sessionTouched` is LINKED to `editing`, the same way `previous` is:
+   * every flip of the session — opened by `elevate()`, by an external
+   * `editing.set(true)` (the phone flag picker seeding a draft), or closed
+   * by any path — recomputes it to `false` in the same synchronous pull.
+   * The pointer and the refused save write `true` in between. Structure,
+   * not a reset someone has to remember at every open site.
+   *
+   * `#selfTouched` records a TRANSITION (a session closed) and stays a
+   * plain signal written by the one eager observer of that edge, the
+   * `emitTouchOnClose` effect — a linked derivation only sees an edge when
+   * it is read on both sides of it, and `errorsVisible` never reads this
+   * branch while a session is open.
    */
   #selfTouched = signal(false);
-  #saveAttempted = signal(false);
+  #sessionTouched = linkedSignal<boolean, boolean>({
+    source: () => this.editing(),
+    computation: () => false,
+  });
   protected errorsVisible = computed(
-    () => this.isInvalid() && (this.touched() || this.#selfTouched() || this.#saveAttempted()),
+    () =>
+      this.isInvalid() &&
+      (this.editing()
+        ? this.#sessionTouched()
+        : this.touched() || this.#selfTouched() || this.#injectedInvalid()),
   );
+
+  /** A pointer inside the panel: the session's touch (the save attempt is the other). */
+  protected markSessionTouched() {
+    this.#sessionTouched.set(true);
+  }
 
   /**
    * Fallback error rendering when no `[editable-error]` content is projected:
@@ -538,18 +589,18 @@ export class AngularInlineText implements FormValueControl<string> {
    */
   protected errorMessages = computed(() => this.errors().filter((error) => !!error.message));
 
-  /** Emits `touch` on the closing edge of an edit session (the blur analogue). */
+  /**
+   * Emits `touch` on the closing edge of an edit session (the blur
+   * analogue). The one state-to-event bridge in the control: the edge can
+   * arrive through the two-way `editing` binding, which no setter sees, so
+   * an eager observer is the only hook. Per-session state does NOT reset
+   * here — `#sessionTouched` is linked to `editing` and resets itself.
+   */
   #wasOpen = false;
   emitTouchOnClose = effect(() => {
     const open = this.editing();
 
-    if (!this.#wasOpen && open) {
-      // A session opened by ANY path — `elevate()`, or an external
-      // `editing.set(true)` (e.g. the phone flag picker seeding a draft).
-      // `#saveAttempted` is per-session, so clear it here too, not only in
-      // `elevate()`, or a stale attempt flashes errors on the fresh draft.
-      untracked(() => this.#saveAttempted.set(false));
-    } else if (this.#wasOpen && !open) {
+    if (this.#wasOpen && !open) {
       untracked(() => {
         this.#selfTouched.set(true);
         this.touch.emit();
@@ -643,7 +694,6 @@ export class AngularInlineText implements FormValueControl<string> {
     // it here syncs it to the committed value before `editing` freezes it.
     const committed = this.previous();
 
-    this.#saveAttempted.set(false);
     this.#pendingCaret = caret;
     this.editing.set(true);
 
@@ -830,9 +880,10 @@ export class AngularInlineText implements FormValueControl<string> {
     }
 
     // Mat-style submit attempt: an invalid draft doesn't commit — it reveals
-    // the errors (and marks the field touched) so the user can react.
+    // the errors (the session's touch) and marks the field touched so the
+    // idle display keeps telling the story after.
     if (this.isInvalid()) {
-      this.#saveAttempted.set(true);
+      this.#sessionTouched.set(true);
       this.#selfTouched.set(true);
       this.touch.emit();
       return;
@@ -1334,7 +1385,8 @@ export class AngularInlineText implements FormValueControl<string> {
    */
   reset() {
     this.#selfTouched.set(false);
-    this.#saveAttempted.set(false);
+    // `#sessionTouched` needs no reset: closing the session below flips
+    // its source, and an idle field's session state is already spent.
 
     if (!this.editing()) return;
 

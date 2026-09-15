@@ -52,6 +52,7 @@
     [animate.enter]="'editable-panel-enter'"
     cdkTrapFocus
     [cdkTrapFocusAutoCapture]="false"
+    (pointerdown)="markSessionTouched()"
     (keydown.escape)="handleEscape($event)"
     (keydown.control.enter)="handleCtrlEnter()"
     (keydown.tab)="handleTabKey($event, 1)"
