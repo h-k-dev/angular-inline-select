@@ -28,6 +28,7 @@
     role="combobox"
     aria-haspopup="grid"
     [attr.aria-expanded]="overlayOpen()"
+    [attr.aria-controls]="overlayOpen() ? panelId : null"
     [attr.aria-label]="ariaLabelOf('start')"
     [attr.aria-invalid]="ariaInvalidOf('start') || null"
     [attr.aria-required]="required() || null"
@@ -57,6 +58,7 @@
       role="combobox"
       aria-haspopup="grid"
       [attr.aria-expanded]="overlayOpen()"
+      [attr.aria-controls]="overlayOpen() ? panelId : null"
       [attr.aria-label]="ariaLabelOf('end')"
       [attr.aria-invalid]="ariaInvalidOf('end') || null"
       [attr.aria-required]="required() || null"
@@ -114,6 +116,7 @@
       tabindex="-1"
       [attr.aria-label]="intl.openCalendarLabel()"
       [attr.aria-expanded]="overlayOpen()"
+      [attr.aria-controls]="overlayOpen() ? panelId : null"
       (mousedown)="$event.preventDefault()"
       (click)="toggleCalendar($event)"
     >
@@ -161,6 +164,7 @@
   <div
     #panel
     class="inline-date__panel"
+    [id]="panelId"
     (mousedown)="handlePanelMousedown($event)"
     (focusout)="handleFocusOut()"
   >

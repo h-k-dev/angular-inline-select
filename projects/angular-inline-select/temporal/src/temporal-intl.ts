@@ -32,6 +32,23 @@ export class TemporalIntl {
   /** Calendar month-navigation buttons. */
   readonly prevMonthLabel = signal('Previous month');
   readonly nextMonthLabel = signal('Next month');
+  /** The same buttons in the month view, which pages a year at a time. */
+  readonly prevYearLabel = signal('Previous year');
+  readonly nextYearLabel = signal('Next year');
+
+  /** The header button's description: it zooms out to the year grid… */
+  readonly chooseYearLabel = signal('Choose year');
+  /** …and, from the year grid, back to the days. */
+  readonly chooseDateLabel = signal('Choose date');
+
+  /** The year view's paging buttons — methods so the count can move in the sentence. */
+  prevYearsLabel(count: number): string {
+    return `Previous ${count} years`;
+  }
+
+  nextYearsLabel(count: number): string {
+    return `Next ${count} years`;
+  }
 
   /** The 📅 affordance that opens the calendar panel. */
   readonly openCalendarLabel = signal('Open calendar');

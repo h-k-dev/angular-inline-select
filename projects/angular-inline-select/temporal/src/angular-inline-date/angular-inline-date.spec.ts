@@ -375,6 +375,15 @@ describe('AngularInlineDate (input rehost)', () => {
     expect(trigger?.getAttribute('tabindex')).toBe('-1');
   });
 
+  it('ARIA: the combobox controls the panel — pointed at only while it exists', () => {
+    expect(h.start().hasAttribute('aria-controls')).toBe(false);
+
+    focusInput(h, h.start());
+    const id = h.start().getAttribute('aria-controls');
+    expect(id).toBeTruthy();
+    expect(document.getElementById(id!)).toBe(h.panel());
+  });
+
   it('focus opens the panel WITHOUT stealing focus; the grid mirrors the draft', async () => {
     focusInput(h, h.start());
 

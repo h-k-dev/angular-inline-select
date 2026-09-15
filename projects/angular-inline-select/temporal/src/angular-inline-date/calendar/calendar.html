@@ -1,67 +1,167 @@
 <div class="cal__header">
+  <!--
+    Material's layout: the period button leads, the ‹ › pair sits together
+    at the end — DOM order = visual order = Tab order.
+  -->
+  <button
+    type="button"
+    class="cal__label"
+    [attr.aria-describedby]="hintId"
+    [attr.data-view]="view()"
+    (mousedown)="$event.preventDefault()"
+    (click)="toggleView()"
+  >
+    <span [id]="labelId">{{ headerLabel() }}</span>
+    <span class="cal__label-caret" aria-hidden="true">▾</span>
+  </button>
   <button
     type="button"
     class="cal__nav"
-    [attr.aria-label]="intl.prevMonthLabel()"
+    [attr.aria-label]="prevLabel()"
     (mousedown)="$event.preventDefault()"
-    (click)="moveMonths(-1)"
+    (click)="page(-1)"
   >
     ‹
   </button>
-  <div class="cal__label" [id]="labelId" aria-live="polite">{{ monthLabel() }}</div>
   <button
     type="button"
     class="cal__nav"
-    [attr.aria-label]="intl.nextMonthLabel()"
+    [attr.aria-label]="nextLabel()"
     (mousedown)="$event.preventDefault()"
-    (click)="moveMonths(1)"
+    (click)="page(1)"
   >
     ›
   </button>
 </div>
 
-<div
-  #grid
-  class="cal__grid"
-  role="grid"
-  [attr.aria-labelledby]="labelId"
-  (keydown)="handleKeydown($event)"
-  (focusin)="gridFocused = true"
-  (focusout)="gridFocused = false"
-  (mousedown)="handleGridMousedown($event)"
-  (mouseover)="handleGridMouseover($event)"
->
-  <div class="cal__weekdays" role="row">
-    @for (name of weekdayNames(); track $index) {
-      <span class="cal__weekday" role="columnheader" [attr.aria-label]="name.long">{{
-        name.narrow
-      }}</span>
-    }
-  </div>
-  @for (week of weeks(); track $index) {
-    <div class="cal__week" role="row">
-      @for (cell of week; track cell.iso) {
-        <button
-          type="button"
-          role="gridcell"
-          class="cal__day"
-          [attr.data-day]="cell.iso"
-          [attr.data-outside]="cell.outside || null"
-          [attr.data-today]="cell.today || null"
-          [attr.data-active]="cell.iso === active() || null"
-          [attr.data-selected]="cell.iso === selectedDay() || null"
-          [attr.data-range-start]="cell.iso === paintedRange()?.start || null"
-          [attr.data-range-end]="cell.iso === paintedRange()?.end || null"
-          [attr.data-in-range]="inPaintedRange(cell.iso) || null"
-          [attr.aria-selected]="cell.iso === selectedDay()"
-          [attr.aria-label]="dayAria(cell.iso)"
-          [tabindex]="cell.iso === active() ? 0 : -1"
-          (mousedown)="$event.preventDefault()"
-          (click)="handleCellClick(cell.iso, $event)"
-        >
-          {{ cell.day }}
-        </button>
+<!--
+  Outside the button on purpose: a live region INSIDE the focused header
+  button spoke every view change twice (its new name + the announcement).
+  The hint is the button's description — `aria-describedby`, not the ARIA
+  1.3 draft `aria-description`, which VoiceOver doesn't reliably read.
+-->
+<span class="cal__sr" aria-live="polite">{{ headerLabel() }}</span>
+<span class="cal__sr" [id]="hintId">{{ headerDescription() }}</span>
+
+<!--
+  The views STACK in one grid cell: the day grid stays rendered (hidden, not
+  removed) under the zoomed grids, so the popup keeps its size — no overlay
+  reposition jump — and the zoomed grids stretch to exactly its box.
+-->
+<div class="cal__views" (focusin)="gridFocused = true" (focusout)="gridFocused = false">
+  <div
+    #grid
+    class="cal__grid"
+    role="grid"
+    data-view="day"
+    [attr.data-inactive]="view() !== 'day' || null"
+    [attr.aria-labelledby]="labelId"
+    (keydown)="handleKeydown($event)"
+    (mousedown)="handleGridMousedown($event)"
+    (mouseover)="handleGridMouseover($event)"
+  >
+    <div class="cal__weekdays" role="row">
+      @for (name of weekdayNames(); track $index) {
+        <span class="cal__weekday" role="columnheader" [attr.aria-label]="name.long">{{
+          name.narrow
+        }}</span>
       }
     </div>
+    @for (week of weeks(); track $index) {
+      <div class="cal__week" role="row">
+        @for (cell of week; track cell.iso) {
+          <button
+            type="button"
+            role="gridcell"
+            class="cal__day"
+            [attr.data-day]="cell.iso"
+            [attr.data-outside]="cell.outside || null"
+            [attr.data-today]="cell.today || null"
+            [attr.aria-current]="cell.today ? 'date' : null"
+            [attr.data-active]="cell.iso === active() || null"
+            [attr.data-selected]="cell.iso === selectedDay() || null"
+            [attr.data-range-start]="cell.iso === paintedRange()?.start || null"
+            [attr.data-range-end]="cell.iso === paintedRange()?.end || null"
+            [attr.data-in-range]="inPaintedRange(cell.iso) || null"
+            [attr.aria-selected]="cell.iso === selectedDay()"
+            [attr.aria-label]="dayAria(cell.iso)"
+            [tabindex]="cell.iso === active() ? 0 : -1"
+            (mousedown)="$event.preventDefault()"
+            (click)="handleCellClick(cell.iso, $event)"
+          >
+            {{ cell.day }}
+          </button>
+        }
+      </div>
+    }
+  </div>
+
+  @switch (view()) {
+    @case ('year') {
+      <div
+        class="cal__periods"
+        role="grid"
+        data-view="year"
+        [attr.aria-labelledby]="labelId"
+        (keydown)="handleYearKeydown($event)"
+      >
+        @for (row of years(); track $index) {
+          <div class="cal__period-row" role="row">
+            @for (cell of row; track cell.value) {
+              <button
+                type="button"
+                role="gridcell"
+                class="cal__period"
+                [attr.data-year]="cell.value"
+                [attr.data-today]="cell.today || null"
+                [attr.aria-current]="cell.today || null"
+                [attr.data-active]="cell.value === activeYear() || null"
+                [attr.data-selected]="cell.selected || null"
+                [attr.aria-selected]="cell.selected"
+                [attr.aria-label]="cell.aria"
+                [tabindex]="cell.value === activeYear() ? 0 : -1"
+                (mousedown)="$event.preventDefault()"
+                (click)="pickYear(cell.value)"
+              >
+                {{ cell.label }}
+              </button>
+            }
+          </div>
+        }
+      </div>
+    }
+    @case ('month') {
+      <div
+        class="cal__periods"
+        role="grid"
+        data-view="month"
+        [attr.aria-labelledby]="labelId"
+        (keydown)="handleMonthKeydown($event)"
+      >
+        @for (row of months(); track $index) {
+          <div class="cal__period-row" role="row">
+            @for (cell of row; track cell.value) {
+              <button
+                type="button"
+                role="gridcell"
+                class="cal__period"
+                [attr.data-month]="cell.value"
+                [attr.data-today]="cell.today || null"
+                [attr.aria-current]="cell.today || null"
+                [attr.data-active]="cell.value === activeMonth() || null"
+                [attr.data-selected]="cell.selected || null"
+                [attr.aria-selected]="cell.selected"
+                [attr.aria-label]="cell.aria"
+                [tabindex]="cell.value === activeMonth() ? 0 : -1"
+                (mousedown)="$event.preventDefault()"
+                (click)="pickMonth(cell.value)"
+              >
+                {{ cell.label }}
+              </button>
+            }
+          </div>
+        }
+      </div>
+    }
   }
 </div>

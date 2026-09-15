@@ -121,6 +121,9 @@ interface DateSide extends SideCore<IsoDate> {
   readonly parsed: Signal<IsoDate | null | undefined>;
 }
 
+/** Distinct popup id per instance — the `aria-controls` target. */
+let nextPanelId = 0;
+
 /**
  * Inline date on NATIVE INPUTS — the input rehost (see ROADMAP-DATETIME).
  * A `FormValueControl` for calendar dates and date RANGES. Canonical value:
@@ -530,6 +533,13 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   protected endInput = viewChild<ElementRef<HTMLInputElement>>('endInput');
   protected calendar = viewChild(Calendar);
   protected panelRef = viewChild<ElementRef<HTMLElement>>('panel');
+
+  /**
+   * The popup's id — the combobox's (and trigger's) `aria-controls` target,
+   * which ARIA 1.2 requires on `role="combobox"`. Only pointed at while the
+   * panel exists: the overlay removes it from the DOM when closed.
+   */
+  protected panelId = `inline-date-panel-${nextPanelId++}`;
 
   /**
    * The current draft's ISO reading (`null` empty, `undefined` unreadable)

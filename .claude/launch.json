@@ -4,8 +4,22 @@
     {
       "name": "app",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["start", "--", "--port", "4202"],
+      "runtimeArgs": [
+        "start",
+        "--",
+        "--port",
+        "4202"
+      ],
       "port": 4202,
+      "autoPort": true
+    },
+    {
+      "name": "app-static",
+      "runtimeExecutable": "/Users/hongknop/.nvm/versions/node/v26.1.0/bin/node",
+      "runtimeArgs": [
+        "/private/tmp/claude-501/-Users-hongknop-Documents-private-repo-angular-inline-select/bbe7d6bc-1606-4b68-967f-327159b63ca0/scratchpad/static-server.mjs"
+      ],
+      "port": 4310,
       "autoPort": true
     }
   ]

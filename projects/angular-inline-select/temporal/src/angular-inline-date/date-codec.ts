@@ -64,10 +64,7 @@ export function toInternalRange(value: InlineDateValue): InternalDateRange {
  * `start-only` keeps its one-key form until the data actually has a
  * distinct end — only then does it grow the `end` key.
  */
-export function echoDateShape(
-  internal: InternalDateRange,
-  shape: DateValueShape,
-): InlineDateValue {
+export function echoDateShape(internal: InternalDateRange, shape: DateValueShape): InlineDateValue {
   switch (shape) {
     case 'single':
       return internal.start;
@@ -402,10 +399,7 @@ export function describeIsoDate(iso: IsoDate, locale?: string | string[]): strin
  * (`'12 – 15 May 2026'`). Interim single-field display until T5's
  * two-field ranged UI.
  */
-export function formatInternalRange(
-  range: InternalDateRange,
-  locale?: string | string[],
-): string {
+export function formatInternalRange(range: InternalDateRange, locale?: string | string[]): string {
   const { start, end } = range;
   if (start === null && end === null) return '';
   if (start === null) return `– ${formatIsoDate(end, locale)}`;
