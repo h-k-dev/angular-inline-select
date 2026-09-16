@@ -34,6 +34,8 @@ import {
   type EditableClearContext,
   observeHoverScope,
   type EditableHoverScopePress,
+  EditableActionsTemplate,
+  type EditableActionsContext,
 } from 'angular-inline-select';
 import {
   parseTime,
@@ -62,6 +64,8 @@ import {
   wireEditingBridge,
   type SideCore,
   type SideKey,
+  makeActionsContexts,
+  ACTIONS_GUARDS,
 } from '../side-session';
 import { TemporalIntl } from '../temporal-intl';
 import {
@@ -78,6 +82,12 @@ import {
   type DbDateTime,
 } from '../datetime/db-entry';
 import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
+
+/** The `editableActions` payload of the time control: the committed instant (UTC ISO DB entry) of that side. */
+export interface InlineTimeActions {
+  value: DbDateTime | null;
+  side: SideKey | null;
+}
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineTimeSaved {
@@ -988,7 +998,18 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
 
   // -- Clear affordance (idle hover bubble; per-side for a range) --------------
 
+  /**
+   * The clear affordance's opt-out. `false` never offers the hover-bubble
+   * clear (stock button or `clearTemplate` alike): the value can still be
+   * emptied, but only the long way — open the editor, delete, save. For
+   * hosts whose house rule is that emptying a field is a deliberate act,
+   * never a one-click shortcut. `true` (the default) keeps the bubble's own
+   * policy (never on required / disabled / readonly / empty / editing).
+   */
+  showClear = input(true);
+
   #clearVisibility = makeClearBubbleVisibility({
+    enabled: this.showClear,
     required: this.required,
     disabled: this.effectiveDisabled,
     readonly: this.effectiveReadonly,
@@ -1011,6 +1032,38 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   private contentClear = contentChild(EditableClearTemplate);
 
   protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
+
+  /** The primary-actions slot — stamped once per bubble with that side's payload. */
+  actionsTemplate = input<TemplateRef<EditableActionsContext<InlineTimeActions>> | undefined>(
+    undefined,
+  );
+
+  private contentActions = contentChild(EditableActionsTemplate<InlineTimeActions>);
+
+  protected actionsTpl = computed(
+    () => this.actionsTemplate() ?? this.contentActions()?.templateRef,
+  );
+
+  #actionsVisibility = makeClearBubbleVisibility({
+    ...ACTIONS_GUARDS,
+    enabled: computed(() => this.actionsTpl() !== undefined),
+    editing: this.editing,
+    range: this.internalRange,
+  });
+  protected actionsCanShowSingle = this.#actionsVisibility.single;
+  protected actionsCanShowStart = this.#actionsVisibility.start;
+  protected actionsCanShowEnd = this.#actionsVisibility.end;
+
+  #actionsContexts = makeActionsContexts<InlineTimeActions>({
+    data: (key) =>
+      key === 'single'
+        ? { value: this.internalRange().start, side: null }
+        : { value: this.internalRange()[key], side: key },
+    focus: (key) => this.#inputOf(key)?.focus(),
+  });
+  protected actionsContextSingle = this.#actionsContexts.single;
+  protected actionsContextStart = this.#actionsContexts.start;
+  protected actionsContextEnd = this.#actionsContexts.end;
 
   #clearContexts = makeClearContexts({
     clear: (key) => this.clearBubble(key),

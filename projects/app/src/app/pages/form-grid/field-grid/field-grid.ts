@@ -34,6 +34,7 @@ import { EditableHoverScope } from '../../../../../../angular-inline-select/src/
 import { AngularInlineText } from '../../../../../../angular-inline-select/src/lib/angular-inline-text/angular-inline-text';
 import { AngularInlineNumber } from '../../../../../../angular-inline-select/src/lib/angular-inline-number/angular-inline-number';
 import type { LocaleNumberOptions } from '../../../../../../angular-inline-select/src/lib/utils/locale-number/locale-number';
+import { detectLink } from '../../../../../../angular-inline-select/src/lib/utils/link-detection/link-detection';
 import {
   EditablePrefix,
   EditableSuffix,
@@ -45,6 +46,10 @@ import { AngularInlineJson } from '../../../../../../angular-inline-select/json/
 
 // The page's own clear affordance — one button for every field in the grid.
 import { ConfirmClearButton } from '../confirm-clear/confirm-clear-button';
+import {
+  EditableAction,
+  EditableActionsTemplate,
+} from '../../../../../../angular-inline-select/src/lib/bubble-menu/editable-actions';
 
 // Secondary entry points
 import { AngularInlinePhone, createLibphonenumberCodec } from 'angular-inline-select/phone';
@@ -189,6 +194,8 @@ function initialRecord(): RecordModel {
 
     // The page's clear affordance
     ConfirmClearButton,
+    EditableAction,
+    EditableActionsTemplate,
   ],
 })
 export class FieldGrid {
@@ -210,6 +217,8 @@ export class FieldGrid {
   protected fieldRequired = signal(true);
   protected fieldReadonly = signal(false);
   protected fieldDisabled = signal(false);
+  /** The clear affordance across the grid — off is the house rule of hosts where emptying a value must be a deliberate act. */
+  protected showClear = signal(true);
 
   // ---------------------------------------------------------------------------
   // Tab-to-accept scope — opt-in: Tab in an open editor settles + advances
@@ -267,6 +276,9 @@ export class FieldGrid {
       .errors()
       .some((error) => error.kind === 'email'),
   );
+
+  /** The Website row's open action: a bare domain counts too (`reddit.com` → https://). */
+  protected linkOf = (value: string): string | null => detectLink(value);
 
   protected billingEmailMalformed = computed(() =>
     this.recordForm

@@ -2,6 +2,7 @@
 // The form-grid pattern: label/value pairs side by side, folding top down when
 // the CONTAINER — not the viewport — runs out of room.
 // =============================================================================
+@use '@angular/material' as mat;
 
 :host {
   display: block;
@@ -105,4 +106,16 @@ mat-icon[inline] {
   gap: 8px;
 
   margin-block-start: 1.5rem;
+}
+
+// The bubble's primary actions: a compact icon button, sized to the pill row.
+.field-grid__action {
+  --mat-icon-size: 20px;
+  @include mat.icon-button-overrides(
+    (
+      icon-size: var(--mat-icon-size),
+      state-layer-size: 28px,
+      touch-target-size: 32px,
+    )
+  );
 }

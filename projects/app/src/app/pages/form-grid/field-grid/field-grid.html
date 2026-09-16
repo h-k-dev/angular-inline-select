@@ -41,6 +41,7 @@
     <dt class="field-grid__label">Project</dt>
     <dd class="field-grid__value">
       <angular-inline-text
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.project"
         [isSingleLine]="true"
@@ -66,6 +67,7 @@
     <dt class="field-grid__label">Summary</dt>
     <dd class="field-grid__value">
       <angular-inline-text
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.summary"
         placeholder="Add a description…"
@@ -88,6 +90,7 @@
     <dt class="field-grid__label">Budget</dt>
     <dd class="field-grid__value">
       <angular-inline-number
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.budget"
         [format]="budgetFormat"
@@ -117,6 +120,7 @@
     <dt class="field-grid__label">Revenue (en)</dt>
     <dd class="field-grid__value">
       <angular-inline-number
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         #revenueEn
         [formField]="recordForm.revenue"
@@ -141,6 +145,7 @@
     <dt class="field-grid__label">Revenue (de)</dt>
     <dd class="field-grid__value">
       <angular-inline-number
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         #revenueDe
         [formField]="recordForm.revenue"
@@ -166,6 +171,7 @@
     <dt class="field-grid__label">Telephone</dt>
     <dd class="field-grid__value">
       <angular-inline-phone
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         #telephone
         [formField]="recordForm.telephone"
@@ -174,6 +180,22 @@
         ariaLabel="Telephone number"
         (saved)="logEmit('telephone.saved', $event)"
       >
+        <!-- PRIMARY ACTIONS: the control hands over the DATA (E.164, a ready
+             tel: href, country, formats); this consumer renders the button —
+             a house with its own dialer would call a service here instead. -->
+        <ng-template editableActions let-data>
+          @if (data.tel; as tel) {
+            <a
+              mat-icon-button
+              editableAction
+              class="field-grid__action"
+              [href]="tel"
+              aria-label="Call"
+            >
+              <mat-icon>call</mat-icon>
+            </a>
+          }
+        </ng-template>
         <span editable-error>
           @if (telephone.parseFailed()) {
             That doesn’t read as a phone number — digits, spaces and an optional leading “+”.
@@ -194,6 +216,7 @@
     <dt class="field-grid__label">Email</dt>
     <dd class="field-grid__value">
       <angular-inline-text
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.email"
         [isSingleLine]="true"
@@ -204,6 +227,17 @@
         ariaLabel="Contact email"
         (saved)="logEmit('email.saved', $event)"
       >
+        <ng-template editableActions let-data>
+          <a
+            mat-icon-button
+            editableAction
+            class="field-grid__action"
+            [href]="'mailto:' + data.value"
+            aria-label="Write email"
+          >
+            <mat-icon>mail</mat-icon>
+          </a>
+        </ng-template>
         <span editable-error>
           @if (emailMalformed()) {
             That doesn’t read as an email address — “name@example.com”.
@@ -222,6 +256,7 @@
     <dt class="field-grid__label">Billing email</dt>
     <dd class="field-grid__value">
       <angular-inline-text
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.billingEmail"
         [isSingleLine]="true"
@@ -253,6 +288,7 @@
     <dt class="field-grid__label">Website</dt>
     <dd class="field-grid__value">
       <angular-inline-text
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.website"
         [isSingleLine]="true"
@@ -262,7 +298,26 @@
         [normalizeValue]="true"
         ariaLabel="Website"
         (saved)="logEmit('website.saved', $event)"
-      />
+      >
+        <!-- Until the link control lands, the consumer derives the href with the
+             shared `detectLink` (bare domains count). A REAL anchor: middle-click,
+             copy link, status bar, no popup blocker. -->
+        <ng-template editableActions let-data>
+          @if (linkOf(data.value); as href) {
+            <a
+              mat-icon-button
+              editableAction
+              class="field-grid__action"
+              [href]="href"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Open website in a new tab"
+            >
+              <mat-icon>open_in_new</mat-icon>
+            </a>
+          }
+        </ng-template>
+      </angular-inline-text>
     </dd>
   </div>
 
@@ -271,6 +326,7 @@
     <dt class="field-grid__label">Deadline</dt>
     <dd class="field-grid__value">
       <angular-inline-date
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         #deadline
         [formField]="recordForm.deadline"
@@ -299,6 +355,7 @@
     <dt class="field-grid__label">Audit</dt>
     <dd class="field-grid__value">
       <angular-inline-date
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         #audit
         [formField]="recordForm.audit"
@@ -323,6 +380,7 @@
     <dt class="field-grid__label">Metadata</dt>
     <dd class="field-grid__value">
       <angular-inline-json
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.metadata"
         ariaLabel="Record metadata"
@@ -341,6 +399,7 @@
     <dt class="field-grid__label">Status</dt>
     <dd class="field-grid__value">
       <angular-inline-text
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.status"
         [isSingleLine]="true"
@@ -381,6 +440,7 @@
     <dt class="field-grid__label">Reference</dt>
     <dd class="field-grid__value">
       <angular-inline-text
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.reference"
         [isSingleLine]="true"
@@ -398,6 +458,7 @@
     <dt class="field-grid__label">Callsign</dt>
     <dd class="field-grid__value">
       <angular-inline-text
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.callsign"
         [isSingleLine]="true"
@@ -422,6 +483,7 @@
     <dt class="field-grid__label">Cable</dt>
     <dd class="field-grid__value">
       <angular-inline-number
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.cable"
         decimalSeparator=","
@@ -439,6 +501,7 @@
     <dt class="field-grid__label">Crew</dt>
     <dd class="field-grid__value">
       <angular-inline-number
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.crew"
         placeholder="Crew…"
@@ -453,6 +516,7 @@
     <dt class="field-grid__label">Mobile</dt>
     <dd class="field-grid__value">
       <angular-inline-phone
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         #mobile
         [formField]="recordForm.mobile"
@@ -478,6 +542,7 @@
     <dt class="field-grid__label">Vacation</dt>
     <dd class="field-grid__value">
       <angular-inline-date
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.vacation"
         [ranged]="true"
@@ -492,6 +557,7 @@
     <dt class="field-grid__label">Kickoff</dt>
     <dd class="field-grid__value">
       <angular-inline-time
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.kickoff"
         locale="en-u-hc-h23"
@@ -507,6 +573,7 @@
     <dt class="field-grid__label">Shift</dt>
     <dd class="field-grid__value">
       <angular-inline-time
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.shift"
         [ranged]="true"
@@ -522,6 +589,7 @@
     <dt class="field-grid__label">Estimate</dt>
     <dd class="field-grid__value">
       <angular-inline-duration
+        [showClear]="showClear()"
         [clearTemplate]="confirmClear"
         [formField]="recordForm.estimate"
         durationFormat="h:mm"
@@ -543,6 +611,9 @@
   </button>
   <button mat-stroked-button (click)="fieldDisabled.update((v) => !v)">
     Disabled: {{ fieldDisabled() ? 'on' : 'off' }}
+  </button>
+  <button mat-stroked-button (click)="showClear.update((v) => !v)">
+    Clear: {{ showClear() ? 'on' : 'off' }}
   </button>
   <button mat-stroked-button (click)="recordForm().markAsTouched()">Mark touched</button>
   <button mat-stroked-button (click)="resetRecord()">Reset record</button>

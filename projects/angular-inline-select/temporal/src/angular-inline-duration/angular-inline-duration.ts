@@ -35,6 +35,8 @@ import {
   EditableClearTemplate,
   observeHoverScope,
   type EditableHoverScopePress,
+  EditableActionsTemplate,
+  type EditableActionsContext,
 } from 'angular-inline-select';
 import {
   parseDuration,
@@ -46,6 +48,13 @@ import {
 import { TemporalIntl } from '../temporal-intl';
 import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 import { focusInputNearPoint, isUnitSpacePress } from '../inline-unit';
+
+/** The `editableActions` payload of the duration control: the committed seconds. */
+export interface InlineDurationActions {
+  value: number | null;
+  /** A single-value control: always null (the context shape is shared with the range controls). */
+  side: null;
+}
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineDurationSaved {
@@ -591,6 +600,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   /** The clear bubble may show while idle and non-empty on an unlocked field. */
   protected clearCanShow = computed(
     () =>
+      this.showClear() &&
       !this.required() &&
       !this.effectiveDisabled() &&
       !this.effectiveReadonly() &&
@@ -606,9 +616,41 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
    */
   clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
 
+  /**
+   * The clear affordance's opt-out. `false` never offers the hover-bubble
+   * clear (stock button or `clearTemplate` alike): the value can still be
+   * emptied, but only the long way — open the editor, delete, save. For
+   * hosts whose house rule is that emptying a field is a deliberate act,
+   * never a one-click shortcut. `true` (the default) keeps the bubble's own
+   * policy (never on required / disabled / readonly / empty / editing).
+   */
+  showClear = input(true);
+
   private contentClear = contentChild(EditableClearTemplate);
 
   protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
+
+  /** The primary-actions slot. */
+  actionsTemplate = input<TemplateRef<EditableActionsContext<InlineDurationActions>> | undefined>(
+    undefined,
+  );
+
+  private contentActions = contentChild(EditableActionsTemplate<InlineDurationActions>);
+
+  protected actionsTpl = computed(
+    () => this.actionsTemplate() ?? this.contentActions()?.templateRef,
+  );
+
+  /** Actions ignore required / disabled / readonly on purpose; never mid-edit, never empty. */
+  protected actionsCanShow = computed(
+    () => this.actionsTpl() !== undefined && !this.editing() && !this.isEmpty(),
+  );
+
+  protected actionsContext = computed<EditableActionsContext<InlineDurationActions>>(() => {
+    const data: InlineDurationActions = { value: this.value(), side: null };
+    return { $implicit: data, data, side: null, focus: this.#focusAction };
+  });
+  #focusAction = () => this.durationInput()?.nativeElement.focus();
 
   #clearCallback = () => this.clearBubble();
 

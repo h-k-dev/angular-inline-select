@@ -1,4 +1,5 @@
 import {
+  viewChild,
   Component,
   DestroyRef,
   ElementRef,
@@ -156,56 +157,120 @@ export class BubbleMenu {
     return origin instanceof ElementRef ? origin.nativeElement : origin;
   });
 
-  /** Pointer intent: over the field, over the bubble itself, or the scope's. */
-  #hover = signal(false);
-  protected visible = computed(() => this.canShow() && this.#hover());
+  /**
+   * Pointer intent, as THREE INDEPENDENT terms — the origin's hover, the
+   * bubble's own, and the scope's (`armed`) — each with its own grace timer
+   * on the leaving edge. The bubble shows while any of them holds.
+   *
+   * Independent on purpose. One shared flag with one shared timer looped
+   * under a real mouse: the pointer leaves the scope ONTO the bubble — the
+   * bubble's mouseenter opens it synchronously, then change detection runs
+   * the `armed` effect, which scheduled a close on the SAME flag; 150ms later
+   * the bubble vanished under the pointer, the row beneath re-armed it, the
+   * next pixel of movement replayed the sequence — a constant flash. Three
+   * terms cannot cancel each other: a leave only ever clears its own.
+   */
+  #originHover = hoverTerm();
+  #selfHover = hoverTerm();
+  #scopeHover = hoverTerm();
+  /**
+   * The fourth term: the origin HOLDS FOCUS. A field with the caret in it
+   * shows its actions without a pointer at all — the tap that placed the
+   * caret is what reveals them on touch (there is no hover to arm), and Tab
+   * lands on them for keyboard users. Released when focus leaves the origin
+   * for anywhere but the bubble itself; no grace needed, focus is discrete.
+   */
+  #focusHold = signal(false);
+  protected visible = computed(
+    () =>
+      this.canShow() &&
+      (this.#originHover.state() ||
+        this.#selfHover.state() ||
+        this.#scopeHover.state() ||
+        this.#focusHold()),
+  );
 
   #renderer = inject(Renderer2);
-  #closeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     // (Re)bind hover listeners whenever the origin element changes; the effect
     // cleanup unlistens so a swapped origin never leaks a stale handler.
     effect((onCleanup) => {
       const el = this.overlayOrigin();
-      const enter = this.#renderer.listen(el, 'mouseenter', () => this.open());
-      const leave = this.#renderer.listen(el, 'mouseleave', () => this.scheduleClose());
+      const enter = this.#renderer.listen(el, 'mouseenter', () => this.#originHover.enter());
+      const leave = this.#renderer.listen(el, 'mouseleave', () => this.#originHover.leave());
+      const focusIn = this.#renderer.listen(el, 'focusin', () => this.#focusHold.set(true));
+      const focusOut = this.#renderer.listen(el, 'focusout', (event: FocusEvent) => {
+        const next = event.relatedTarget as Node | null;
+        if (next !== null && (el.contains(next) || this.bubbleRef()?.nativeElement.contains(next)))
+          return;
+        this.#focusHold.set(false);
+      });
       onCleanup(() => {
         enter();
         leave();
+        focusIn();
+        focusOut();
       });
     });
 
-    // The scope's hover rides the same open/grace-close machine as the origin's.
+    // The scope's hover is its own term — grace-timed on the way out like the others.
     let wasArmed = false;
     effect(() => {
       const armed = this.armed();
       if (armed === wasArmed) return;
       wasArmed = armed;
-      untracked(() => (armed ? this.open() : this.scheduleClose()));
+      untracked(() => (armed ? this.#scopeHover.enter() : this.#scopeHover.leave()));
     });
 
-    // The delayed close must not fire into a destroyed component.
+    // A delayed leave must not fire into a destroyed component.
     inject(DestroyRef).onDestroy(() => {
-      if (this.#closeTimer !== null) clearTimeout(this.#closeTimer);
+      this.#originHover.dispose();
+      this.#selfHover.dispose();
+      this.#scopeHover.dispose();
     });
   }
 
+  /** The bubble element while attached — focus moving INTO it must not release the hold. */
+  protected bubbleRef = viewChild<ElementRef<HTMLElement>>('bubble');
+
+  /** The bubble's own hover (template-bound). */
   protected open() {
-    if (this.#closeTimer !== null) {
-      clearTimeout(this.#closeTimer);
-      this.#closeTimer = null;
-    }
-    this.#hover.set(true);
+    this.#selfHover.enter();
   }
 
-  /** Delayed close so the pointer can cross the gap between field and bubble. */
   protected scheduleClose() {
-    if (this.#closeTimer !== null) clearTimeout(this.#closeTimer);
-
-    this.#closeTimer = setTimeout(() => {
-      this.#closeTimer = null;
-      this.#hover.set(false);
-    }, 150);
+    this.#selfHover.leave();
   }
+}
+
+/** The grace the pointer gets to cross a gap before a hover term lets go. */
+const HOVER_GRACE_MS = 150;
+
+/** One hover term: enters at once, leaves after the grace, owns its own timer. */
+function hoverTerm() {
+  const state = signal(false);
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const clear = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  return {
+    state,
+    enter() {
+      clear();
+      state.set(true);
+    },
+    leave() {
+      clear();
+      timer = setTimeout(() => {
+        timer = null;
+        state.set(false);
+      }, HOVER_GRACE_MS);
+    },
+    dispose: clear,
+  };
 }

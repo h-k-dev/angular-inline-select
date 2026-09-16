@@ -4,7 +4,12 @@ import { By } from '@angular/platform-browser';
 import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineDate, type InlineDateSaved } from './angular-inline-date';
-import { EditableClear, EditableClearTemplate, EditableHoverScope } from 'angular-inline-select';
+import {
+  EditableClear,
+  EditableClearTemplate,
+  EditableHoverScope,
+  EditableActionsTemplate,
+} from 'angular-inline-select';
 import {
   parseDateInput,
   formatIsoDate,
@@ -251,6 +256,7 @@ class DateShapeHost {
     <angular-inline-date
       [(value)]="value"
       [ranged]="ranged()"
+      [showClear]="showClear()"
       locale="en"
       [now]="now"
       (saved)="sessions.push($event)"
@@ -272,6 +278,7 @@ class DateShapeHost {
 class DateClearHost {
   value = signal<InlineDateValue>(null);
   ranged = signal(false);
+  showClear = signal(true);
   now = () => NOW;
 
   sessions: InlineDateSaved[] = [];
@@ -964,6 +971,18 @@ describe('AngularInlineDate — clear affordance', () => {
     ];
   }
 
+  it('showClear false never offers a bubble, template or not — on either side', () => {
+    h.host.ranged.set(true);
+    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.host.showClear.set(false);
+    h.fixture.detectChanges();
+
+    hover(h.start());
+    hover(h.end()!);
+    expect(customButtons()).toEqual([]);
+    expect(document.querySelector('.editable-bubble')).toBeNull();
+  });
+
   it('stamps the consumer template per side, each labelled and side-tagged', () => {
     h.host.ranged.set(true);
     h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
@@ -1292,5 +1311,52 @@ describe('AngularInlineDate — the interactive unit', () => {
       fixture.detectChanges();
       expect(document.querySelector('.inline-date__panel')).toBeNull();
     });
+  });
+});
+
+// =============================================================================
+// The primary-actions slot — one stamp per side, each with that side's day
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineDate, EditableActionsTemplate],
+  template: `
+    <angular-inline-date
+      [(value)]="value"
+      [ranged]="true"
+      [readonly]="true"
+      locale="en"
+      [now]="now"
+    >
+      <ng-template editableActions let-data>
+        <span class="act" [attr.data-side]="data.side" [attr.data-value]="data.value"></span>
+      </ng-template>
+    </angular-inline-date>
+  `,
+})
+class DateActionsHost {
+  value = signal<InlineDateValue>({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+  now = () => NOW;
+}
+
+describe('AngularInlineDate — primary actions', () => {
+  it('stamps per side with that side’s day, on a readonly field (no clear), and never mid-edit', async () => {
+    const h = setupHost(DateActionsHost);
+    const act = () => document.querySelector('.editable-bubble .act');
+
+    h.start().dispatchEvent(new MouseEvent('mouseenter'));
+    h.fixture.detectChanges();
+    expect(act()?.getAttribute('data-side')).toBe('start');
+    expect(act()?.getAttribute('data-value')).toBe('2026-05-12');
+    expect(document.querySelector('.editable-bubble .editable-action-clear')).toBeNull();
+
+    h.start().dispatchEvent(new MouseEvent('mouseleave'));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    h.fixture.detectChanges();
+
+    h.end()!.dispatchEvent(new MouseEvent('mouseenter'));
+    h.fixture.detectChanges();
+    expect(act()?.getAttribute('data-side')).toBe('end');
+    expect(act()?.getAttribute('data-value')).toBe('2026-05-15');
   });
 });

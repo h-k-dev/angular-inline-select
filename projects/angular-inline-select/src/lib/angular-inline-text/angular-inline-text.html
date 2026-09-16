@@ -193,13 +193,23 @@
   [canShow]="bubbleMenuCanShow()"
   [armed]="scopeHover()"
 >
-  @if (clearTpl(); as tpl) {
-    <ng-container *ngTemplateOutlet="tpl; context: clearContext" />
-  } @else {
-    <button
-      editableClearButton
-      [attr.aria-label]="clearLabel"
-      (clear)="clearValue($event)"
-    ></button>
+  <!-- Two slots, two gates: the consumer's PRIMARY ACTIONS first, clear last. -->
+  @if (actionsCanShow()) {
+    <span class="editable-bubble__group editable-bubble__actions">
+      <ng-container *ngTemplateOutlet="actionsTpl()!; context: actionsContext()" />
+    </span>
+  }
+  @if (clearCanShow()) {
+    <span class="editable-bubble__group editable-bubble__clear">
+      @if (clearTpl(); as tpl) {
+        <ng-container *ngTemplateOutlet="tpl; context: clearContext" />
+      } @else {
+        <button
+          editableClearButton
+          [attr.aria-label]="clearLabel"
+          (clear)="clearValue($event)"
+        ></button>
+      }
+    </span>
   }
 </bubble-menu>

@@ -10,6 +10,7 @@ import {
 } from './angular-inline-text';
 import { EditableSuffix } from './editable-affix';
 import { EditableClear, EditableClearTemplate } from '../bubble-menu/editable-clear';
+import { EditableAction, EditableActionsTemplate } from '../bubble-menu/editable-actions';
 import { detectSlashToken } from './editable-menu';
 import {
   replayEdit,
@@ -118,6 +119,7 @@ class FilteredHost {
   template: `
     <angular-inline-text
       [(value)]="value"
+      [showClear]="showClear()"
       (saved)="sessions.push($event)"
       (touch)="touchCount = touchCount + 1"
     >
@@ -137,6 +139,7 @@ class FilteredHost {
 })
 class ConfirmClearHost {
   value = signal('initial');
+  showClear = signal(true);
   sessions: InlineTextSaved[] = [];
   touchCount = 0;
 
@@ -748,6 +751,21 @@ describe('AngularInlineText — affix templates', () => {
 });
 
 describe('AngularInlineText — clear affordance', () => {
+  it('showClear false never offers the bubble, template or not — emptying stays the long way', () => {
+    const h = setup(ConfirmClearHost);
+    h.host.showClear.set(false);
+    h.fixture.detectChanges();
+
+    hoverField(h);
+    expect(document.querySelector('.editable-bubble')).toBeNull();
+    expect(bubbleAction('button.confirm-clear')).toBeNull();
+
+    h.host.showClear.set(true);
+    h.fixture.detectChanges();
+    hoverField(h);
+    expect(bubbleAction('button.confirm-clear')).not.toBeNull();
+  });
+
   it('renders the stock button, which clears on click', () => {
     const h = setup(ValueBindingHost);
     hoverField(h);
@@ -1494,5 +1512,84 @@ describe('AngularInlineText — the interactive unit', () => {
 
     // While the panel is open the dimmed unit ignores presses (the scrim owns them)
     expect(press(field()).defaultPrevented).toBe(false);
+  });
+});
+
+// =============================================================================
+// The primary-actions slot — consumer buttons that act ON the value, before
+// clear, with their own gate
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineText, EditableActionsTemplate, EditableAction],
+  template: `
+    <angular-inline-text [(value)]="value" [readonly]="readonly()" [showClear]="showClear()">
+      <ng-template editableActions let-data let-focus="focus">
+        <a editableAction class="open" [href]="data.value">go</a>
+      </ng-template>
+    </angular-inline-text>
+  `,
+})
+class ActionsHost {
+  value = signal('https://example.test/');
+  readonly = signal(false);
+  showClear = signal(true);
+}
+
+describe('AngularInlineText — primary actions', () => {
+  let h: Harness<ActionsHost>;
+
+  const open = () => document.querySelector<HTMLAnchorElement>('.editable-bubble .open');
+  const clear = () => document.querySelector('.editable-bubble .editable-action-clear');
+  const groups = () => [...document.querySelectorAll('.editable-bubble .editable-bubble__group')];
+
+  beforeEach(() => {
+    h = setup(ActionsHost);
+  });
+
+  it('stamps the consumer template with the payload, BEFORE the clear button', () => {
+    hoverField(h);
+
+    expect(open()?.getAttribute('href')).toBe('https://example.test/');
+    expect(clear()).not.toBeNull();
+    expect(groups().map((g) => g.className)).toEqual([
+      'editable-bubble__group editable-bubble__actions',
+      'editable-bubble__group editable-bubble__clear',
+    ]);
+  });
+
+  it('gates are per slot: a readonly field keeps its actions and loses clear', () => {
+    h.host.readonly.set(true);
+    h.fixture.detectChanges();
+    hoverField(h);
+
+    expect(open()).not.toBeNull();
+    expect(clear()).toBeNull();
+    expect(groups().length).toBe(1);
+  });
+
+  it('showClear false keeps the actions', () => {
+    h.host.showClear.set(false);
+    h.fixture.detectChanges();
+    hoverField(h);
+
+    expect(open()).not.toBeNull();
+    expect(clear()).toBeNull();
+  });
+
+  it('an empty value offers nothing to act on', () => {
+    h.host.value.set('');
+    h.fixture.detectChanges();
+    hoverField(h);
+
+    expect(document.querySelector('.editable-bubble')).toBeNull();
+  });
+
+  it('a press on an action never moves focus off the field', () => {
+    hoverField(h);
+    const event = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 });
+    open()!.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
   });
 });

@@ -49,6 +49,10 @@ import {
   EditableClearTemplate,
   type EditableClearContext,
 } from '../bubble-menu/editable-clear';
+import {
+  EditableActionsTemplate,
+  type EditableActionsContext,
+} from '../bubble-menu/editable-actions';
 
 interface ValueNormalizationDetails {
   value: string;
@@ -1240,6 +1244,43 @@ export class AngularInlineText implements FormValueControl<string> {
 
   protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
 
+  /**
+   * The PRIMARY-ACTIONS slot — consumer buttons that act ON the value, stamped
+   * before clear. Same dual channel: input for composition (number and phone
+   * forward theirs here with their own payload), `ng-template[editableActions]`
+   * content for direct use. See {@link EditableActionsTemplate}.
+   */
+  actionsTemplate = input<TemplateRef<EditableActionsContext<unknown>> | undefined>(undefined);
+
+  /**
+   * The payload a WRAPPING control hands its consumer instead of this control's
+   * own `{ value }` — the number's parsed number, the phone's E.164 and `tel:`.
+   * `undefined` (direct use) means the text payload.
+   */
+  actionsData = input<unknown>(undefined);
+
+  private contentActions = contentChild(EditableActionsTemplate);
+
+  protected actionsTpl = computed(
+    () => this.actionsTemplate() ?? this.contentActions()?.templateRef,
+  );
+
+  /** The text control's own payload: the committed string. */
+  protected actionsContext = computed<EditableActionsContext<unknown>>(() => {
+    const data = this.actionsData() ?? { value: this.value() ?? '' };
+    return { $implicit: data, data, side: null, focus: this.#focusAction };
+  });
+  #focusAction = () => this.focus();
+
+  /**
+   * Actions show whenever there is a template and something to act on — and
+   * IGNORE required / disabled / readonly on purpose: a readonly value still
+   * opens, calls, copies. Never mid-edit (the panel is the surface then).
+   */
+  protected actionsCanShow = computed(
+    () => this.actionsTpl() !== undefined && !this.isEmpty() && !this.editing(),
+  );
+
   /** The stock accessible name — the context's `label`, and the default button's. */
   protected readonly clearLabel = 'Clear value';
 
@@ -1262,14 +1303,28 @@ export class AngularInlineText implements FormValueControl<string> {
    * `required()` keeps the bubble hidden — a guaranteed-doomed clear stays
    * unavailable.
    */
-  protected bubbleMenuCanShow = computed(
+  /**
+   * The clear affordance's opt-out. `false` never offers the hover-bubble
+   * clear (stock button or `clearTemplate` alike): the value can still be
+   * emptied, but only the long way — open the editor, delete, save. For
+   * hosts whose house rule is that emptying a field is a deliberate act,
+   * never a one-click shortcut. `true` (the default) keeps the bubble's own
+   * policy (never on required / disabled / readonly / empty / editing).
+   */
+  showClear = input(true);
+
+  protected clearCanShow = computed(
     () =>
+      this.showClear() &&
       !this.required() &&
       !this.disabled() &&
       !this.readonly() &&
       !this.isEmpty() &&
       !this.editing(),
   );
+
+  /** The bubble shows when EITHER slot has something — gates are per slot. */
+  protected bubbleMenuCanShow = computed(() => this.clearCanShow() || this.actionsCanShow());
 
   /**
    * The offset from the field box's inline-end/block-end CORNER to where the

@@ -92,33 +92,51 @@
     <bubble-menu
       [origin]="startInput"
       side="start"
-      [canShow]="clearCanShowStart()"
+      [canShow]="clearCanShowStart() || actionsCanShowStart()"
       [armed]="scopeHover()"
     >
-      @if (clearTpl(); as tpl) {
-        <ng-container *ngTemplateOutlet="tpl; context: clearContextStart()" />
-      } @else {
-        <button
-          editableClearButton
-          [attr.aria-label]="clearContextStart().label"
-          (clear)="clearBubble('start')"
-        ></button>
+      @if (actionsCanShowStart()) {
+        <span class="editable-bubble__group editable-bubble__actions">
+          <ng-container *ngTemplateOutlet="actionsTpl()!; context: actionsContextStart()" />
+        </span>
+      }
+      @if (clearCanShowStart()) {
+        <span class="editable-bubble__group editable-bubble__clear">
+          @if (clearTpl(); as tpl) {
+            <ng-container *ngTemplateOutlet="tpl; context: clearContextStart()" />
+          } @else {
+            <button
+              editableClearButton
+              [attr.aria-label]="clearContextStart().label"
+              (clear)="clearBubble('start')"
+            ></button>
+          }
+        </span>
       }
     </bubble-menu>
     <bubble-menu
       [origin]="endInput"
       side="end"
-      [canShow]="clearCanShowEnd()"
+      [canShow]="clearCanShowEnd() || actionsCanShowEnd()"
       [armed]="scopeHover()"
     >
-      @if (clearTpl(); as tpl) {
-        <ng-container *ngTemplateOutlet="tpl; context: clearContextEnd()" />
-      } @else {
-        <button
-          editableClearButton
-          [attr.aria-label]="clearContextEnd().label"
-          (clear)="clearBubble('end')"
-        ></button>
+      @if (actionsCanShowEnd()) {
+        <span class="editable-bubble__group editable-bubble__actions">
+          <ng-container *ngTemplateOutlet="actionsTpl()!; context: actionsContextEnd()" />
+        </span>
+      }
+      @if (clearCanShowEnd()) {
+        <span class="editable-bubble__group editable-bubble__clear">
+          @if (clearTpl(); as tpl) {
+            <ng-container *ngTemplateOutlet="tpl; context: clearContextEnd()" />
+          } @else {
+            <button
+              editableClearButton
+              [attr.aria-label]="clearContextEnd().label"
+              (clear)="clearBubble('end')"
+            ></button>
+          }
+        </span>
       }
     </bubble-menu>
   }
@@ -152,17 +170,26 @@
   <bubble-menu
     [origin]="field"
     [side]="effectiveClearBubbleSide()"
-    [canShow]="clearCanShowSingle()"
+    [canShow]="clearCanShowSingle() || actionsCanShowSingle()"
     [armed]="scopeHover()"
   >
-    @if (clearTpl(); as tpl) {
-      <ng-container *ngTemplateOutlet="tpl; context: clearContextSingle()" />
-    } @else {
-      <button
-        editableClearButton
-        [attr.aria-label]="clearContextSingle().label"
-        (clear)="clearBubble('start')"
-      ></button>
+    @if (actionsCanShowSingle()) {
+      <span class="editable-bubble__group editable-bubble__actions">
+        <ng-container *ngTemplateOutlet="actionsTpl()!; context: actionsContextSingle()" />
+      </span>
+    }
+    @if (clearCanShowSingle()) {
+      <span class="editable-bubble__group editable-bubble__clear">
+        @if (clearTpl(); as tpl) {
+          <ng-container *ngTemplateOutlet="tpl; context: clearContextSingle()" />
+        } @else {
+          <button
+            editableClearButton
+            [attr.aria-label]="clearContextSingle().label"
+            (clear)="clearBubble('start')"
+          ></button>
+        }
+      </span>
     }
   </bubble-menu>
 }

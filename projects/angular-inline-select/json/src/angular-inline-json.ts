@@ -633,8 +633,19 @@ export class AngularInlineJson implements FormValueControl<string> {
     focus: () => this.focus(),
   };
 
+  /**
+   * The clear affordance's opt-out. `false` never offers the hover-bubble
+   * clear (stock button or `clearTemplate` alike): the value can still be
+   * emptied, but only the long way — open the editor, delete, save. For
+   * hosts whose house rule is that emptying a field is a deliberate act,
+   * never a one-click shortcut. `true` (the default) keeps the bubble's own
+   * policy (never on required / disabled / readonly / empty / editing).
+   */
+  showClear = input(true);
+
   protected bubbleMenuCanShow = computed(
     () =>
+      this.showClear() &&
       !this.required() &&
       !this.disabled() &&
       !this.readonly() &&

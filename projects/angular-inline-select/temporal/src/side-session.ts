@@ -12,7 +12,7 @@ import {
   type WritableSignal,
 } from '@angular/core';
 
-import type { EditableClearContext } from 'angular-inline-select';
+import type { EditableClearContext, EditableActionsContext } from 'angular-inline-select';
 
 import { TemporalIntl } from './temporal-intl';
 
@@ -149,9 +149,21 @@ export function makeShapeMemory<V, S>(options: {
   return { shape, twoFields: computed(() => shape() !== options.singleShape) };
 }
 
+/** The actions slot's guards: none of the clear's house rules apply. */
+export const ACTIONS_GUARDS = {
+  required: computed(() => false),
+  disabled: computed(() => false),
+  readonly: computed(() => false),
+} as const;
+
 /**
  * The clear-bubble policy: never on required/disabled/readonly fields,
- * never mid-edit; the single bubble needs ANY value, a range side its own.
+ * never mid-edit, never when the host opted out (`enabled` — the control's
+ * `showClear`); the single bubble needs ANY value, a range side its own.
+ *
+ * Also drives the ACTIONS slot, with the house guards handed in as constant
+ * `false` (`ACTIONS_GUARDS`): actions ignore required / disabled / readonly
+ * on purpose — a readonly value still opens, calls, copies.
  */
 export function makeClearBubbleVisibility(options: {
   required: Signal<boolean>;
@@ -159,9 +171,15 @@ export function makeClearBubbleVisibility(options: {
   readonly: Signal<boolean>;
   editing: Signal<boolean>;
   range: Signal<{ start: unknown; end: unknown }>;
+  enabled?: Signal<boolean>;
 }): { single: Signal<boolean>; start: Signal<boolean>; end: Signal<boolean> } {
   const guards = computed(
-    () => !options.required() && !options.disabled() && !options.readonly() && !options.editing(),
+    () =>
+      (options.enabled?.() ?? true) &&
+      !options.required() &&
+      !options.disabled() &&
+      !options.readonly() &&
+      !options.editing(),
   );
 
   return {
@@ -311,5 +329,38 @@ export function makeSideSessionChrome(
       if (flashTimer !== null) clearTimeout(flashTimer);
       flashTimer = setTimeout(() => revertFlash.set(null), 600);
     },
+  };
+}
+
+/**
+ * The `editableActions` contexts — one per bubble a temporal control can
+ * stamp (`single`, `start`, `end`), each carrying that side's payload from
+ * `data(key)`. Focus callbacks are bound once, like the clear contexts'.
+ */
+export function makeActionsContexts<T>(options: {
+  data: (key: SideKey | 'single') => T;
+  focus: (key: SideKey) => void;
+}): {
+  single: Signal<EditableActionsContext<T>>;
+  start: Signal<EditableActionsContext<T>>;
+  end: Signal<EditableActionsContext<T>>;
+} {
+  const focusStart = () => options.focus('start');
+  const focusEnd = () => options.focus('end');
+
+  const context = (
+    key: SideKey | 'single',
+    side: SideKey | null,
+    focus: () => void,
+  ): Signal<EditableActionsContext<T>> =>
+    computed(() => {
+      const data = options.data(key);
+      return { $implicit: data, data, side, focus };
+    });
+
+  return {
+    single: context('single', null, focusStart),
+    start: context('start', 'start', focusStart),
+    end: context('end', 'end', focusEnd),
   };
 }

@@ -45,29 +45,7 @@ import { ConfirmClearDialog, type ConfirmClearData } from './confirm-clear-dialo
       <mat-icon>backspace</mat-icon>
     </button>
   `,
-  styles: `
-    :host {
-      display: inline-flex;
-    }
-
-    /*
-      The destructive role, spoken in mat system tokens: --mat-sys-error is the
-      M3 equivalent of the library's own error color (the idle error underline
-      resolves to the same token).
-    */
-    .confirm-clear__button {
-      --mat-icon-button-icon-color: var(--mat-sys-error);
-      --mat-icon-button-state-layer-color: var(--mat-sys-error);
-      --mat-icon-button-ripple-color: color-mix(in srgb, var(--mat-sys-error) 12%, transparent);
-      --mat-icon-button-icon-size: 18px;
-      --mat-icon-button-touch-target-display: none;
-
-      width: 32px;
-      height: 32px;
-      padding: 7px;
-      color: var(--mat-sys-error);
-    }
-  `,
+  styleUrls: ['./confirm-clear-button.scss'],
 })
 export class ConfirmClearButton {
   /** The field's clear path — called ONLY if the dialog comes back yes. */

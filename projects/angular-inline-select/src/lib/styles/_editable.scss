@@ -209,6 +209,16 @@
   animation: editable-bubble-enter 0.15s var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
 }
 
+// The bubble's two SLOTS — the consumer's primary actions first, clear last.
+// Each is a group so the template can gate them independently; visually they
+// run as one row of pills on the bubble's own gap. No separator, on purpose
+// (user decision): the ORDER carries the meaning, a hairline read as chrome.
+.editable-bubble__group {
+  display: inline-flex;
+  align-items: center;
+  gap: inherit;
+}
+
 // -----------------------------------------------------------------------------
 // ACTION BUTTONS: the shared pill buttons projected into the panel + bubble.
 // Global (not component-encapsulated) so a CONSUMER-projected button — rendered

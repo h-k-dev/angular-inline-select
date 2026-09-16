@@ -1,0 +1,34 @@
+/* fallback */
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 400;
+  src: url('material-symbols-outlined.woff2') format('woff2');
+}
+
+.material-symbols-outlined {
+  --_icon-size: var(--mat-icon-size, 24px);
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: var(--_icon-size);
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' var(--mat-icon-fill, 1);
+
+  /**
+   * {@link https://github.com/angular/components/issues/31304|Angular Issue #31304: Icon Alignment Workaround}
+   */
+  &.mat-icon {
+    display: block;
+    width: var(--_icon-size);
+    height: var(--_icon-size);
+  }
+}

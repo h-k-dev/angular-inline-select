@@ -1,0 +1,13 @@
+@use '@angular/material' as mat;
+
+.confirm-clear__button {
+  --mat-icon-size: 20px;
+  @include mat.icon-button-overrides(
+    (
+      icon-size: var(--mat-icon-size),
+      state-layer-size: 28px,
+      touch-target-size: 32px,
+      icon-color: var(--mat-sys-error),
+    )
+  );
+}

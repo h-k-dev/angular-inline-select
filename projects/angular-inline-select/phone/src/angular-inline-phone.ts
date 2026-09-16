@@ -21,9 +21,11 @@ import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 import {
   AngularInlineText,
   EditableClearTemplate,
+  EditableActionsTemplate,
   EditablePrefix,
   EditableSuffix,
   type EditableClearContext,
+  type EditableActionsContext,
   type InlineTextSaved,
 } from 'angular-inline-select';
 
@@ -34,6 +36,18 @@ import {
   type PhoneNumberKind,
   type PhoneParseWarning,
 } from './phone-codec';
+
+/** The `editableActions` payload: everything a house needs to act on a phone number. */
+export interface InlinePhoneActions {
+  /** The committed value — E.164 when it parses, else the raw string an injection kept. */
+  value: string | null;
+  e164: string | null;
+  /** A ready `tel:` href, or null when the value does not parse. */
+  tel: string | null;
+  country: PhoneCountry | undefined;
+  national: string | null;
+  international: string | null;
+}
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlinePhoneSaved {
@@ -211,9 +225,53 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
    */
   clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
 
+  /** Forwarded to the inner control: `false` never offers the hover-bubble clear. */
+  showClear = input(true);
+
   private contentClear = contentChild(EditableClearTemplate);
 
   protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
+
+  /** The primary-actions slot, forwarded to the inner control with THIS payload. */
+  actionsTemplate = input<TemplateRef<EditableActionsContext<InlinePhoneActions>> | undefined>(
+    undefined,
+  );
+
+  private contentActions = contentChild(EditableActionsTemplate<InlinePhoneActions>);
+
+  protected actionsTpl = computed(
+    () => this.actionsTemplate() ?? this.contentActions()?.templateRef,
+  );
+
+  /**
+   * What a house needs to ACT on a phone number: the E.164 value, a ready
+   * `tel:` href, the country, and both formats — so a template can render an
+   * anchor, or hand the number to its own dialer service.
+   */
+  protected actionsData = computed<InlinePhoneActions>(() => {
+    const canonical = this.canonical();
+    const empty: InlinePhoneActions = {
+      value: canonical,
+      e164: null,
+      tel: null,
+      country: this.country(),
+      national: null,
+      international: null,
+    };
+    if (canonical === null) return empty;
+
+    const result = this.codec().parse(canonical, this.defaultCountry());
+    if (!result?.ok) return empty;
+
+    return {
+      value: canonical,
+      e164: result.e164,
+      tel: `tel:${result.e164}`,
+      country: result.country ?? this.country(),
+      national: result.national,
+      international: result.international,
+    };
+  });
 
   /** Form Value Contract: touch — forwarded from the inner control. */
   touch = output<void>();

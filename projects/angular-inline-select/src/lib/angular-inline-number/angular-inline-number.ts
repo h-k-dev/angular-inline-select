@@ -18,12 +18,21 @@ import {
 import { EditablePrefix, EditableSuffix } from '../angular-inline-text/editable-affix';
 import { EditableClearTemplate, type EditableClearContext } from '../bubble-menu/editable-clear';
 import {
+  EditableActionsTemplate,
+  type EditableActionsContext,
+} from '../bubble-menu/editable-actions';
+import {
   makeLocaleNumberCodec,
   formatLocaleNumber,
   parseLocaleNumber,
   localeNumberChars,
   type LocaleNumberOptions,
 } from '../utils/locale-number/locale-number';
+
+/** The `editableActions` payload: the committed number (or the raw string an unparseable injection kept). */
+export interface InlineNumberActions {
+  value: number | string | null;
+}
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlineNumberSaved {
@@ -187,9 +196,25 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
    */
   clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
 
+  /** Forwarded to the inner control: `false` never offers the hover-bubble clear. */
+  showClear = input(true);
+
   private contentClear = contentChild(EditableClearTemplate);
 
   protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
+
+  /** The primary-actions slot, forwarded to the inner control with THIS payload. */
+  actionsTemplate = input<TemplateRef<EditableActionsContext<InlineNumberActions>> | undefined>(
+    undefined,
+  );
+
+  private contentActions = contentChild(EditableActionsTemplate<InlineNumberActions>);
+
+  protected actionsTpl = computed(
+    () => this.actionsTemplate() ?? this.contentActions()?.templateRef,
+  );
+
+  protected actionsData = computed<InlineNumberActions>(() => ({ value: this.value() ?? null }));
 
   /**
    * Which decimal separator the draft accepts and the idle text shows.

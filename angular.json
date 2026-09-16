@@ -29,7 +29,7 @@
                 "input": "projects/app/public"
               }
             ],
-            "styles": ["projects/app/src/styles.scss"]
+            "styles": ["projects/assets/fonts/_material-symbols-outline.scss", "projects/app/src/styles.scss"]
           },
           "configurations": {
             "production": {

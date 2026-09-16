@@ -55,17 +55,26 @@
 <bubble-menu
   [origin]="field"
   [side]="effectiveClearBubbleSide()"
-  [canShow]="clearCanShow()"
+  [canShow]="clearCanShow() || actionsCanShow()"
   [armed]="scopeHover()"
 >
-  @if (clearTpl(); as tpl) {
-    <ng-container *ngTemplateOutlet="tpl; context: clearContext()" />
-  } @else {
-    <button
-      editableClearButton
-      [attr.aria-label]="clearContext().label"
-      (clear)="clearBubble()"
-    ></button>
+  @if (actionsCanShow()) {
+    <span class="editable-bubble__group editable-bubble__actions">
+      <ng-container *ngTemplateOutlet="actionsTpl()!; context: actionsContext()" />
+    </span>
+  }
+  @if (clearCanShow()) {
+    <span class="editable-bubble__group editable-bubble__clear">
+      @if (clearTpl(); as tpl) {
+        <ng-container *ngTemplateOutlet="tpl; context: clearContext()" />
+      } @else {
+        <button
+          editableClearButton
+          [attr.aria-label]="clearContext().label"
+          (clear)="clearBubble()"
+        ></button>
+      }
+    </span>
   }
 </bubble-menu>
 

@@ -977,9 +977,100 @@ adornments outside) — caret math, replay and filtering assume one flat
 text node. Airtable made the same call (only the URL field links). A
 read-only rendered overlay would be a separate conversation.
 
+**Shipped ahead (2026-09-16): `utils/link-detection` — `detectLink(value)`.**
+Absolute http(s) URLs as they are; BARE DOMAINS (`reddit.com`, user ask)
+given `https://`, guarded by a TLD check (two letters, or a generic-TLD
+list) so `file.pdf` / `index.html` stay text; whitespace and `@` are out.
+The grid's Website row and iusta's text-v2 stock action both use it; the
+link control's codec starts from it.
+
 **Build order:** codec + specs → control with `draftText` → the open seam
 → Cmd/Ctrl+click + hint → core `m-editable-link` (house anchor styling;
 first consumers: the two settings pages hand-writing `mailto:`).
+
+### The clear opt-out (`showClear`) — 2026-09-16
+
+**The ask (iusta core).** The custom-field house rule: emptying a value is
+a DELIBERATE act — open the editor, delete, save — never a one-click
+hover shortcut. So every control with a clear bubble (text, number, phone,
+JSON, date, time, duration) gained `showClear = input(true)`: `false`
+never offers the bubble, stock button or `clearTemplate` alike; the
+bubble's own policy (never on required / disabled / readonly / empty /
+editing) still applies on top of `true`. Number and phone forward it to
+the inner text control; date and time hand it to
+`makeClearBubbleVisibility` as its new optional `enabled` term (declared
+ABOVE that field — TS2729 otherwise), duration folds it into its own
+`clearCanShow`. The grid playground has a "Clear: on/off" toggle wired to
+all 22 editables. Docs: `SHOW_CLEAR_INPUT` beside `clearTemplate` on every
+variant. Specs: text (bubble gone, template or not; back on re-enable) +
+date (neither side).
+
+### The primary-actions slot (`editableActions`) — 2026-09-16
+
+**The ask (iusta core).** Buttons that act ON the value — open the link,
+call the number through the house's own dialer, and "they can have many".
+So the bubble grew a second SLOT beside clear, and the split is what makes
+it work: clear is a destructive house-rule affordance (`showClear`);
+actions are value-typed and consumer-owned.
+
+- **The control renders nothing.** `ng-template[editableActions]` content
+  (or the `actionsTemplate` input for composition) is stamped BEFORE clear,
+  in its own `.editable-bubble__group` (no separator — user decision: the
+  order carries the meaning), with an
+  `EditableActionsContext<T>` — `{ $implicit: data, data, side, focus }`.
+  The DATA is typed per control: text `{ value }`; number
+  `InlineNumberActions { value }`; phone `InlinePhoneActions { value, e164,
+tel, country, national, international }` (a ready `tel:` href, or the
+  number for a dialer service); date `InlineDateActions { value: IsoDate,
+side }` and time `{ value: DbDateTime, side }` — one stamp per side, each
+  with its own day/instant; duration `{ value }`. Wrappers (number, phone)
+  forward the template plus their payload through the text control's
+  `actionsData` input.
+- **Gates are per slot.** Clear keeps its policy plus `showClear`. Actions
+  show whenever a template exists and the value is non-empty and not
+  mid-edit — and IGNORE required / disabled / readonly on purpose: a
+  readonly phone still calls, a required link still opens. The bubble
+  shows when either slot has something. Temporal: `makeClearBubbleVisibility`
+  reused with `ACTIONS_GUARDS` (constant-false house guards);
+  `makeActionsContexts` mirrors `makeClearContexts`.
+- **`editableAction` directive** on each consumer button: the mousedown
+  guard (focus never leaves the field, a hover scope's press forwarding
+  never fires); clicks and anchor navigation untouched.
+- **No stock default** for text/number/phone/temporal — without a template
+  there is nothing sensible to offer. The link control (next) is the one
+  exception: it ships a stock real anchor.
+- **Grid:** Website (open_in_new, href from the raw text until the link
+  control), Email (`mailto:`), Telephone (`tel:` from `data.tel`) — three
+  `mat-icon-button` anchors, `.field-grid__action` sized to the pill row.
+  Docs: `ACTIONS_TEMPLATE_INPUT` on every variant. Specs: 5 text (payload +
+  order, readonly keeps actions, showClear false keeps actions, empty offers
+  nothing, press keeps focus) + 1 date (per side, readonly).
+- **THE FLASH TRAP (user-found, first hover of a real mouse on a grid
+  button):** the bubble had ONE hover flag with ONE grace timer, shared by
+  the origin, the bubble itself and the scope's `armed`. A real pointer
+  leaving the row onto the bubble fires the bubble's mouseenter FIRST
+  (synchronous → open), then change detection runs the `armed` effect,
+  which scheduled a close on the same flag → 150ms later the bubble
+  vanished under the pointer, the row beneath re-armed it, the next pixel
+  replayed it — a constant flash. Invisible to the tool's synthetic hover
+  (no boundary events fire). Fix: THREE INDEPENDENT hover terms
+  (`hoverTerm()` — origin, self, scope), each with its own grace timer; a
+  leave only ever clears its own. Two bubble specs pin the exact sequence.
+- **The focus hold (same day).** A fourth bubble term: the origin HOLDING
+  FOCUS keeps the bubble up — a field with the caret in it shows its
+  actions with no pointer at all. Why: touch has no hover (the tap that
+  placed the caret is what reveals the call button), and Tab lands on
+  visible actions for keyboard users. Released when focus leaves the
+  origin for anywhere but the bubble itself (a `viewChild` on the bubble
+  element — a template ref can't reach out of the overlay's embedded
+  view); no grace, focus is discrete. Editing still hides everything (the
+  panel is the surface), so temporal fields — whose focus opens the
+  session — show nothing on focus alone. Expect: after a save the text
+  control refocuses the display, so the bubble appears right after a
+  commit. Spec pins hold, keep-on-move-into-bubble, release.
+- **Open:** keyboard reach into the bubble (an "actions" key on the focused
+  field) — already true for clear, matters more now; JSON has no actions
+  slot yet.
 
 ## Later (needs real behavior, not just a declared input)
 

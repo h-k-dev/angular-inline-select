@@ -22,6 +22,9 @@
   [prefixTemplate]="prefixTpl()"
   [suffixTemplate]="suffixTpl()"
   [clearTemplate]="clearTpl()"
+  [showClear]="showClear()"
+  [actionsTemplate]="actionsTpl()"
+  [actionsData]="actionsData()"
   (touch)="touch.emit()"
   (saved)="handleInnerSaved($event)"
 >

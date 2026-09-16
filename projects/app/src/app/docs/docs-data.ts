@@ -141,6 +141,24 @@ const CLEAR_TEMPLATE_INPUT: ApiMember = {
     'Replaces the stock clear button inside the hover bubble; direct consumers use `ng-template[editableClear]` content instead. The context — { $implicit: clear, clear, side, label, focus } — hands over the clear CALLBACK, so a consumer can confirm in a dialog first and commit only on yes (clearing is a commit: it writes, touches, and emits saved in one go); focus puts the keyboard back on the field once the dialog closes. See the Form Grid pattern for one button serving every field.',
 };
 
+/** The clear seam's opt-out — beside `clearTemplate` on every variant. */
+const SHOW_CLEAR_INPUT: ApiMember = {
+  name: 'showClear',
+  type: 'boolean',
+  default: 'true',
+  description:
+    'Opt-out of the hover-bubble clear (stock button and `clearTemplate` alike). `false` never offers it: the value can still be emptied the long way — open, delete, save — for hosts whose rule is that emptying a field is a deliberate act, never a one-click shortcut. The bubble’s own policy (never on required / disabled / readonly / empty / editing) applies on top of `true`.',
+};
+
+/** The primary-actions slot — beside the clear seam on every variant. */
+const ACTIONS_TEMPLATE_INPUT: ApiMember = {
+  name: 'actionsTemplate',
+  type: 'TemplateRef<EditableActionsContext<…>> | undefined',
+  default: 'undefined',
+  description:
+    'The PRIMARY-ACTIONS slot of the hover bubble, stamped before clear: consumer-owned buttons that act ON the value — open the link, call the number. The control renders nothing itself; it hands over DATA typed per control (text { value }, number { value }, phone { value, e164, tel, country, national, international }, date/time { value, side }, duration { value }) and `focus` for the dialog case. Direct consumers use `ng-template[editableActions]` content; put `editableAction` on each button so a press never moves focus off the field. Gates are per slot: actions show whenever the value is non-empty and not mid-edit — readonly and disabled fields keep their actions, unlike clear.',
+};
+
 const ARIA_LABEL_INPUT: ApiMember = {
   name: 'ariaLabel',
   type: 'string | undefined',
@@ -630,6 +648,8 @@ export const DOCS: Record<string, SectionDocs> = {
           },
           ...AFFIX_INPUTS,
           CLEAR_TEMPLATE_INPUT,
+          SHOW_CLEAR_INPUT,
+          ACTIONS_TEMPLATE_INPUT,
           {
             name: 'hintTemplate',
             type: 'TemplateRef<unknown> | undefined',
@@ -727,6 +747,8 @@ export const DOCS: Record<string, SectionDocs> = {
           },
           ...AFFIX_INPUTS,
           CLEAR_TEMPLATE_INPUT,
+          SHOW_CLEAR_INPUT,
+          ACTIONS_TEMPLATE_INPUT,
         ],
         outputs: [
           {
@@ -817,6 +839,8 @@ export const DOCS: Record<string, SectionDocs> = {
           ARIA_LABEL_INPUT,
           ...AFFIX_INPUTS,
           CLEAR_TEMPLATE_INPUT,
+          SHOW_CLEAR_INPUT,
+          ACTIONS_TEMPLATE_INPUT,
         ],
         outputs: [
           {
@@ -923,6 +947,8 @@ export const DOCS: Record<string, SectionDocs> = {
           },
           ...AFFIX_INPUTS,
           CLEAR_TEMPLATE_INPUT,
+          SHOW_CLEAR_INPUT,
+          ACTIONS_TEMPLATE_INPUT,
         ],
         outputs: [
           {
@@ -1030,6 +1056,8 @@ export const DOCS: Record<string, SectionDocs> = {
           },
           ...AFFIX_INPUTS,
           CLEAR_TEMPLATE_INPUT,
+          SHOW_CLEAR_INPUT,
+          ACTIONS_TEMPLATE_INPUT,
         ],
         outputs: [
           {
@@ -1088,6 +1116,8 @@ export const DOCS: Record<string, SectionDocs> = {
           },
           ...AFFIX_INPUTS,
           CLEAR_TEMPLATE_INPUT,
+          SHOW_CLEAR_INPUT,
+          ACTIONS_TEMPLATE_INPUT,
         ],
         outputs: [
           {
@@ -1196,6 +1226,8 @@ export const DOCS: Record<string, SectionDocs> = {
           },
           ...AFFIX_INPUTS,
           CLEAR_TEMPLATE_INPUT,
+          SHOW_CLEAR_INPUT,
+          ACTIONS_TEMPLATE_INPUT,
         ],
         outputs: [
           {
