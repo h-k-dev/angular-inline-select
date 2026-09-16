@@ -925,3 +925,33 @@ describe('AngularInlineTime — clear affordance', () => {
     expect(host.sessions.at(-1)).toMatchObject({ changed: true, side: 'start' });
   });
 });
+
+// =============================================================================
+// The interactive unit — a press on the wrapper's own space lands in the input
+// =============================================================================
+
+describe('AngularInlineTime — the interactive unit', () => {
+  it('a press in the unit outside the input focuses it and opens the session', () => {
+    const h = setup();
+    const unit = h.fixture.nativeElement.querySelector('.inline-time') as HTMLElement;
+    expect(unit.classList.contains('editable-unit')).toBe(true);
+
+    const event = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: 400,
+      clientY: 8,
+    });
+    unit.dispatchEvent(event);
+    h.fixture.detectChanges();
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(h.input());
+
+    // A press on the input itself stays the browser's business
+    const own = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 });
+    h.input().dispatchEvent(own);
+    expect(own.defaultPrevented).toBe(false);
+  });
+});

@@ -263,3 +263,29 @@ describe('AngularInlineDuration — clear affordance', () => {
     expect(host.sessions).toEqual([{ value: null, changed: true }]);
   });
 });
+
+// =============================================================================
+// The interactive unit — a press on the wrapper's own space lands in the input
+// =============================================================================
+
+describe('AngularInlineDuration — the interactive unit', () => {
+  it('a press in the unit outside the input focuses it and opens the session', () => {
+    const h = setup();
+    const unit = h.fixture.nativeElement.querySelector('.inline-duration') as HTMLElement;
+    expect(unit.classList.contains('editable-unit')).toBe(true);
+
+    const event = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: 400,
+      clientY: 8,
+    });
+    unit.dispatchEvent(event);
+    h.fixture.detectChanges();
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(h.input());
+    expect(h.input().selectionStart).toBe(h.input().value.length);
+  });
+});

@@ -3,8 +3,19 @@
   and caret-able, but every mutation is intercepted — the page never reflows
   while typing. Affixes live outside the contenteditable: never part of the
   draft, never reachable by the caret.
+
+  THE INTERACTIVE UNIT: this box plus its shape (`::after`, styles) is what
+  the pointer meets: hover arms the bubble and fades the shape in, a press
+  anywhere in it focuses the text with the caret on the nearest character (a
+  native input's padding, generalised), keyboard focus keeps the shape up.
+  An ancestor `editableHoverScope` extends all of that to its container.
 -->
-<span #fieldArea class="editable-text__field">
+<span
+  #fieldArea
+  class="editable-text__field editable-unit"
+  (mousedown)="handleFieldMouseDown($event)"
+  (editableScopePress)="handleScopePress($event)"
+>
   @if (prefixTpl(); as prefix) {
     <span class="editable-text__affix editable-text__affix--prefix" aria-hidden="true">
       <ng-container *ngTemplateOutlet="prefix" />
@@ -180,6 +191,7 @@
   [origin]="fieldArea"
   [contentOffset]="clearContentOffset()"
   [canShow]="bubbleMenuCanShow()"
+  [armed]="scopeHover()"
 >
   @if (clearTpl(); as tpl) {
     <ng-container *ngTemplateOutlet="tpl; context: clearContext" />

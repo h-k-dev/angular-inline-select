@@ -11,7 +11,14 @@ import {
 import { EditableSuffix } from './editable-affix';
 import { EditableClear, EditableClearTemplate } from '../bubble-menu/editable-clear';
 import { detectSlashToken } from './editable-menu';
-import { replayEdit, filterChars, getSelectionOffsets, setCaretOffset, alignCaret } from './caret';
+import {
+  replayEdit,
+  filterChars,
+  getSelectionOffsets,
+  setCaretOffset,
+  alignCaret,
+  caretOffsetNearPoint,
+} from './caret';
 
 // =============================================================================
 // Hosts — one per binding mode
@@ -1313,5 +1320,179 @@ describe('AngularInlineText — draftText (a rendering the editor does not type 
 
     expect(h.host.value()).toBe('1.250.000,50');
     expect(h.display().textContent).toBe('1.250.000,50');
+  });
+});
+
+// =============================================================================
+// The interactive unit — the halo around the text is the hover, press and
+// focus target (a native input's box, restored)
+// =============================================================================
+
+describe('caretOffsetNearPoint', () => {
+  type Rect = {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+    width: number;
+    height: number;
+  };
+  const rect = (left: number, top: number, width: number, height: number): Rect => ({
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+  });
+
+  function textRoot(text: string, rects: Rect[]) {
+    const root = document.createElement('span');
+    root.textContent = text;
+    document.body.appendChild(root);
+    root.getClientRects = () => rects as unknown as DOMRectList;
+    return root;
+  }
+
+  afterEach(() => {
+    delete (document as { caretRangeFromPoint?: unknown }).caretRangeFromPoint;
+    delete (document as { caretPositionFromPoint?: unknown }).caretPositionFromPoint;
+  });
+
+  it('without layout (no line boxes) the caret goes to the end', () => {
+    const root = textRoot('hello', []);
+    expect(caretOffsetNearPoint(root, 0, 0)).toBe(5);
+  });
+
+  it('clamps the point into the nearest line and asks the browser for the character there', () => {
+    const root = textRoot('hello world', [rect(100, 10, 80, 20), rect(100, 30, 40, 20)]);
+    const seen: [number, number][] = [];
+    (document as { caretRangeFromPoint?: unknown }).caretRangeFromPoint = (
+      x: number,
+      y: number,
+    ) => {
+      seen.push([x, y]);
+      const range = document.createRange();
+      range.setStart(root.firstChild!, 3);
+      return range;
+    };
+
+    // A press in the halo ABOVE the first line, past its end: clamped to the
+    // first line's inline-end edge at its vertical centre.
+    expect(caretOffsetNearPoint(root, 500, 2)).toBe(3);
+    expect(seen).toEqual([[179, 20]]);
+  });
+
+  it('a hit outside the root falls back to the nearest edge', () => {
+    const root = textRoot('hello', [rect(100, 10, 80, 20)]);
+    (document as { caretRangeFromPoint?: unknown }).caretRangeFromPoint = () => {
+      const range = document.createRange();
+      range.setStart(document.body, 0);
+      return range;
+    };
+
+    expect(caretOffsetNearPoint(root, 10, 20)).toBe(0); // before the first line
+    expect(caretOffsetNearPoint(root, 300, 20)).toBe(5); // past it
+  });
+
+  it('without the hit-testing API: start before the first line, end anywhere else', () => {
+    const root = textRoot('hello', [rect(100, 10, 80, 20), rect(100, 30, 40, 20)]);
+
+    expect(caretOffsetNearPoint(root, 10, 20)).toBe(0);
+    expect(caretOffsetNearPoint(root, 10, 40)).toBe(5); // before the SECOND line: no offset known
+    expect(caretOffsetNearPoint(root, 300, 20)).toBe(5);
+  });
+});
+
+@Component({
+  imports: [AngularInlineText, EditableSuffix],
+  template: `
+    <angular-inline-text [(value)]="value" [disabled]="disabled()">
+      <ng-template editableSuffix>
+        <span class="unit">€</span>
+        <button type="button" class="chrome" (mousedown)="chromePressed = chromePressed + 1">
+          i
+        </button>
+      </ng-template>
+    </angular-inline-text>
+  `,
+})
+class UnitHost {
+  value = signal('initial');
+  disabled = signal(false);
+  chromePressed = 0;
+}
+
+describe('AngularInlineText — the interactive unit', () => {
+  let h: Harness<UnitHost>;
+
+  const field = () => h.fixture.nativeElement.querySelector('.editable-text__field') as HTMLElement;
+
+  function press(target: Element, init: MouseEventInit = {}): MouseEvent {
+    const event = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      ...init,
+    });
+    target.dispatchEvent(event);
+    h.fixture.detectChanges();
+    return event;
+  }
+
+  beforeEach(() => {
+    h = setup(UnitHost);
+  });
+
+  it('a press in the halo focuses the text with the caret at the nearest character', () => {
+    const event = press(field(), { clientX: 400, clientY: 8 });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(h.display());
+    // jsdom has no layout: the nearest character is the end
+    expect(getSelectionOffsets(h.display())).toEqual({ start: 7, end: 7 });
+  });
+
+  it('a press in the halo BEFORE the text lands at the start', () => {
+    h.display().getClientRects = () =>
+      [
+        { left: 100, right: 180, top: 10, bottom: 30, width: 80, height: 20 },
+      ] as unknown as DOMRectList;
+
+    press(field(), { clientX: 10, clientY: 20 });
+
+    expect(document.activeElement).toBe(h.display());
+    expect(getSelectionOffsets(h.display())).toEqual({ start: 0, end: 0 });
+  });
+
+  it('a press on a non-interactive affix counts as the halo', () => {
+    press(h.fixture.nativeElement.querySelector('.unit'), { clientX: 400, clientY: 8 });
+
+    expect(document.activeElement).toBe(h.display());
+  });
+
+  it('presses on the text itself, on chrome, with shift, or on a locked field are left alone', () => {
+    expect(press(h.display()).defaultPrevented).toBe(false);
+
+    expect(press(h.fixture.nativeElement.querySelector('.chrome')).defaultPrevented).toBe(false);
+    expect(h.host.chromePressed).toBe(1);
+
+    expect(press(field(), { shiftKey: true }).defaultPrevented).toBe(false);
+
+    h.host.disabled.set(true);
+    h.fixture.detectChanges();
+    expect(press(field()).defaultPrevented).toBe(false);
+    expect(document.activeElement).not.toBe(h.display());
+  });
+
+  it('a press never opens the session — the first keystroke still does', async () => {
+    press(field(), { clientX: 400, clientY: 8 });
+    expect(h.editable().editing()).toBe(false);
+
+    await typeText(h, 'typed');
+    expect(h.editable().editing()).toBe(true);
+
+    // While the panel is open the dimmed unit ignores presses (the scrim owns them)
+    expect(press(field()).defaultPrevented).toBe(false);
   });
 });

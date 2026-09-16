@@ -30,6 +30,7 @@ import {
   type EditableScopeAdvanceMode,
   type EditableScopeBlockedPolicy,
 } from '../../../../../../angular-inline-select/src/lib/utils/editable-scope/editable-scope';
+import { EditableHoverScope } from '../../../../../../angular-inline-select/src/lib/utils/editable-hover-scope/editable-hover-scope';
 import { AngularInlineText } from '../../../../../../angular-inline-select/src/lib/angular-inline-text/angular-inline-text';
 import { AngularInlineNumber } from '../../../../../../angular-inline-select/src/lib/angular-inline-number/angular-inline-number';
 import type { LocaleNumberOptions } from '../../../../../../angular-inline-select/src/lib/utils/locale-number/locale-number';
@@ -167,6 +168,7 @@ function initialRecord(): RecordModel {
     FormField,
 
     // Components
+    EditableHoverScope,
     AngularInlineText,
     AngularInlineNumber,
     AngularInlinePhone,

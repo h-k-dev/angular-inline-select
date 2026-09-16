@@ -1,9 +1,4 @@
-import {
-  composeDbEntry,
-  localDayOf,
-  localTimeOf,
-  rollDbEntryForward,
-} from './db-entry';
+import { composeDbEntry, localDayOf, localTimeOf, rollDbEntryForward } from './db-entry';
 
 // All expectations pin an explicit display zone, so the specs are
 // machine-independent — DST cases NEED a zone that actually observes it.

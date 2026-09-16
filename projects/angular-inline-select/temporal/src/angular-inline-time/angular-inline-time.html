@@ -8,11 +8,14 @@
   it from a side's own click (there is no trigger button).
 -->
 <span
-  class="inline-time"
+  class="inline-time editable-unit"
   cdkOverlayOrigin
   #origin="cdkOverlayOrigin"
   #field
   [class.inline-time--invalid]="errorsVisible()"
+  [class.inline-time--scoped]="hasHoverScope()"
+  (mousedown)="handleUnitMouseDown($event)"
+  (editableScopePress)="handleScopePress($event)"
 >
   @if (prefixTpl(); as tpl) {
     <span class="inline-time__affix" aria-hidden="true">
@@ -86,7 +89,12 @@
     </span>
 
     <!-- Range: a bubble per side, each opening OUTWARD (start→left, end→right). -->
-    <bubble-menu [origin]="startInput" side="start" [canShow]="clearCanShowStart()">
+    <bubble-menu
+      [origin]="startInput"
+      side="start"
+      [canShow]="clearCanShowStart()"
+      [armed]="scopeHover()"
+    >
       @if (clearTpl(); as tpl) {
         <ng-container *ngTemplateOutlet="tpl; context: clearContextStart()" />
       } @else {
@@ -97,7 +105,12 @@
         ></button>
       }
     </bubble-menu>
-    <bubble-menu [origin]="endInput" side="end" [canShow]="clearCanShowEnd()">
+    <bubble-menu
+      [origin]="endInput"
+      side="end"
+      [canShow]="clearCanShowEnd()"
+      [armed]="scopeHover()"
+    >
       @if (clearTpl(); as tpl) {
         <ng-container *ngTemplateOutlet="tpl; context: clearContextEnd()" />
       } @else {
@@ -140,6 +153,7 @@
     [origin]="field"
     [side]="effectiveClearBubbleSide()"
     [canShow]="clearCanShowSingle()"
+    [armed]="scopeHover()"
   >
     @if (clearTpl(); as tpl) {
       <ng-container *ngTemplateOutlet="tpl; context: clearContextSingle()" />
@@ -161,7 +175,7 @@
   [cdkConnectedOverlayPositions]="overlayPositions"
   [cdkConnectedOverlayViewportMargin]="8"
   [cdkConnectedOverlayPush]="true"
-  (overlayOutsideClick)="dismissPanel()"
+  (overlayOutsideClick)="handleOutsideClick($event)"
 >
   <div #panel class="inline-time__panel" (focusout)="handleFocusOut()">
     <div class="inline-time__errors" [hidden]="!errorSlotVisible()">

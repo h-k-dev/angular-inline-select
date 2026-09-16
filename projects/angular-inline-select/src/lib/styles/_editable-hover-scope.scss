@@ -1,0 +1,52 @@
+// =============================================================================
+// editable-hover-scope — the CONTAINER as the interactive unit.
+//
+// `[editableHoverScope]` marks a row / card / cell as the surface that owns
+// the hover: the inline controls inside find it by DOM ancestor and arm their
+// bubbles on its hover and focus-within; the scope itself paints ONE shape
+// behind its content — the YouTube lockup / M3 state layer, at the row level
+// (Gmail rows, Notion property rows, Figma's properties panel). It paints on
+// HOVER ONLY: a focused row keeps the field's solid underline as its signal,
+// so at most one row is ever painted and neighbouring shapes never stack.
+//
+// The scope owns the box, so there is nothing to measure: the shape is the
+// scope's own pseudo-element, larger by `--editable-hover-scope-inset`,
+// behind the content (`z-index: -1` inside the scope's own stacking context)
+// and hit-testable — the reach into the gap between rows counts as the row.
+// Table rows: pseudo-elements on <tr> are unreliable across engines — paint
+// through `.editable-hover-scope--active` on the cells instead.
+//
+// Theming: var(--editable-hover-scope-<token>, var(--mat-sys-<token>, <fallback>)).
+// =============================================================================
+.editable-hover-scope {
+  position: relative;
+  isolation: isolate;
+
+  &::after {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: calc(-1 * var(--editable-hover-scope-inset, 0.5rem));
+    border-radius: var(--editable-hover-scope-radius, var(--mat-sys-corner-medium, 0.75rem));
+    background: var(
+      --editable-hover-scope-color,
+      oklch(from var(--mat-sys-on-surface, #000) l c h / 0.05)
+    );
+    opacity: 0;
+    transform: scale(0.985);
+    transition:
+      opacity 0.15s var(--editable-ease-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      transform 0.15s var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
+  }
+
+  &--active::after {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editable-hover-scope::after {
+    transition: none;
+  }
+}

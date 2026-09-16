@@ -1,3 +1,5 @@
+@use '../inline-unit';
+
 :host {
   display: inline;
 }
@@ -7,6 +9,9 @@
   align-items: baseline;
   gap: 0.25ch;
   max-width: 100%;
+
+  // The interactive unit: the wrapper's shape is the halo (see _inline-unit.scss).
+  @include inline-unit.unit;
 }
 
 /* The family look, on an input (see the date control for the rationale). */

@@ -4,7 +4,7 @@ import { By } from '@angular/platform-browser';
 import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineDate, type InlineDateSaved } from './angular-inline-date';
-import { EditableClear, EditableClearTemplate } from 'angular-inline-select';
+import { EditableClear, EditableClearTemplate, EditableHoverScope } from 'angular-inline-select';
 import {
   parseDateInput,
   formatIsoDate,
@@ -1147,5 +1147,150 @@ describe('AngularInlineDate — unresolved injected values', () => {
     inject('another-bad-entry');
     expect(control.resolved()).toEqual({ start: false, end: true });
     expect(h.start().classList).toContain('inline-date__input--unresolved');
+  });
+});
+
+// =============================================================================
+// The interactive unit — the wrapper's shape is the press target; a press
+// outside the inputs lands in the nearest one (a native input's padding,
+// generalised across the pair) — and the hover scope above it
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineDate, EditableHoverScope],
+  template: `
+    <div class="row" editableHoverScope>
+      <span class="label">Deadline</span>
+      <span class="cell"><angular-inline-date [(value)]="value" locale="en" [now]="now" /></span>
+    </div>
+  `,
+})
+class ScopedDateHost {
+  value = signal<InlineDateValue>(db('2026-05-12'));
+  now = () => NOW;
+}
+
+describe('AngularInlineDate — the interactive unit', () => {
+  function unitPress(h: Harness<unknown>, target: Element, init: MouseEventInit = {}) {
+    const event = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      ...init,
+    });
+    target.dispatchEvent(event);
+    h.fixture.detectChanges();
+    return event;
+  }
+
+  it('a press in the unit outside the inputs focuses the input and opens the calendar', () => {
+    const h = setupHost(DateFormHost);
+    const unit = h.fixture.nativeElement.querySelector('.inline-date') as HTMLElement;
+    expect(unit.classList.contains('editable-unit')).toBe(true);
+
+    const event = unitPress(h, unit, { clientX: 400, clientY: 8 });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(h.start());
+    expect(h.panel()).not.toBeNull(); // focus does what focus does: the session opens, the calendar shows
+  });
+
+  it('a range press lands in the NEAREST side, caret at the nearest edge', () => {
+    const h = setupHost(DateShapeHost);
+    h.host.ranged.set(true);
+    h.host.value.set({ start: db('2026-05-12'), end: db('2026-05-14') });
+    h.fixture.detectChanges();
+
+    const box = (left: number) => () =>
+      ({ left, width: 80, top: 10, height: 20, right: left + 80, bottom: 30 }) as DOMRect;
+    const end = h.end()!;
+    h.start().getBoundingClientRect = box(100);
+    end.getBoundingClientRect = box(220);
+    const unit = h.fixture.nativeElement.querySelector('.inline-date') as HTMLElement;
+
+    unitPress(h, unit, { clientX: 400, clientY: 20 }); // past the end input
+    expect(document.activeElement).toBe(end);
+    expect(end.selectionStart).toBe(end.value.length);
+
+    unitPress(h, unit, { clientX: 10, clientY: 20 }); // before the start input
+    expect(document.activeElement).toBe(h.start());
+    expect(h.start().selectionStart).toBe(0);
+  });
+
+  it('presses on an input or on the 📅 trigger are left alone', () => {
+    const h = setupHost(DateFormHost);
+
+    expect(unitPress(h, h.start()).defaultPrevented).toBe(false);
+    const trigger = h.fixture.nativeElement.querySelector('.inline-date__trigger') as HTMLElement;
+    // The trigger prevents its own mousedown (focus stays in the field) — the unit adds nothing
+    expect(unitPress(h, trigger).defaultPrevented).toBe(true);
+    expect(document.activeElement).not.toBe(h.start());
+  });
+
+  describe('inside a hover scope', () => {
+    let fixture: ComponentFixture<ScopedDateHost>;
+    const row = () => fixture.nativeElement.querySelector('.row') as HTMLElement;
+    const unit = () => fixture.nativeElement.querySelector('.inline-date') as HTMLElement;
+    const input = () =>
+      fixture.nativeElement.querySelector('.inline-date__input') as HTMLInputElement;
+
+    beforeEach(async () => {
+      fixture = TestBed.createComponent(ScopedDateHost);
+      fixture.detectChanges();
+      await fixture.whenStable(); // the unit finds its scope after the first render
+      fixture.detectChanges();
+    });
+
+    it('marks itself scoped and arms its bubble on the scope’s hover', async () => {
+      expect(unit().classList.contains('inline-date--scoped')).toBe(true);
+      expect(document.querySelector('.editable-bubble')).toBeNull();
+
+      row().dispatchEvent(new MouseEvent('mouseenter'));
+      fixture.detectChanges();
+      expect(document.querySelector('.editable-bubble')).not.toBeNull();
+
+      row().dispatchEvent(new MouseEvent('mouseleave'));
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      fixture.detectChanges();
+      expect(document.querySelector('.editable-bubble')).toBeNull();
+    });
+
+    it('a press on the row’s space is forwarded into the input', () => {
+      const event = new MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        clientX: 500,
+        clientY: 5,
+      });
+      fixture.nativeElement.querySelector('.cell').dispatchEvent(event);
+      fixture.detectChanges();
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(input());
+    });
+
+    it('the click that completes a forwarded press never dismisses the calendar it just opened', async () => {
+      const cell = fixture.nativeElement.querySelector('.cell') as HTMLElement;
+      const at = { bubbles: true, cancelable: true, button: 0, clientX: 500, clientY: 5 };
+      cell.dispatchEvent(new MouseEvent('mousedown', at));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(document.querySelector('.inline-date__panel')).not.toBeNull();
+
+      // The click lands on the row — outside the overlay's origin, so CDK
+      // reports it as outside. The row is the unit: it must not dismiss.
+      cell.dispatchEvent(new MouseEvent('click', at));
+      fixture.detectChanges();
+      expect(document.querySelector('.inline-date__panel')).not.toBeNull();
+
+      // Anywhere else still does.
+      document.body.dispatchEvent(
+        new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }),
+      );
+      fixture.detectChanges();
+      expect(document.querySelector('.inline-date__panel')).toBeNull();
+    });
   });
 });

@@ -3,11 +3,14 @@
   carries only the error slot, appearing when there is an error to show.
 -->
 <span
-  class="inline-duration"
+  class="inline-duration editable-unit"
   cdkOverlayOrigin
   #origin="cdkOverlayOrigin"
   #field
   [class.inline-duration--invalid]="errorsVisible()"
+  [class.inline-duration--scoped]="hasHoverScope()"
+  (mousedown)="handleUnitMouseDown($event)"
+  (editableScopePress)="handleScopePress($event)"
 >
   @if (prefixTpl(); as tpl) {
     <span class="inline-duration__affix" aria-hidden="true">
@@ -49,7 +52,12 @@
 </span>
 
 <!-- Floating clear affordance — anchored to the whole field. -->
-<bubble-menu [origin]="field" [side]="effectiveClearBubbleSide()" [canShow]="clearCanShow()">
+<bubble-menu
+  [origin]="field"
+  [side]="effectiveClearBubbleSide()"
+  [canShow]="clearCanShow()"
+  [armed]="scopeHover()"
+>
   @if (clearTpl(); as tpl) {
     <ng-container *ngTemplateOutlet="tpl; context: clearContext()" />
   } @else {
@@ -68,7 +76,7 @@
   [cdkConnectedOverlayPositions]="overlayPositions"
   [cdkConnectedOverlayViewportMargin]="8"
   [cdkConnectedOverlayPush]="true"
-  (overlayOutsideClick)="dismissPanel()"
+  (overlayOutsideClick)="handleOutsideClick($event)"
 >
   <div #panel class="inline-duration__panel" (focusout)="handleFocusOut()">
     <div class="inline-duration__errors" [hidden]="!errorSlotVisible()">

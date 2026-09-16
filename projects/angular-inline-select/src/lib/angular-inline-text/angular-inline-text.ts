@@ -32,9 +32,14 @@ import {
   replayEdit,
   filterChars,
   alignCaret,
+  caretOffsetNearPoint,
   type SelectionOffsets,
 } from './caret';
 import { EDITABLE_SCOPE } from '../utils/editable-scope/editable-scope';
+import {
+  observeHoverScope,
+  type EditableHoverScopePress,
+} from '../utils/editable-hover-scope/editable-hover-scope';
 import { EditablePrefix, EditableSuffix } from './editable-affix';
 import { EditableHint } from './editable-hint';
 import { EditableMenu, detectSlashToken, type SlashToken } from './editable-menu';
@@ -165,6 +170,7 @@ function panelPositions(paddingX: number): ConnectedPosition[] {
     class: 'editable-text',
     '[class.editable-text--editing]': 'editing()',
     '[class.editable-text--invalid]': 'errorsVisible()',
+    '[class.editable-text--scoped]': 'hasHoverScope()',
     '[style.display]': 'hidden() ? "none" : null',
     '(focus)': 'focus()',
   },
@@ -1361,6 +1367,71 @@ export class AngularInlineText implements FormValueControl<string> {
     this.#selfTouched.set(true);
     this.touch.emit();
   }
+
+  /**
+   * A press in the unit but OUTSIDE the text — the halo, a unit suffix, the
+   * space past a short value — behaves like a press in a native input's
+   * padding: the display takes focus and the caret lands on the nearest
+   * character of the nearest line. Without this the browser starts a
+   * selection in the wrapper span and the field never focuses, so "Aurora"
+   * is a target six characters wide. Presses ON the text keep native caret
+   * placement; interactive chrome inside the unit (the phone flag button)
+   * keeps its own handling; shift-presses extend a selection natively.
+   * Focus only — the session still opens on the first keystroke.
+   */
+  protected handleFieldMouseDown(event: MouseEvent) {
+    if (event.button !== 0 || event.shiftKey) return;
+    if (this.editing() || this.disabled() || this.readonly()) return;
+
+    const target = event.target as Element | null;
+    const display = this.display().nativeElement;
+    if (target === null || display.contains(target)) return;
+
+    const interactive = target.closest('button, a, input, select, textarea, [role="button"]');
+    if (interactive !== null && this.fieldArea().nativeElement.contains(interactive)) return;
+
+    event.preventDefault();
+    display.focus();
+    setCaretOffset(display, caretOffsetNearPoint(display, event.clientX, event.clientY));
+  }
+
+  /**
+   * The scope's press, forwarded (`pressToFocus`): the same landing as a
+   * press in the unit's own halo, from a point outside it.
+   */
+  protected handleScopePress(event: Event) {
+    if (this.editing() || this.disabled() || this.readonly()) return;
+
+    const { clientX, clientY } = (event as CustomEvent<EditableHoverScopePress>).detail;
+    const display = this.display().nativeElement;
+    display.focus();
+    setCaretOffset(display, caretOffsetNearPoint(display, clientX, clientY));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Hover scope — the container as the interactive unit
+  // ---------------------------------------------------------------------------
+
+  /**
+   * The nearest `[editableHoverScope]` ancestor, found by DOM after the first
+   * render — never injected (a mat-table cell cannot inject its row's
+   * directive; `closest()` finds it). The control listens to the scope
+   * element ITSELF, the way the bubble listens to the field: the scope's
+   * hover and focus-within arm the bubble (`armed`, grace-timed there), and
+   * the host class hands the paint decision to the styles (the scope paints,
+   * the field's own shape rests unless `--editable-text-shape-in-scope`).
+   */
+  #hoverScope = signal<HTMLElement | null>(null);
+  protected hasHoverScope = computed(() => this.#hoverScope() !== null);
+  protected scopeHover = signal(false);
+
+  #findHoverScope = afterNextRender(() => {
+    const watch = observeHoverScope(this.#hostEl.nativeElement, (hover) =>
+      this.scopeHover.set(hover),
+    );
+    this.#hoverScope.set(watch.scope);
+    this.#scopeDestroyRef.onDestroy(watch.disconnect);
+  });
 
   // ---------------------------------------------------------------------------
   // FormUiControl contract

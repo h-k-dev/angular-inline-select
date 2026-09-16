@@ -25,11 +25,17 @@
   align-items: baseline;
 }
 
-// `display: contents` dissolves the row wrapper: its <dt>/<dd> become items of
-// the list grid above, which is what keeps every label in the same track while
-// the markup stays a well-formed <dl> of pairs.
+// A SUBGRID row: the <dt>/<dd> land in the list grid's own tracks above (every
+// label in one column), and the row keeps a real box — which `display:
+// contents` would dissolve. The box is what `editableHoverScope` needs: the
+// row is the interactive unit — hovering anywhere on it arms the value's
+// actions and paints the row's shape — and a boxless row could neither be
+// hovered across the column gap nor painted.
 .field-grid__row {
-  display: contents;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: baseline;
 }
 
 .field-grid__label {

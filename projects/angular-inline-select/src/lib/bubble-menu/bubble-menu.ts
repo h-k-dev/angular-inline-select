@@ -8,6 +8,7 @@ import {
   // Signals
   computed,
   effect,
+  untracked,
   input,
   signal,
 } from '@angular/core';
@@ -135,6 +136,14 @@ export class BubbleMenu {
   /** Which edge to grow from — `'end'` (default) or `'start'` for a range's left field. */
   side = input<BubbleMenuSide>('end');
 
+  /**
+   * A second hover source — an ancestor `editableHoverScope`'s hover or
+   * focus-within, wired by the host control. Grace-timed like the origin's
+   * own hover, so the pointer can leave the scope onto the bubble (which
+   * sits outside the scope's DOM) without a flicker.
+   */
+  armed = input(false);
+
   protected positions = computed(() => {
     const offset = this.contentOffset();
     if (offset && this.side() === 'end') return endOffsetPositions(offset);
@@ -147,7 +156,7 @@ export class BubbleMenu {
     return origin instanceof ElementRef ? origin.nativeElement : origin;
   });
 
-  /** Pointer intent: over the field or over the bubble itself. */
+  /** Pointer intent: over the field, over the bubble itself, or the scope's. */
   #hover = signal(false);
   protected visible = computed(() => this.canShow() && this.#hover());
 
@@ -165,6 +174,15 @@ export class BubbleMenu {
         enter();
         leave();
       });
+    });
+
+    // The scope's hover rides the same open/grace-close machine as the origin's.
+    let wasArmed = false;
+    effect(() => {
+      const armed = this.armed();
+      if (armed === wasArmed) return;
+      wasArmed = armed;
+      untracked(() => (armed ? this.open() : this.scheduleClose()));
     });
 
     // The delayed close must not fire into a destroyed component.

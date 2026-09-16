@@ -160,7 +160,7 @@ const EDITING_MODEL: ApiMember = {
 // Shared token groups
 // -----------------------------------------------------------------------------
 
-/** Tokens of the inline-text surfaces — also picked up by number and phone, which render through the same surfaces. */
+/** Tokens of the inline-text surfaces — also picked up by number and phone, which render through the same surfaces, and (the shape tokens) by the temporal family's input wrappers. */
 const TEXT_SURFACE_TOKENS: TokenGroup = {
   title: 'Field surfaces',
   description:
@@ -210,6 +210,29 @@ const TEXT_SURFACE_TOKENS: TokenGroup = {
       description: 'Color of prefix/suffix affixes.',
     },
     {
+      token: '--editable-text-shape-inset',
+      fallback: '0.375rem',
+      description:
+        'How far the unit’s shape — the hit area and state layer behind the in-flow field — reaches past the text on every side. Layout-free: a pseudo-element for no-wrap fields, cloned per-line padding cancelled by margin for wrapping ones. `0` shrinks the unit to the text’s own box.',
+    },
+    {
+      token: '--editable-text-shape-radius',
+      fallback: 'var(--mat-sys-corner-small, 0.5rem)',
+      description: 'Corner radius of the shape.',
+    },
+    {
+      token: '--editable-text-shape-color',
+      fallback: 'oklch(from var(--mat-sys-on-surface, #000) l c h / 0.05)',
+      description:
+        'The state layer: the shape’s tint while the unit is hovered or the field holds keyboard focus. `transparent` keeps the hit area with no painted feedback.',
+    },
+    {
+      token: '--editable-text-shape-in-scope',
+      fallback: '0',
+      description:
+        'Inside an `editableHoverScope` the scope paints and the field’s own shape rests. `1` keeps the field’s shape as the inner level (Figma’s row surface plus control hover).',
+    },
+    {
       token: '--editable-text-dim-opacity',
       fallback: '0.35',
       description: 'Opacity of the in-flow field while its elevated editor is open.',
@@ -228,6 +251,30 @@ const TEXT_SURFACE_TOKENS: TokenGroup = {
       token: '--editable-ease-standard',
       fallback: 'cubic-bezier(0.4, 0, 0.2, 1)',
       description: 'Easing for the field opacity transitions.',
+    },
+  ],
+};
+
+/** Tokens of the container-as-unit surface (`[editableHoverScope]`). */
+const HOVER_SCOPE_TOKENS: TokenGroup = {
+  title: 'Hover scope',
+  description:
+    'The shape an `editableHoverScope` container (a grid row, a card, a cell) paints behind its content while hovered or holding focus; the inline controls inside arm their action bubbles on the same hover. Resolution order: var(--editable-hover-scope-<token>, var(--mat-sys-<token>, <fallback>)).',
+  tokens: [
+    {
+      token: '--editable-hover-scope-inset',
+      fallback: '0.5rem',
+      description: 'How far the scope’s shape reaches past the container’s box on every side.',
+    },
+    {
+      token: '--editable-hover-scope-radius',
+      fallback: 'var(--mat-sys-corner-medium, 0.75rem)',
+      description: 'Corner radius of the scope’s shape.',
+    },
+    {
+      token: '--editable-hover-scope-color',
+      fallback: 'oklch(from var(--mat-sys-on-surface, #000) l c h / 0.05)',
+      description: 'Tint of the scope’s shape while active.',
     },
   ],
 };
@@ -621,7 +668,7 @@ export const DOCS: Record<string, SectionDocs> = {
         ],
       },
     ],
-    tokenGroups: [TEXT_SURFACE_TOKENS, CHROME_TOKENS],
+    tokenGroups: [TEXT_SURFACE_TOKENS, HOVER_SCOPE_TOKENS, CHROME_TOKENS],
   },
 
   number: {
@@ -1103,7 +1150,7 @@ export const DOCS: Record<string, SectionDocs> = {
         ],
       },
     ],
-    tokenGroups: [TEMPORAL_TOKENS, CHROME_TOKENS],
+    tokenGroups: [TEMPORAL_TOKENS, HOVER_SCOPE_TOKENS, CHROME_TOKENS],
   },
 
   json: {

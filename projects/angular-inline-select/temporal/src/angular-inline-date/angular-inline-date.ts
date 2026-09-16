@@ -1,4 +1,5 @@
 import {
+  DestroyRef,
   Component,
   ElementRef,
   Injector,
@@ -39,6 +40,8 @@ import {
   EditableClearTemplate,
   type BubbleMenuSide,
   type EditableClearContext,
+  observeHoverScope,
+  type EditableHoverScopePress,
 } from 'angular-inline-select';
 import {
   parseDateInput,
@@ -58,6 +61,7 @@ import {
   type InternalDateRange,
 } from './date-codec';
 import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
+import { focusInputNearPoint, isUnitSpacePress } from '../inline-unit';
 import {
   dayToDbEntry,
   dayEndToDbEntry,
@@ -734,6 +738,76 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const echoed = echoDateShape(next, this.shape());
     if (!dateValuesEqual(echoed, this.value())) this.value.set(echoed);
   }
+
+  // -- The interactive unit + the hover scope -------------------------------------
+
+  /** The wrapper around the inputs — the unit the pointer meets. */
+  protected field = viewChild.required<ElementRef<HTMLElement>>('dateField');
+
+  #unitHost = inject<ElementRef<HTMLElement>>(ElementRef);
+  #unitDestroyRef = inject(DestroyRef);
+
+  #inputs(): (HTMLInputElement | undefined)[] {
+    return [this.startInput()?.nativeElement, this.endInput()?.nativeElement];
+  }
+
+  /**
+   * A press in the unit OUTSIDE the inputs — the shape, an affix, the space
+   * past a short value — focuses the nearest input with the caret near the
+   * point (a native input's padding, generalised across the pair). Focus then
+   * does what focus does here: the session opens and the calendar shows. Presses ON an input keep native
+   * caret placement; chrome inside the unit keeps its own handling.
+   */
+  protected handleUnitMouseDown(event: MouseEvent) {
+    if (this.effectiveDisabled() || this.effectiveReadonly()) return;
+    if (!isUnitSpacePress(event, this.field().nativeElement)) return;
+
+    event.preventDefault();
+    focusInputNearPoint(this.#inputs(), event.clientX, event.clientY);
+  }
+
+  /**
+   * The overlay's outside click, SCOPE-AWARE: a press on the hover scope's
+   * own space is the gesture that just focused this control (the scope
+   * forwards it, the panel opens on focus), and the CLICK that completes
+   * that press lands on the row — outside the overlay's origin, so CDK
+   * reports it as outside and the panel would flash open and shut. The row
+   * is the unit: a click on it is a click on us. Clicks on another row, or
+   * anywhere else, still dismiss.
+   */
+  protected handleOutsideClick(event: MouseEvent) {
+    const scope = this.#hoverScope();
+    if (scope !== null && scope.contains(event.target as Node)) return;
+
+    this.overlayOpen.set(false);
+  }
+
+  /** The scope's press, forwarded (`pressToFocus`): the same landing from a point outside the unit. */
+  protected handleScopePress(event: Event) {
+    if (this.effectiveDisabled() || this.effectiveReadonly()) return;
+
+    const { clientX, clientY } = (event as CustomEvent<EditableHoverScopePress>).detail;
+    focusInputNearPoint(this.#inputs(), clientX, clientY);
+  }
+
+  /**
+   * The nearest `[editableHoverScope]` ancestor, found by DOM after the first
+   * render (never injected — the mat-table trap): its hover and focus-within
+   * arm the bubbles (`armed`, grace-timed there), and the wrapper's modifier
+   * hands the paint decision to the styles (the scope paints, the unit's own
+   * shape rests unless `--editable-text-shape-in-scope`).
+   */
+  #hoverScope = signal<HTMLElement | null>(null);
+  protected hasHoverScope = computed(() => this.#hoverScope() !== null);
+  protected scopeHover = signal(false);
+
+  #watchHoverScope = afterNextRender(() => {
+    const watch = observeHoverScope(this.#unitHost.nativeElement, (hover) =>
+      this.scopeHover.set(hover),
+    );
+    this.#hoverScope.set(watch.scope);
+    this.#unitDestroyRef.onDestroy(watch.disconnect);
+  });
 
   // -- Focus flow ----------------------------------------------------------------
 

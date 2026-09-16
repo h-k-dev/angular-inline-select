@@ -184,3 +184,69 @@ export function alignCaret(source: string, draft: string, caret: number): number
 
   return j;
 }
+
+/** A text position resolved by the browser's own hit-testing (two API generations). */
+function hitTextPosition(
+  doc: Document,
+  x: number,
+  y: number,
+): { node: Node; offset: number } | null {
+  const d = doc as Document & {
+    caretPositionFromPoint?(x: number, y: number): { offsetNode: Node; offset: number } | null;
+    caretRangeFromPoint?(x: number, y: number): Range | null;
+  };
+
+  if (typeof d.caretPositionFromPoint === 'function') {
+    const position = d.caretPositionFromPoint(x, y);
+    return position ? { node: position.offsetNode, offset: position.offset } : null;
+  }
+  if (typeof d.caretRangeFromPoint === 'function') {
+    const range = d.caretRangeFromPoint(x, y);
+    return range ? { node: range.startContainer, offset: range.startOffset } : null;
+  }
+
+  return null;
+}
+
+/**
+ * The text offset in `root` nearest to a viewport point OUTSIDE its text — a
+ * press in the field's halo. What a native input does with a press in its
+ * padding: the caret lands on the closest character of the closest line,
+ * never wherever the browser would have started a selection in the wrapper.
+ * The point is clamped INTO the nearest line box and resolved through the
+ * browser's hit-testing; without layout or the API (jsdom) it falls back to
+ * the nearest edge — the start when the press sits before the first line,
+ * the end otherwise.
+ */
+export function caretOffsetNearPoint(root: HTMLElement, x: number, y: number): number {
+  const length = root.textContent?.length ?? 0;
+  const rects = Array.from(root.getClientRects()).filter(
+    (rect) => rect.width > 0 || rect.height > 0,
+  );
+  if (rects.length === 0) return length;
+
+  // The closest line box vertically (a tie keeps the earlier line).
+  let line = rects[0];
+  let best = Infinity;
+  for (const rect of rects) {
+    const distance = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+    if (distance < best) {
+      best = distance;
+      line = rect;
+    }
+  }
+
+  const clampedX = Math.min(Math.max(x, line.left + 1), line.right - 1);
+  const clampedY = line.top + line.height / 2;
+
+  const doc = root.ownerDocument;
+  const hit = hitTextPosition(doc, clampedX, clampedY);
+  if (hit && root.contains(hit.node)) {
+    const probe = doc.createRange();
+    probe.selectNodeContents(root);
+    probe.setEnd(hit.node, hit.offset);
+    return probe.toString().length;
+  }
+
+  return line === rects[0] && x < line.left ? 0 : length;
+}

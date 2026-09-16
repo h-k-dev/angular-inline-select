@@ -37,7 +37,7 @@
   [onBlocked]="onBlocked()"
 >
   <!-- Text, single line: required, projected error, edge-trimmed on commit. -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Project</dt>
     <dd class="field-grid__value">
       <angular-inline-text
@@ -62,7 +62,7 @@
     Text, multi line: authored line breaks are user content and survive; the
     panel hint is a live character counter that never touches the draft.
   -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Summary</dt>
     <dd class="field-grid__value">
       <angular-inline-text
@@ -84,7 +84,7 @@
   </div>
 
   <!-- Number: codec formatting (two decimals) + a suffix outside the draft. -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Budget</dt>
     <dd class="field-grid__value">
       <angular-inline-number
@@ -113,7 +113,7 @@
     back as typed OR grouped. A dot in a German draft that is not a thousands
     group (`1.5`) is a parse error, never a silent fifteen.
   -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Revenue (en)</dt>
     <dd class="field-grid__value">
       <angular-inline-number
@@ -137,7 +137,7 @@
     </dd>
   </div>
 
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Revenue (de)</dt>
     <dd class="field-grid__value">
       <angular-inline-number
@@ -162,7 +162,7 @@
   </div>
 
   <!-- Phone: the codec interprets, the flag prefix picks the country. -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Telephone</dt>
     <dd class="field-grid__value">
       <angular-inline-phone
@@ -190,7 +190,7 @@
     middle ground, not RFC 5322. `inputMode` asks mobile keyboards for the
     @-row without changing a thing about the draft.
   -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Email</dt>
     <dd class="field-grid__value">
       <angular-inline-text
@@ -218,7 +218,7 @@
     row for the valid email above. The value is perfectly readable; the form's
     `email()` rule is what rejects it.
   -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Billing email</dt>
     <dd class="field-grid__value">
       <angular-inline-text
@@ -249,7 +249,7 @@
     offers (the mobile keyboard's / and .com row). The `angular-inline-link`
     control (ROADMAP → "Next up — angular-inline-link") replaces this row.
   -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Website</dt>
     <dd class="field-grid__value">
       <angular-inline-text
@@ -267,7 +267,7 @@
   </div>
 
   <!-- Date: typed or picked; the model is the UTC ISO DB entry. -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Deadline</dt>
     <dd class="field-grid__value">
       <angular-inline-date
@@ -295,7 +295,7 @@
     resolves it; `resolved.set({ start: true, end: true })` would acknowledge
     it without touching the value.
   -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Audit</dt>
     <dd class="field-grid__value">
       <angular-inline-date
@@ -319,7 +319,7 @@
   </div>
 
   <!-- JSON: a bounded preview that elevates into a real CodeMirror editor. -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Metadata</dt>
     <dd class="field-grid__value">
       <angular-inline-json
@@ -337,7 +337,7 @@
     Slash menu: the control owns the trigger, the keyboard and the combobox
     ARIA; this template owns the options. Type “/” in the field.
   -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Status</dt>
     <dd class="field-grid__value">
       <angular-inline-text
@@ -377,7 +377,7 @@
     The value is far too long for the column at ANY width: `noWrap` keeps the
     one line and ellipsizes at the constraint instead of growing the row.
   -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Reference</dt>
     <dd class="field-grid__value">
       <angular-inline-text
@@ -394,7 +394,7 @@
   </div>
 
   <!-- Character filter + shape validation: the filter types, the schema judges. -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Callsign</dt>
     <dd class="field-grid__value">
       <angular-inline-text
@@ -418,7 +418,7 @@
   </div>
 
   <!-- Comma decimals: both halves of the codec, dot-decimal model. -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Cable</dt>
     <dd class="field-grid__value">
       <angular-inline-number
@@ -435,7 +435,7 @@
   </div>
 
   <!-- The plain case: a bare integer, no codec, no affix. -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Crew</dt>
     <dd class="field-grid__value">
       <angular-inline-number
@@ -449,7 +449,7 @@
   </div>
 
   <!-- Same control, national display and mobile-only interpretation. -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Mobile</dt>
     <dd class="field-grid__value">
       <angular-inline-phone
@@ -474,7 +474,7 @@
   </div>
 
   <!-- The binding shape IS the mode: { start, end } renders the two-field pair. -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Vacation</dt>
     <dd class="field-grid__value">
       <angular-inline-date
@@ -488,7 +488,7 @@
   </div>
 
   <!-- Time, pinned to 24 h through the locale extension — zero codec changes. -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Kickoff</dt>
     <dd class="field-grid__value">
       <angular-inline-time
@@ -503,7 +503,7 @@
   </div>
 
   <!-- Ranged time, seeded overnight: the end instant wears the +1 badge. -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Shift</dt>
     <dd class="field-grid__value">
       <angular-inline-time
@@ -518,7 +518,7 @@
   </div>
 
   <!-- Duration: the model is seconds, the display is h:mm. -->
-  <div class="field-grid__row">
+  <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Estimate</dt>
     <dd class="field-grid__value">
       <angular-inline-duration

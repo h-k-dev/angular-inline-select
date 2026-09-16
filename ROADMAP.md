@@ -781,6 +781,151 @@ context type and the directive), then the seven call-sites:
 control if/when it lands. Watch for iusta's own `TemporalIntl` copy — the
 `clearLabel` signature moved.
 
+## Shipped — the interactive unit + the hover scope — 2026-09-16
+
+**The ask.** The clear bubble was hard to reach: it armed on `mouseenter`
+of the field's own box, and that box was the value's INK — "AUR-01" is a
+target one line tall and six characters wide, under the accessibility
+minimum for target size before any UX argument. The first idea was a
+configurable hover padding; the settled design is bigger and simpler.
+
+**The practice it follows.** Gmail rows, Drive, Slack messages, Notion
+property rows, Linear lists, Figma's properties panel: the CONTAINER is the
+interactive unit, and its hover is PAINTED — YouTube's `yt-touch-feedback-
+shape` (a sibling layer behind the card with a negative margin), M3's state
+layer (a pseudo-element on a button). Nobody detects hover on the action's
+anchor and enlarges it. The nearest precedent of all is a native input: its
+box is the hit area, hovering it lights it up, a press in its padding lands
+the caret on the nearest character, focus wraps the box. Moving editing
+onto the ink of a contenteditable had quietly lost all of that.
+
+**Round 1 (superseded the same day):** padding + negative margin as the
+halo, the tint as the field's own background. It worked and it looked like
+a disabled text input — grey box, dashed underline inside it, the clear
+button floating outside it. The lesson: the surface must be a layer BEHIND
+the content, larger than it, and it must cover the actions too.
+
+**What shipped — the field level, on `.editable-text__field`:**
+
+- **The shape.** A `::after` pseudo-element behind the content (`z-index:
+-1` inside the field's own `isolation: isolate`), reaching past the box by
+  `--editable-text-shape-inset` (0.375rem), `--editable-text-shape-radius`
+  corners, `--editable-text-shape-color` tint (on-surface at 5%), faded and
+  settled in on hover and while the display is `:focus-visible`
+  (contenteditable counts as keyboard-focusable, so a press keeps it up as
+  long as the field holds focus — the unit wraps the focus; the solid
+  underline stays the a11y signal). HIT-TESTABLE AS PART OF THE ELEMENT: the
+  shape IS the halo, the field's box never changes, no padding, no margin
+  tricks. It covers the INLINE only — a first cut reached under the bubble
+  so text and actions read as one surface, and the user cut it: the bubble
+  is its own unit with its own transparent hover pad (the bridge), so the
+  two hit areas MEET and never overlap; in the grid the row's shape simply
+  happens to contain the bubble. Rests while editing (the panel is the
+  surface).
+- **Two paint modes, one behaviour.** An absolutely positioned pseudo inside
+  an inline box that WRAPS gets a nonsense containing block (first
+  fragment's start → last fragment's end). So no-wrap fields (the default
+  single-line: grid cells, tables, titles) become an `inline-flex` unit — a
+  real box, baseline-aligned like the panel line, the display shrinks first
+  (`min-width: 0` → its own ellipsis), affixes never — and wrapping fields
+  (prose, multi-line) keep the box inline and paint the same tint as cloned
+  per-line padding cancelled by margin (layout-free: vertical padding on an
+  inline box never enters the line box).
+- **Press**: `handleFieldMouseDown` — a press in the unit OUTSIDE the text
+  (shape, unit suffix, the space past a short value) focuses the display
+  with the caret on the nearest character of the nearest line via
+  `caretOffsetNearPoint` (clamp the point INTO the nearest line box, ask
+  `caretPositionFromPoint`/`caretRangeFromPoint`, fall back to the nearest
+  edge without layout). Presses ON the text keep native placement; chrome
+  inside the unit (the phone flag button) keeps its own handling;
+  shift-presses extend natively; locked fields and open sessions are left
+  alone. FOCUS ONLY — the session still opens on the first keystroke, so
+  selecting text to copy it never throws a panel up.
+
+**What shipped — the container level, `editableHoverScope`
+(`utils/editable-hover-scope/`):**
+
+- **The row owns the box — it never reports it.** Handing a rect to the
+  field would mean measuring, a ResizeObserver, scroll invalidation, and a
+  field shape sitting OVER the label that eats its clicks. The scope's shape
+  is the scope's own `::after` (`--editable-hover-scope-inset` 0.5rem,
+  medium radius, same tint), behind its content, hit-testable — the reach
+  into the gap between rows counts as the row. `.editable-hover-scope--active`
+  while HOVERED ONLY (the first cut painted on focus-within too, and the
+  core pilot showed the cost at once: click into one row, move to the next
+  — two painted rows, their shapes stacking to a darker band in the shared
+  gap; a focused row keeps the field's solid underline as its signal —
+  Notion paints the hovered property row, never the focused one);
+  focus-within still ARMS the actions through the field's own listeners.
+  Table rows paint through the class (tr pseudo-elements are unreliable
+  across engines).
+- **The field finds the scope by DOM and listens itself.** `closest()` for
+  the marker after first render — NEVER injection: a cell inside a mat-table
+  column definition cannot inject its row's directive, the mat-table trap
+  paid for in iusta — then the control binds the scope element's
+  mouseenter/mouseleave/focusin/focusout the way the bubble binds the field.
+  The scope's hover arms the bubble through the bubble's new `armed` input,
+  grace-timed on the same open/close machine so the pointer can leave the
+  scope onto the bubble (outside the scope's DOM) without a flicker. Host
+  class `editable-text--scoped`: the field's own shape rests inside a scope
+  (`--editable-text-shape-in-scope: 1` keeps it as the inner, Figma-style
+  level). A scope holding several fields arms ALL of them — if that is loud,
+  the scope is the cell, not the row.
+- **`pressToFocus`, default ON.** A press on the scope's own SPACE (not the
+  field, not chrome, not TEXT) hands its point to the ONE field inside over
+  a DOM CustomEvent (`editableScopePress`) and the field lands the caret
+  nearest — so the row's shape is also the row's press target and the next
+  keystroke elevates (the Airtable cell feel). The first cut shipped it OFF
+  to protect labels (a press on a label is a rename gesture in users' heads
+  — Notion) and the user hit the gap immediately: a press in the empty
+  value space at the row's end focused nothing, and a double-click there
+  selected the next row's label. The rule that reconciles both: an element
+  that carries its own text keeps its press and its selection; only SPACE
+  forwards. Only when the scope holds exactly one field;
+  `[pressToFocus]="false"` opts out.
+- **The grid fixture:** every `.field-grid__row` carries the marker. The rows
+  were `display: contents` — a boxless row can neither be hovered across the
+  column gap nor painted — so they became SUBGRID rows (label track alignment
+  kept, a real box gained).
+
+Number, phone and JSON render through the same surfaces and inherit the
+field level. Specs: 4 helper + 5 unit + 8 scope.
+
+**The temporal family (same day).** The input-hosted controls got the unit
+too — the user's first question after the grid: "click on the halo area is
+not yet doing what inline does" for date. Their `inline-flex` wrapper
+(`.inline-date` / `.inline-time` / `.inline-duration`) is the unit: the
+`unit` mixin in `temporal/src/_inline-unit.scss` is the text control's
+shape on that wrapper (same tokens, same `::after`, `&--scoped` rests it
+inside a scope — `:is()` lifts the scoped rule to the focus rule's
+specificity so it wins both), and `inline-unit.ts` holds the press half:
+`isUnitSpacePress` (plain left press, not on an input, not on chrome) +
+`focusInputNearPoint` (the NEAREST enabled input by box distance, caret at
+the nearest edge or proportional inside — inputs have no caret hit-testing
+API, digits are near-monospace; `setSelectionRange` guarded for
+`type="time"`). Focus then does what focus already does in this family:
+the session opens, the date calendar shows. Every unit wrapper wears the
+shared `editable-unit` class (the text field too) — the scope directive
+counts and forwards presses to `.editable-unit`, not to a per-family
+selector — and the three controls watch the scope through the new shared
+`observeHoverScope` (`utils/editable-hover-scope`; the text control uses it
+too now), arming all their bubbles through `armed`. TRAP, found by the user on
+first touch ("the picker flashes open then immediately close"): a press
+on the row's space is forwarded, the panel opens on focus DURING the
+mousedown, and the CLICK that completes the press lands on the row —
+outside the overlay's ORIGIN — so CDK's `overlayOutsideClick` dismissed
+it. Invisible to a scripted click (pointerdown→click in one task, before
+CD attached the overlay); reproduced with a 120ms-spaced synthetic
+sequence. Fix: the three controls' `handleOutsideClick` is SCOPE-AWARE —
+a click inside the hover scope never dismisses (the row is the unit: a
+click on it is a click on us); another row or anywhere else still does.
+Specs: 6 helper + 6 date + 1 time + 1 duration.
+
+**Next (the actions program):** the `primary-actions` slot beside clear with
+PER-SLOT visibility gates (`canShow` is a CLEAR rule — a required or readonly
+link field still wants its open button); then the link control drops its
+open anchor into that slot; temporal bubbles onto the scope.
+
 ## Next up — `angular-inline-link` (design settled 2026-09-16, not started)
 
 **Baseline in the grid:** the "Website" row — a URL in a plain

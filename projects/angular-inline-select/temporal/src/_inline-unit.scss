@@ -1,0 +1,54 @@
+// =============================================================================
+// THE INTERACTIVE UNIT for the input-hosted family — the text control's shape
+// (styles/_editable-text.scss, "THE SHAPE"), applied to the inline-flex
+// wrapper around a control's real <input>s. Same tokens, same idiom: an
+// `::after` behind the content, larger than the box, hit-testable so it IS
+// the halo, faded in on hover and while an input holds focus. Inside an
+// `editableHoverScope` the scope paints and the unit's shape rests
+// (`--editable-text-shape-in-scope: 1` keeps it as the inner level). Include
+// inside the wrapper rule; `&--scoped` resolves to the control's own modifier.
+// =============================================================================
+@mixin unit {
+  position: relative;
+  isolation: isolate;
+  cursor: text;
+
+  &::after {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: calc(-1 * var(--editable-text-shape-inset, 0.375rem));
+    border-radius: var(--editable-text-shape-radius, var(--mat-sys-corner-small, 0.5rem));
+    background: var(
+      --editable-text-shape-color,
+      oklch(from var(--mat-sys-on-surface, #000) l c h / 0.05)
+    );
+    opacity: 0;
+    transform: scale(0.97);
+    transition:
+      opacity 0.15s var(--editable-ease-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      transform 0.15s var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
+  }
+
+  &:hover::after,
+  &:has(input:focus-visible)::after {
+    opacity: 1;
+    transform: none;
+  }
+
+  // `:is()` lifts this to the focus rule's specificity, so it wins both.
+  &--scoped:is(:hover, :has(input:focus-visible))::after {
+    opacity: var(--editable-text-shape-in-scope, 0);
+  }
+
+  &:has(input:disabled),
+  &:has(input[readonly]) {
+    cursor: default;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &::after {
+      transition: none;
+    }
+  }
+}

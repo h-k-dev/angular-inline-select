@@ -19,12 +19,134 @@
 }
 
 // -----------------------------------------------------------------------------
-// ELEMENT: in-flow field area (prefix + display + suffix)
+// ELEMENT: in-flow field area (prefix + display + suffix) — THE INTERACTIVE UNIT
+//
+// A native input's box, restored for inline text: one box is the hover
+// target (arms the bubble), the press target (focus + caret on the nearest
+// character — the control's mousedown handler) and the focus surface. The
+// value's ink alone is a target one line tall and a few characters wide,
+// under the accessibility minimum before any UX argument.
+//
+// THE SHAPE (`::after`) is the YouTube touch-feedback / M3 state-layer idiom:
+// a pseudo-element BEHIND the content, larger than the box by
+// `--editable-text-shape-inset`, rounded, tinted, faded in on hover and
+// while the text holds keyboard focus. It is hit-testable as part of the
+// element, so it IS the halo — no padding, no negative margins, the field's
+// own box never changes. It covers the INLINE only: the bubble is its own
+// unit with its own transparent hover pad (the bridge), so the two hit
+// areas meet, they never overlap. Inside an `editableHoverScope` the scope
+// paints instead and the field's shape rests (`--editable-text-shape-in-
+// scope: 1` keeps it as the inner, Figma-style level).
+//
+// Two paint modes, one behaviour: an absolutely positioned pseudo-element
+// inside an inline box that WRAPS across lines gets a nonsense containing
+// block (first fragment's start to last fragment's end), so:
+// - no-wrap fields (the default single-line: grid cells, tables, titles)
+//   become an `inline-flex` unit — a real box the shape can wrap;
+// - wrapping fields (prose, multi-line) keep the box inline and paint the
+//   same tint as cloned per-line padding, cancelled by margin: layout-free
+//   because vertical padding on an inline box never enters the line box.
 // -----------------------------------------------------------------------------
 .editable-text__field {
   display: inline;
+  position: relative;
+  isolation: isolate; // the shape's z-index:-1 stays behind THIS content only
+  cursor: text;
 
   transition: opacity 0.15s var(--editable-ease-standard, cubic-bezier(0.4, 0, 0.2, 1));
+
+  // The no-wrap unit: a real box. Baseline-aligned like the panel line, the
+  // display shrinks first (min-width: 0 → its own ellipsis), affixes never.
+  &:has(> .editable-text__display--no-wrap) {
+    display: inline-flex;
+    align-items: baseline;
+    max-width: 100%;
+    white-space: nowrap;
+    vertical-align: baseline;
+
+    > .editable-text__display {
+      flex: 0 1 auto;
+      min-width: 0;
+    }
+
+    > .editable-text__affix {
+      flex: 0 0 auto;
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      z-index: -1;
+      inset: calc(-1 * var(--editable-text-shape-inset, 0.375rem));
+      border-radius: var(--editable-text-shape-radius, var(--mat-sys-corner-small, 0.5rem));
+      background: var(
+        --editable-text-shape-color,
+        oklch(from var(--mat-sys-on-surface, #000) l c h / 0.05)
+      );
+      opacity: 0;
+      transform: scale(0.97);
+      transition:
+        opacity 0.15s var(--editable-ease-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+        transform 0.15s var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
+    }
+
+    &:hover::after,
+    &:has(> .editable-text__display:focus-visible)::after {
+      opacity: 1;
+      transform: none;
+    }
+
+    // Inside a hover scope the SCOPE paints; the inner shape is opt-in.
+    .editable-text--scoped &:hover::after,
+    .editable-text--scoped &:has(> .editable-text__display:focus-visible)::after {
+      opacity: var(--editable-text-shape-in-scope, 0);
+    }
+
+    // The panel is the surface while editing.
+    .editable-text.editable-text--editing &::after {
+      opacity: 0;
+    }
+  }
+
+  // The wrapping unit: cloned per-line padding is the only per-fragment
+  // surface CSS offers; the tint paints on the box itself.
+  &:not(:has(> .editable-text__display--no-wrap)) {
+    padding: var(--editable-text-shape-inset, 0.375rem);
+    margin-inline: calc(-1 * var(--editable-text-shape-inset, 0.375rem));
+    border-radius: var(--editable-text-shape-radius, var(--mat-sys-corner-small, 0.5rem));
+    box-decoration-break: clone;
+    transition:
+      opacity 0.15s var(--editable-ease-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      background-color 0.15s var(--editable-ease-standard, cubic-bezier(0.4, 0, 0.2, 1));
+
+    &:hover,
+    &:has(> .editable-text__display:focus-visible) {
+      background-color: var(
+        --editable-text-shape-color,
+        oklch(from var(--mat-sys-on-surface, #000) l c h / 0.05)
+      );
+    }
+
+    .editable-text--scoped &:hover,
+    .editable-text--scoped &:has(> .editable-text__display:focus-visible) {
+      background-color: color-mix(
+        in oklch,
+        var(--editable-text-shape-color, oklch(from var(--mat-sys-on-surface, #000) l c h / 0.05))
+          calc(var(--editable-text-shape-in-scope, 0) * 100%),
+        transparent
+      );
+    }
+
+    .editable-text.editable-text--editing & {
+      background-color: transparent;
+    }
+  }
+
+  // Locked fields: the box is still the unit (hover shows nothing to do), the
+  // I-beam would promise an edit that cannot happen.
+  &:has(> .editable-text__display[contenteditable='false']) {
+    cursor: default;
+  }
 
   // Dimmed as a whole — affixes included — under the scrim while editing.
   .editable-text--editing & {
@@ -212,6 +334,8 @@
 // Reduced motion
 // -----------------------------------------------------------------------------
 @media (prefers-reduced-motion: reduce) {
+  .editable-text__field,
+  .editable-text__field::after,
   .editable-text__display {
     transition: none;
   }
