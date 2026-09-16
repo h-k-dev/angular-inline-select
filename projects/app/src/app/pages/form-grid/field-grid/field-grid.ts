@@ -78,6 +78,7 @@ export interface RecordModel {
   mobile: string | null;
   email: string;
   billingEmail: string;
+  website: string;
   deadline: string | null;
   audit: string | null;
   vacation: IsoDateRange | null;
@@ -123,6 +124,9 @@ function initialRecord(): RecordModel {
     // on arrival, before the field was ever touched. The valid `email` above
     // is its side-by-side comparison.
     billingEmail: 'billing.aurora-observatory.example',
+    // A URL in a plain text field — the BASELINE the link control measures
+    // against: no detection, no open affordance, no validation.
+    website: 'https://aurora-observatory.example/survey/sector-nine',
     deadline: dayToDbEntry('2026-07-20'),
     // An INVALID backend entry (MySQL's zero-date classic) — the date control
     // shows it verbatim under the error underline and reports it through

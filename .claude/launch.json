@@ -17,7 +17,7 @@
       "name": "app-static",
       "runtimeExecutable": "/Users/hongknop/.nvm/versions/node/v26.1.0/bin/node",
       "runtimeArgs": [
-        "/private/tmp/claude-501/-Users-hongknop-Documents-private-repo-angular-inline-select/bbe7d6bc-1606-4b68-967f-327159b63ca0/scratchpad/static-server.mjs"
+        "/private/tmp/claude-501/-Users-hongknop-Documents-private-repo-angular-inline-select/1a232800-e8b7-4e77-ba0f-d59324748e7f/scratchpad/static-server.mjs"
       ],
       "port": 4310,
       "autoPort": true

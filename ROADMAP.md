@@ -781,6 +781,61 @@ context type and the directive), then the seven call-sites:
 control if/when it lands. Watch for iusta's own `TemporalIntl` copy — the
 `clearLabel` signature moved.
 
+## Next up — `angular-inline-link` (design settled 2026-09-16, not started)
+
+**Baseline in the grid:** the "Website" row — a URL in a plain
+`angular-inline-text` with `inputMode="url"`, the way every website field
+ships today. Nothing detects it, nothing opens it, copy-paste is the only
+road to the page. The link control replaces that row.
+
+**The precedent, and the one rule it agrees on.** Notion (URL property:
+click edits, ↗ opens), Airtable (click selects, open icon on hover /
+selection), Google Docs/Sheets (click → bubble with the URL + open + copy,
+Cmd/Ctrl+click opens), editors (Cmd/Ctrl+click follows, tooltip says so):
+**in an editable field a plain click never navigates.** Jira's real-anchor
+idle field is the outlier — users edit and navigate by accident. Our idle
+click already places a caret without opening a session, so the rule costs
+nothing.
+
+**Shape — a typed control, not text with detection.** Composed over
+`angular-inline-text` like number and phone; owns a codec and nothing else:
+
+- Parse: trim; a bare domain gets `https://`; anything that does not parse
+  as a URL or uses a scheme outside the allowlist (http, https, mailto,
+  tel) is a `url` error. THE SECURITY LINE: an `href` exists only when the
+  parser produced it — never `javascript:`, never the raw value.
+- Display: the prettified rendering (scheme and `www.` stripped,
+  ellipsized); the editor opens on the raw URL via `draftText` — the
+  locale-number seam, reused.
+- A public `href` signal for whoever renders the affordance.
+
+**The open affordance is a SEAM, not a button** (the `editableClear`
+lesson: ask two will be "internal links go through the router", ask three
+"confirm before leaving"): a template slot with a stock default rendered
+OUTSIDE the contenteditable (suffix / bubble position). The stock default
+is a REAL anchor (`target=_blank rel="noopener noreferrer"`), not a button
+calling `window.open` — middle-click, copy-link, drag, status-bar URL, no
+popup blocker. Visible whenever the value is a valid link, muted at rest
+and strong on hover (hover-only affordances do not exist on touch); in
+the tab order right after the field (the Tab scope already handles it).
+
+**Power gesture:** Cmd/Ctrl+click on the idle display opens the same
+`href`; the panel hint (the phone's "what the engine understood" slot)
+says so and previews "will open https://…" per keystroke.
+
+**Email and phone get it for free:** `mailto:` and `tel:` are codecs
+producing an `href`; phone already has E.164.
+
+**Deliberately NOT: linkify inside free text.** Anchors inside the
+contenteditable display cross the ProseMirror line (characters only;
+adornments outside) — caret math, replay and filtering assume one flat
+text node. Airtable made the same call (only the URL field links). A
+read-only rendered overlay would be a separate conversation.
+
+**Build order:** codec + specs → control with `draftText` → the open seam
+→ Cmd/Ctrl+click + hint → core `m-editable-link` (house anchor styling;
+first consumers: the two settings pages hand-writing `mailto:`).
+
 ## Later (needs real behavior, not just a declared input)
 
 - `pending` — block commit while async validation runs; "Validating…" hint in

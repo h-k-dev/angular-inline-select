@@ -241,6 +241,31 @@
     </dd>
   </div>
 
+  <!--
+    BASELINE for the link feature: a URL living in a plain text field, the way
+    every "Website" field ships today. Nothing detects it, nothing opens it —
+    the value is text, clicking it places a caret, and the only way to the
+    page is copy-paste. `inputMode="url"` is the one thing text already
+    offers (the mobile keyboard's / and .com row). The `angular-inline-link`
+    control (ROADMAP → "Next up — angular-inline-link") replaces this row.
+  -->
+  <div class="field-grid__row">
+    <dt class="field-grid__label">Website</dt>
+    <dd class="field-grid__value">
+      <angular-inline-text
+        [clearTemplate]="confirmClear"
+        [formField]="recordForm.website"
+        [isSingleLine]="true"
+        inputMode="url"
+        wrapBehavior="noWrap"
+        placeholder="https://example.com"
+        [normalizeValue]="true"
+        ariaLabel="Website"
+        (saved)="logEmit('website.saved', $event)"
+      />
+    </dd>
+  </div>
+
   <!-- Date: typed or picked; the model is the UTC ISO DB entry. -->
   <div class="field-grid__row">
     <dt class="field-grid__label">Deadline</dt>
