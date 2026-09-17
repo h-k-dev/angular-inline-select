@@ -926,6 +926,20 @@ PER-SLOT visibility gates (`canShow` is a CLEAR rule — a required or readonly
 link field still wants its open button); then the link control drops its
 open anchor into that slot; temporal bubbles onto the scope.
 
+**Follow-up — the scope's reach follows the row gap (2026-09-17).** Core
+tightened the editable-grid to a 32px pitch (24px line + 8px gap) and the
+row shapes looked bloated: `--editable-hover-scope-inset` was ONE fixed
+0.5rem on all four sides, drawn against a 16px gap — on 8px each shape
+reached the next row's ink and neighbours overlapped. The reach is per axis
+now: `--editable-hover-scope-inset-block` / `-inline`, both falling back to
+the old token. The block reach is the HOST's to derive — half its row gap,
+so neighbouring shapes meet and tile on the pitch: core's `.editable-group`
+sets `calc(var(--_grid-gap) / 2)` (follows both modes and the
+`--editable-grid-row-gap` knob), the grid fixture does the same from
+`--_row-gap`. The fixture's fold moved the label→value gap onto the subgrid
+row's own `row-gap` — it was a margin INSIDE the row box, which made the
+shape lopsided around the pair.
+
 ## Next up — `angular-inline-link` (design settled 2026-09-16, not started)
 
 **Baseline in the grid:** the "Website" row — a URL in a plain

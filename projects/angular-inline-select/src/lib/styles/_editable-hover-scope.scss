@@ -26,7 +26,17 @@
     content: '';
     position: absolute;
     z-index: -1;
-    inset: calc(-1 * var(--editable-hover-scope-inset, 0.5rem));
+    // The reach is per AXIS. Inline it is the row's own air; in the block axis
+    // it spends the gap to the NEXT row, so a host with a row rhythm derives it
+    // from that gap (half of it: neighbouring shapes meet, they never overlap
+    // or reach the next row's ink). A fixed reach on all four sides only fits
+    // the gap it was drawn against.
+    inset-block: calc(
+      -1 * var(--editable-hover-scope-inset-block, var(--editable-hover-scope-inset, 0.5rem))
+    );
+    inset-inline: calc(
+      -1 * var(--editable-hover-scope-inset-inline, var(--editable-hover-scope-inset, 0.5rem))
+    );
     border-radius: var(--editable-hover-scope-radius, var(--mat-sys-corner-medium, 0.75rem));
     background: var(
       --editable-hover-scope-color,

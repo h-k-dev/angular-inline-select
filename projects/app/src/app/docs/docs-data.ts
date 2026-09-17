@@ -285,6 +285,17 @@ const HOVER_SCOPE_TOKENS: TokenGroup = {
       description: 'How far the scope’s shape reaches past the container’s box on every side.',
     },
     {
+      token: '--editable-hover-scope-inset-block',
+      fallback: 'var(--editable-hover-scope-inset, 0.5rem)',
+      description:
+        'The reach above and below. It spends the gap to the next row, so a host with a row rhythm sets half its row gap: neighbouring shapes meet and never overlap.',
+    },
+    {
+      token: '--editable-hover-scope-inset-inline',
+      fallback: 'var(--editable-hover-scope-inset, 0.5rem)',
+      description: 'The reach at the start and end of the row.',
+    },
+    {
       token: '--editable-hover-scope-radius',
       fallback: 'var(--mat-sys-corner-medium, 0.75rem)',
       description: 'Corner radius of the scope’s shape.',

@@ -17,12 +17,16 @@
 // One grid for the whole list — never a grid per row: the labels have to share
 // a single column track, or the values stop lining up down the card.
 .field-grid__list {
+  // The rhythm between rows, named because the rows' hover shape is derived
+  // from it (below).
+  --_row-gap: 0.75rem;
+
   margin: 0;
 
   display: grid;
   grid-template-columns: minmax(6ch, max-content) minmax(0, 1fr);
   column-gap: 1.5rem;
-  row-gap: 0.75rem;
+  row-gap: var(--_row-gap);
   align-items: baseline;
 }
 
@@ -37,6 +41,11 @@
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
   align-items: baseline;
+
+  // The row's shape reaches HALF the row gap each way: neighbouring shapes
+  // meet in the middle and never reach the next row's ink — and the reach
+  // follows the gap when it changes. The scope's fixed 0.5rem does neither.
+  --editable-hover-scope-inset-block: calc(var(--_row-gap) / 2);
 }
 
 .field-grid__label {
@@ -64,13 +73,16 @@
   .field-grid__list {
     grid-template-columns: minmax(0, 1fr);
 
-    // Stacked, the row gap is now the LABEL-to-value gap, so it tightens; the
-    // air between pairs comes back as a margin on the label below.
-    row-gap: 0.125rem;
+    // Stacked, the pairs need more air to read as pairs.
+    --_row-gap: 1rem;
   }
 
-  .field-grid__row + .field-grid__row .field-grid__label {
-    margin-block-start: 0.875rem;
+  // The LABEL-to-value gap is the row's own: a subgrid row only borrows the
+  // list's COLUMN tracks, its rows are its own. (It used to be the list's
+  // row-gap with the air between pairs as a margin on the next label — inside
+  // the row's box, so the row's hover shape sat lopsided around the pair.)
+  .field-grid__row {
+    row-gap: 0.125rem;
   }
 }
 
