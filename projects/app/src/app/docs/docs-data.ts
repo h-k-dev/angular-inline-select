@@ -455,6 +455,20 @@ const CHROME_TOKENS: TokenGroup = {
 };
 
 /** The temporal components style their own surfaces but consume the same token names. */
+const PHONE_TOKENS: TokenGroup = {
+  title: 'Phone flag',
+  description:
+    'The country flag is a unicode emoji. Windows ships no flag glyphs (Chrome/Edge show the letters “DE” instead), so load a flag font — e.g. “Twemoji Country Flags” with a flag-only unicode-range — and the control picks it up. Without one, the platform’s native flags are used.',
+  tokens: [
+    {
+      token: '--editable-phone-flag-font',
+      fallback: "'Twemoji Country Flags'",
+      description:
+        'Font family tried first for the flag prefix and the country rows. An undeclared family is skipped.',
+    },
+  ],
+};
+
 const TEMPORAL_TOKENS: TokenGroup = {
   title: 'Temporal surfaces',
   description:
@@ -869,7 +883,7 @@ export const DOCS: Record<string, SectionDocs> = {
         ],
       },
     ],
-    tokenGroups: [TEXT_SURFACE_TOKENS, CHROME_TOKENS],
+    tokenGroups: [TEXT_SURFACE_TOKENS, PHONE_TOKENS, CHROME_TOKENS],
   },
 
   temporal: {

@@ -72,7 +72,8 @@ export interface PhoneCodec {
 
 /**
  * Flag emoji for an ISO country code — two regional-indicator code points.
- * No sprites, no stylesheets, nothing that can break.
+ * No sprites, no stylesheets. Windows has no flag glyphs (renders "DE"); the
+ * control's `--editable-phone-flag-font` hook covers that with a flag font.
  */
 export function countryFlagEmoji(country: PhoneCountry): string {
   const code = country.toUpperCase();

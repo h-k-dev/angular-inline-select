@@ -96,8 +96,17 @@ export interface InlinePhoneSaved {
       color: var(--mat-sys-on-surface-variant, #5f6368);
     }
 
+    /*
+     * Flag-only elements: Windows' emoji font has no flag glyphs (🇩🇪 renders
+     * as "DE"), so a flag font goes first when the consumer has one loaded.
+     * An undeclared family is skipped — native flags stay where they work.
+     */
+    .country-trigger,
+    .country-flag {
+      font-family: var(--editable-phone-flag-font, 'Twemoji Country Flags'), sans-serif;
+    }
     .country-trigger {
-      font: inherit;
+      font-size: inherit;
       line-height: 1;
       padding: 0;
       border: 0;
