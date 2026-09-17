@@ -25,6 +25,7 @@ import {
   CdkConnectedOverlay,
   CdkOverlayOrigin,
   type ConnectedPosition,
+  Overlay,
 } from '@angular/cdk/overlay';
 
 // Form
@@ -773,6 +774,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     if (!isUnitSpacePress(event, this.field().nativeElement)) return;
 
     event.preventDefault();
+    this.#armOpeningClick(); // focus below opens the panel — same press, same trap
     focusInputNearPoint(this.#inputs(), event.clientX, event.clientY);
   }
 
@@ -786,6 +788,12 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * anywhere else, still dismiss.
    */
   protected handleOutsideClick(event: MouseEvent) {
+    // The click completing the press that opened the panel — never an intent to close.
+    if (this.#openingClickPending) {
+      this.#openingClickPending = false;
+      return;
+    }
+
     const scope = this.#hoverScope();
     if (scope !== null && scope.contains(event.target as Node)) return;
 
@@ -797,6 +805,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     if (this.effectiveDisabled() || this.effectiveReadonly()) return;
 
     const { clientX, clientY } = (event as CustomEvent<EditableHoverScopePress>).detail;
+    this.#armOpeningClick();
     focusInputNearPoint(this.#inputs(), clientX, clientY);
   }
 
@@ -865,7 +874,63 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   protected handleInputPointerdown() {
     if (this.effectiveDisabled() || this.effectiveReadonly()) return;
 
+    this.#armOpeningClick();
     this.overlayOpen.set(true);
+  }
+
+  /**
+   * THE PUSHED-PANEL TRAP (found in the isolate popup, 1000×600). The panel
+   * opens on the press; in a short viewport it fits neither below nor above
+   * the field, so CDK's `push` slides it INTO the viewport, over the field.
+   * The press RELEASES on the pushed panel, and the browser targets the
+   * completing CLICK at the common ancestor of press-down (the input) and
+   * release (the pane) — the body — which CDK reports as an OUTSIDE click.
+   * The panel closed on it: an open-close flash on every click, gone the
+   * moment the window is a few pixels taller.
+   *
+   * So the opening press arms a one-shot latch that `handleOutsideClick`
+   * consumes; the next click (bubble phase, after CDK's capture dispatch)
+   * or the next press clears it, so a later real outside click still
+   * dismisses. Keyboard opens involve no press and arm nothing.
+   */
+  /**
+   * THE CDK APPROACH, consistent with the house select (`editable-select-v2`,
+   * the best-tested overlay in the app): the panel CLOSES on scroll — CDK's
+   * `close()` strategy, which hears every scroll container through the
+   * capture-phase dispatcher, unlike `block()`, which pins the document only
+   * and pinned nothing in a shell that scrolls an inner container. The
+   * directive's own Escape/backdrop closing is disabled (`disableClose`) so
+   * this control stays the single owner of its open state; a CDK-initiated
+   * detach (the scroll) is mirrored back through `handlePanelDetach`. The one
+   * deliberate difference from the select: no `usePopover: 'inline'` — that
+   * inserts the popup INSIDE the origin's subtree, which the select's combobox
+   * primitive relies on and the calendar's hover scope containment would not.
+   */
+  protected panelScrollStrategy = inject(Overlay).scrollStrategies.close();
+
+  /** CDK detached the panel (a scroll): the open state follows. */
+  protected handlePanelDetach() {
+    if (this.overlayOpen()) this.overlayOpen.set(false);
+  }
+
+  #openingClickPending = false;
+  /** The latch's document listeners — released by the next click/press, or on destroy. */
+  #settleOpeningClick: (() => void) | null = null;
+  #openingClickDestroy = this.#unitDestroyRef.onDestroy(() => this.#settleOpeningClick?.());
+
+  #armOpeningClick() {
+    if (this.#openingClickPending) return;
+    this.#openingClickPending = true;
+
+    const settle = () => {
+      this.#openingClickPending = false;
+      this.#settleOpeningClick = null;
+      this.#document.removeEventListener('click', settle);
+      this.#document.removeEventListener('pointerdown', settle, true);
+    };
+    this.#settleOpeningClick = settle;
+    this.#document.addEventListener('click', settle);
+    this.#document.addEventListener('pointerdown', settle, true);
   }
 
   /**

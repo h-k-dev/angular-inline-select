@@ -1070,7 +1070,52 @@ side }` and time `{ value: DbDateTime, side }` — one stamp per side, each
   commit. Spec pins hold, keep-on-move-into-bubble, release.
 - **Open:** keyboard reach into the bubble (an "actions" key on the focused
   field) — already true for clear, matters more now; JSON has no actions
-  slot yet.
+  slot yet. Also: the actions gate is "template PRESENT", not "template
+  RENDERED something" — a consumer template whose `@if` yields nothing
+  still opens the bubble (an empty group beside clear, or an empty bubble
+  when clear is off). Core's custom-field hands the template over only
+  when it has something to show (`linkOf(value) ? openLink : undefined`);
+  the grid's Website row leans on clear being there. A library-side gate
+  (an empty embedded view counts as absent) would remove the rule.
+
+### The pushed-panel trap (date) — 2026-09-17
+
+**Found by the user in iusta's isolate popup (1000×600):** the calendar
+flashed open-and-shut on every click, fixed by making the window a few
+pixels taller. The panel opens on the PRESS; in a short viewport it fits
+neither below nor above the field, so CDK's `push` slides it into the
+viewport OVER the field. Not focus (the trace showed no focusout, window
+focused, session still open, only `overlayOpen` flipping ~60ms after
+pointerdown), not the popup (a same-size tab reproduces it).
+
+THE MECHANISM: the press RELEASES on the pushed panel, and the browser
+targets the completing CLICK at the common ancestor of press-down (the
+input) and release (the pane) — the body — which CDK reports as an OUTSIDE
+click; `handleOutsideClick` closed on it. THE FIX, reduced to the minimum
+at the user's request (a first cut also made the panel `pointer-events:
+none` during the press — unnecessary, the retargeted click never reaches
+the chip under the release): the opening press (`handleInputPointerdown`
+/ the unit press / the scope press) arms a one-shot `#openingClickPending`
+latch that `handleOutsideClick` consumes; the next click (bubble phase,
+after CDK's capture dispatch) or the next press clears it. Keyboard opens
+arm nothing. Two specs. Mirrored to core's date-v2; user-confirmed in the
+popup.
+
+**The CDK approach is the house select's (user decision, same day):**
+`editable-select-v2` is the best-tested overlay in iusta and it CLOSES on
+scroll — CDK `close()`, which hears every scroll container through the
+capture-phase dispatcher. A first cut used `block()` (pins the document
+only — pinned nothing in the main shell, "the scroll owner is wrong"),
+then a scroll-owner-finding block strategy; both dropped for the simpler,
+consistent behaviour: `close()` + `disableClose` (this control owns its
+open state; CDK's own Escape/backdrop detach stays out) +
+`disposeOnNavigation` + `(detach)` → `overlayOpen.set(false)` so a
+CDK-initiated detach is mirrored. Deliberate difference: no `usePopover:
+'inline'` (it inserts the popup INSIDE the origin subtree — the select's
+combobox primitive needs that, the calendar's hover-scope containment
+would not survive it). One spec.
+Follow-up: the OVERLAP itself (flexible dimensions + a max-height so the
+panel fits instead of covering the field).
 
 ## Later (needs real behavior, not just a declared input)
 

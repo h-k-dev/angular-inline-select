@@ -1360,3 +1360,67 @@ describe('AngularInlineDate — primary actions', () => {
     expect(act()?.getAttribute('data-value')).toBe('2026-05-15');
   });
 });
+
+// =============================================================================
+// The pushed-panel trap — the click that completes the opening press is
+// never an outside click
+// =============================================================================
+
+describe('AngularInlineDate — the opening press', () => {
+  it('the click that completes the opening press never closes the panel — the next outside click does', () => {
+    const h = setupHost(DateFormHost);
+
+    // Press on the input opens; the release lands on the pushed panel, so the
+    // browser targets the CLICK at their common ancestor — the body.
+    h.start().dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    h.start().focus();
+    h.fixture.detectChanges();
+    expect(h.panel()).not.toBeNull();
+
+    document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    document.body.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }),
+    );
+    h.fixture.detectChanges();
+    expect(h.panel()).not.toBeNull();
+
+    // A real outside click still dismisses.
+    document.body.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }),
+    );
+    h.fixture.detectChanges();
+    expect(h.panel()).toBeNull();
+  });
+
+  it('closes on scroll like the house select, and the open state follows the detach', () => {
+    const h = setupHost(DateFormHost);
+
+    h.start().focus();
+    h.fixture.detectChanges();
+    expect(h.panel()).not.toBeNull();
+
+    document.dispatchEvent(new Event('scroll', { bubbles: true }));
+    h.fixture.detectChanges();
+    expect(h.panel()).toBeNull();
+    expect(
+      h.fixture.debugElement
+        .query((d) => d.name === 'angular-inline-date')
+        .componentInstance.overlayOpen(),
+    ).toBe(false);
+    expect(document.activeElement).toBe(h.start()); // the session survives; only the panel went
+  });
+
+  it('a keyboard open involves no press and arms nothing — the first outside click dismisses', () => {
+    const h = setupHost(DateFormHost);
+
+    h.start().focus();
+    h.fixture.detectChanges();
+    expect(h.panel()).not.toBeNull();
+
+    document.body.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }),
+    );
+    h.fixture.detectChanges();
+    expect(h.panel()).toBeNull();
+  });
+});

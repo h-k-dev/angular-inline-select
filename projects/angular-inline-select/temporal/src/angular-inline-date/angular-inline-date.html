@@ -201,6 +201,10 @@
   [cdkConnectedOverlayPositions]="overlayPositions"
   [cdkConnectedOverlayViewportMargin]="8"
   [cdkConnectedOverlayPush]="true"
+  [cdkConnectedOverlayScrollStrategy]="panelScrollStrategy"
+  [cdkConnectedOverlayDisableClose]="true"
+  [cdkConnectedOverlayDisposeOnNavigation]="true"
+  (detach)="handlePanelDetach()"
   (overlayOutsideClick)="handleOutsideClick($event)"
 >
   <div
