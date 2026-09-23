@@ -76,6 +76,9 @@ export interface RecordModel {
   status: string;
   reference: string;
   callsign: string;
+  /** The editable stem only — the extension below is never part of the draft. */
+  fileName: string;
+  fileExtension: string;
   budget: number | null;
   revenue: number | null;
   cable: number | string | null;
@@ -119,6 +122,8 @@ function initialRecord(): RecordModel {
     status: 'In progress',
     reference: 'Junction Point Observatory / Western Rim / survey sector nine / dossier 4471-B',
     callsign: 'AUR-01',
+    fileName: 'sector-nine-survey-report',
+    fileExtension: 'pdf',
     budget: 48500,
     revenue: 1250000.5,
     cable: 48.5,
@@ -209,6 +214,9 @@ export class FieldGrid {
   /** Callsigns are typed in the shape they are stored in — the filter says so. */
   protected readonly callsignChars = /[A-Z0-9-]/;
 
+  /** File names refuse what no file system stores; the extension is a suffix, not typed. */
+  protected readonly fileNameChars = /[^\\/:*?"<>|]/;
+
   // ---------------------------------------------------------------------------
   // The record: one model, one form, every control
   // ---------------------------------------------------------------------------
@@ -232,6 +240,7 @@ export class FieldGrid {
     // [editable-error] content (the mat-error split).
     required(path.project, { when: () => this.fieldRequired() });
     required(path.telephone, { when: () => this.fieldRequired() });
+    required(path.fileName);
 
     // The framework's own `email` validator: a PRAGMATIC check, deliberately
     // not RFC 5322. It caps the local part and the whole address, insists on a
@@ -266,6 +275,13 @@ export class FieldGrid {
   protected telephoneMissing = computed(() =>
     this.recordForm
       .telephone()
+      .errors()
+      .some((error) => error.kind === 'required'),
+  );
+
+  protected fileNameMissing = computed(() =>
+    this.recordForm
+      .fileName()
       .errors()
       .some((error) => error.kind === 'required'),
   );

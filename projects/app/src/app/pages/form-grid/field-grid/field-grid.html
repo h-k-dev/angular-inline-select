@@ -453,6 +453,36 @@
     </dd>
   </div>
 
+  <!--
+    File name: only the stem is editable — the extension is a suffix, outside
+    the draft, so a rename can never turn `report.pdf` into `report.exe`. The
+    filter keeps out the characters no file system accepts.
+  -->
+  <div class="field-grid__row" editableHoverScope>
+    <dt class="field-grid__label">Attachment</dt>
+    <dd class="field-grid__value">
+      <angular-inline-text
+        [showClear]="showClear()"
+        [clearTemplate]="confirmClear"
+        [formField]="recordForm.fileName"
+        [isSingleLine]="true"
+        wrapBehavior="noWrap"
+        [allowedChars]="fileNameChars"
+        placeholder="File name…"
+        [normalizeValue]="true"
+        ariaLabel="Attachment file name, {{ recordModel().fileExtension }} file"
+        (saved)="logEmit('fileName.saved', $event)"
+      >
+        <ng-template editableSuffix>.{{ recordModel().fileExtension }}</ng-template>
+        <span editable-error>
+          @if (fileNameMissing()) {
+            A file needs a name.
+          }
+        </span>
+      </angular-inline-text>
+    </dd>
+  </div>
+
   <!-- Character filter + shape validation: the filter types, the schema judges. -->
   <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Callsign</dt>

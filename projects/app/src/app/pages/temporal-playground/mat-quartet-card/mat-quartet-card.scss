@@ -17,3 +17,13 @@
     min-width: 9rem;
   }
 }
+
+// Filled row: the mat box IS the surface — its container, state layer and
+// active indicator answer hover and focus. Our own shape tint would stack a
+// second grey inside it, so the row sets it transparent with the controls'
+// token; every inline control in the row inherits it.
+.mat-quartet--filled {
+  --editable-text-shape-color: transparent;
+
+  margin-top: 0.75rem;
+}

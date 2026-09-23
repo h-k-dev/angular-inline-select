@@ -1,11 +1,4 @@
-<div
-  class="example-card"
-  id="mat-quartet-example"
-  dateTimeRangeGroup
-  #matStayGroup="dateTimeRangeGroup"
-  [formField]="matStayForm"
-  (savedModelChange)="logEmit('matStay.savedModelChange', $event)"
->
+<div class="example-card" id="mat-quartet-example">
   <h3 class="example-card__title">The quartet in mat-form-fields (T4) — same controls, mat chrome</h3>
   <p class="prose">
     The SAME group and the SAME mat-ignorant leaves — each hosted by <code>&lt;mat-form-field&gt;</code> via
@@ -16,7 +9,13 @@
     <code>+{{ matStayGroup.endDayOffset() }}</code> badge all work unchanged inside the mat box.
   </p>
 
-  <div class="mat-quartet">
+  <div
+    class="mat-quartet"
+    dateTimeRangeGroup
+    #matStayGroup="dateTimeRangeGroup"
+    [formField]="matStayForm"
+    (savedModelChange)="logEmit('matStay.savedModelChange', $event)"
+  >
     <mat-form-field appearance="outline">
       <mat-label>Stay</mat-label>
       <angular-inline-date
@@ -59,6 +58,65 @@
         [step]="60"
         placeholder=""
         ariaLabel="Mat stay length"
+      />
+      <mat-hint>whole minutes</mat-hint>
+    </mat-form-field>
+  </div>
+
+
+  <!--
+    The same quartet in appearance="fill", bound to the SAME model — edit either
+    row and the other follows. Here the mat box owns hover and focus, so the
+    controls' own shape tint is set transparent (see the scss).
+  -->
+  <div
+    class="mat-quartet mat-quartet--filled"
+    dateTimeRangeGroup
+    [formField]="matStayForm"
+    (savedModelChange)="logEmit('matStayFilled.savedModelChange', $event)"
+  >
+    <mat-form-field appearance="fill">
+      <mat-label>Stay</mat-label>
+      <angular-inline-date
+        rangeDay
+        inlineMatFormField
+        [locale]="locale()"
+        placeholder=""
+        ariaLabel="Filled mat stay day"
+      />
+    </mat-form-field>
+
+    <mat-form-field appearance="fill">
+      <mat-label>Starts</mat-label>
+      <angular-inline-time
+        rangeStart
+        inlineMatFormField
+        [locale]="militaryLocale()"
+        placeholder=""
+        ariaLabel="Filled mat stay start in 24-hour time"
+      />
+    </mat-form-field>
+
+    <mat-form-field appearance="fill">
+      <mat-label>Ends</mat-label>
+      <angular-inline-time
+        rangeEnd
+        inlineMatFormField
+        [locale]="militaryLocale()"
+        placeholder=""
+        ariaLabel="Filled mat stay end in 24-hour time"
+      />
+    </mat-form-field>
+
+    <mat-form-field appearance="fill">
+      <mat-label>Length</mat-label>
+      <angular-inline-duration
+        rangeLength
+        inlineMatFormField
+        durationFormat="h:mm"
+        [step]="60"
+        placeholder=""
+        ariaLabel="Filled mat stay length"
       />
       <mat-hint>whole minutes</mat-hint>
     </mat-form-field>
