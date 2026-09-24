@@ -49,8 +49,6 @@
 // -----------------------------------------------------------------------------
 .editable-text__field {
   display: inline;
-  position: relative;
-  isolation: isolate; // the shape's z-index:-1 stays behind THIS content only
   cursor: text;
 
   transition: opacity 0.15s var(--editable-ease-standard, cubic-bezier(0.4, 0, 0.2, 1));
@@ -58,6 +56,8 @@
   // The no-wrap unit: a real box. Baseline-aligned like the panel line, the
   // display shrinks first (min-width: 0 → its own ellipsis), affixes never.
   &:has(> .editable-text__display--no-wrap) {
+    position: relative;
+    isolation: isolate; // the shape's z-index:-1 stays behind THIS content only
     display: inline-flex;
     align-items: baseline;
     max-width: 100%;
@@ -110,6 +110,13 @@
 
   // The wrapping unit: cloned per-line padding is the only per-fragment
   // surface CSS offers; the tint paints on the box itself.
+  //
+  // NO LAYER HERE — no `position`, no `isolation`. The display is `inline`, so
+  // the caret is painted by the enclosing BLOCK, and a layered inline paints
+  // after that block: its tint lands on top of the caret. With an opaque
+  // `--editable-text-shape-color` the field focused, the selection was right,
+  // and the caret never blinked. Unlayered, the tint paints with the block's
+  // line boxes and the caret after them.
   &:not(:has(> .editable-text__display--no-wrap)) {
     padding: var(--editable-text-shape-inset, 0.375rem);
     margin-inline: calc(-1 * var(--editable-text-shape-inset, 0.375rem));
