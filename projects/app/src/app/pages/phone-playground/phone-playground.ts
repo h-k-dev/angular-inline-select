@@ -11,14 +11,9 @@ import { FormField, form, required } from '@angular/forms/signals';
 // Material
 import { MatButtonModule } from '@angular/material/button';
 
-// Phone entry point: the only place in the app that carries phone bytes.
-import { AngularInlinePhone, createLibphonenumberCodec } from 'angular-inline-select/phone';
-import metadata from 'libphonenumber-js/metadata.min.json';
-import examples from 'libphonenumber-js/examples.mobile.json';
-
-// One codec per app: full min-metadata here; a DACH-only app would pass a
-// generated subset instead (a few kB).
-const phoneCodec = createLibphonenumberCodec(metadata, examples);
+// No engine here: every phone field shares the app-wide lazy one registered
+// with `providePhoneCodec` in app.config.ts.
+import { AngularInlinePhone } from 'angular-inline-select/phone';
 
 @Component({
   selector: 'app-phone-playground',
@@ -37,8 +32,6 @@ const phoneCodec = createLibphonenumberCodec(metadata, examples);
   ],
 })
 export class PhonePlayground {
-  protected codec = phoneCodec;
-
   // ---------------------------------------------------------------------------
   // Fresh-entry example — empty field, no pre-filled number
   // ---------------------------------------------------------------------------
@@ -66,7 +59,10 @@ export class PhonePlayground {
   });
 
   protected phoneMissing = computed(() =>
-    this.contactForm.phone().errors().some((error) => error.kind === 'required'),
+    this.contactForm
+      .phone()
+      .errors()
+      .some((error) => error.kind === 'required'),
   );
 
   // Event console: E.164-typed payloads, newest first.

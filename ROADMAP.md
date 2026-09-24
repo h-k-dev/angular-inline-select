@@ -467,6 +467,40 @@ list, preserving the national number. Both gestures share one option list.
   from scratch) and a `menuLocale` toggle. 71 tests; production secondary-
   entry-point build still isolates `libphonenumber` to the phone bundle.
 
+**P5 — the shared lazy engine + the reserved flag — SHIPPED (2026-09-17).**
+The engine used to be a required `[codec]` input, so every page built its own
+(the demo had FOUR). Now the default is ONE app-wide engine, lazy:
+
+- **`providePhoneCodec(() => import(…))`** registers the source;
+  `PhoneCodecLoader` (`@Service`, a signal + a memoized promise) runs it ONCE
+  however many fields ask. `[codec]` stays as the explicit override and never
+  touches the loader.
+- **Idle-until-urgent:** the first RENDERED field schedules the load with
+  `onIdle({ timeout: 300 })` (Angular's `IdleService`, shared with `@defer`);
+  hover/focus call `ensureLoaded()` and skip the wait. Hover-only loading was
+  rejected: it puts the upgrade (number reformat) under the pointer.
+  `injectAsync` was rejected too: promise-only (the template needs a signal),
+  its `prefetch` only warms the chunk, and its memoized promise cannot retry —
+  the loader FORGETS a failed attempt (stale-deploy chunk 404) and never
+  rejects.
+- **The adapter moved** to its own entry point,
+  `angular-inline-select/phone-libphonenumber` (the `temporal-mat` pattern):
+  inside `/phone` it could not be a lazy chunk, because the control's static
+  import pins the whole module. `/phone` is now engine-free (0 references).
+- **Passthrough:** until the engine lands the field is a plain text control
+  on the raw value. The swap replaces the inner control, so `upgraded` latches
+  it: never UNDER an open session, only after it settles.
+- **Zero-shift flag:** `.country-trigger`/`.country-flag` are a RESERVED
+  inline-block (`--editable-phone-flag-width`, 1.35em), and the passthrough
+  renders the same box (`reservesFlag`) — blank with a value (the country is
+  the engine's call), the default flag when empty. Browser-measured: slot
+  21.59px before and after, number x unchanged. The font partial is
+  `font-display: block` (the fallback is LETTERS). What cannot be reserved is
+  the reformat itself (`+493012345678` → `+49 30 12345678`) — that is why the
+  load is early and once.
+- Verified: production build — engine chunks (adapter + 83 kB metadata) out of
+  main, fetched together ~300 ms after the first phone field; 519 tests.
+
 Original design notes:
 
 - **Core seam (dormant unless fed):** `angular-inline-text` gets a

@@ -7,8 +7,10 @@ import examples from 'libphonenumber-js/examples.mobile.json';
 
 import { AngularInlineText, EditableClear, EditableClearTemplate } from 'angular-inline-select';
 
+import { createLibphonenumberCodec } from 'angular-inline-select/phone-libphonenumber';
+
 import { AngularInlinePhone, type InlinePhoneSaved } from './angular-inline-phone';
-import { createLibphonenumberCodec } from './libphonenumber-codec';
+import { PhoneCodecLoader, providePhoneCodec } from './phone-codec-loader';
 
 const codec = createLibphonenumberCodec(metadata, examples);
 
@@ -274,6 +276,109 @@ describe('AngularInlinePhone — signal form [formField] binding', () => {
     await typeText(h, '0171 2345678');
 
     expect(h.host.field().value()).toBe('+491712345678');
+  });
+});
+
+// =============================================================================
+// The default: no [codec] — the app-wide lazy engine (providePhoneCodec)
+// =============================================================================
+
+@Component({
+  imports: [AngularInlinePhone],
+  template: `<angular-inline-phone [(value)]="value" defaultCountry="DE" />`,
+})
+class PhoneLazyHost {
+  value = signal<string | null>('+491712345678');
+}
+
+describe('AngularInlinePhone — shared lazy engine', () => {
+  const prefix = (fixture: ComponentFixture<unknown>) =>
+    fixture.nativeElement.querySelector('.editable-text__affix--prefix') as HTMLElement | null;
+  const display = (fixture: ComponentFixture<unknown>) =>
+    fixture.nativeElement.querySelector('.editable-text__display') as HTMLElement;
+
+  it('renders a passthrough with the flag box RESERVED, then upgrades in place', async () => {
+    TestBed.configureTestingModule({ providers: [providePhoneCodec(async () => codec)] });
+    const fixture = TestBed.createComponent(PhoneLazyHost);
+    fixture.detectChanges();
+
+    // Passthrough: raw E.164; the box is there but blank — the country of a
+    // VALUE is the engine's call, never a guess.
+    expect(display(fixture).textContent).toBe('+491712345678');
+    expect(prefix(fixture)?.querySelector('.country-trigger')).not.toBeNull();
+    expect(prefix(fixture)?.textContent?.trim()).toBe('');
+
+    // Urgent intent: hover skips the idle wait
+    fixture.nativeElement
+      .querySelector('angular-inline-phone')
+      .dispatchEvent(new Event('mouseenter'));
+    await TestBed.inject(PhoneCodecLoader).ensureLoaded();
+    fixture.detectChanges();
+
+    expect(display(fixture).textContent).toBe('+49 171 2345678');
+    expect(prefix(fixture)?.textContent?.trim()).toBe('🇩🇪');
+  });
+
+  it('never upgrades UNDER an open passthrough session — it waits for the settlement', async () => {
+    TestBed.configureTestingModule({ providers: [providePhoneCodec(async () => codec)] });
+    const fixture = TestBed.createComponent(PhoneLazyHost);
+    fixture.detectChanges();
+
+    const h = {
+      fixture,
+      display: () => display(fixture),
+      editor: () => document.querySelector('.editable-text__editor') as HTMLElement | null,
+    } as Harness<PhoneLazyHost>;
+    const inner = () => fixture.debugElement.children[0].children[0].componentInstance;
+
+    await typeText(h, '0171 2345678');
+    const session = inner();
+
+    // The engine lands mid-draft: same inner control, same editor, same draft
+    await TestBed.inject(PhoneCodecLoader).ensureLoaded();
+    fixture.detectChanges();
+
+    expect(inner()).toBe(session);
+    expect(h.editor()?.textContent).toBe('0171 2345678');
+
+    (session as unknown as { accept(): void }).accept();
+    fixture.detectChanges();
+
+    // Settled → upgraded; the raw commit reads as the engine understands it
+    expect(inner()).not.toBe(session);
+    expect(display(fixture).textContent).toBe('+49 171 2345678');
+  });
+
+  it("shows the default country's flag in the reserved box of an EMPTY field", () => {
+    TestBed.configureTestingModule({ providers: [providePhoneCodec(async () => codec)] });
+    const fixture = TestBed.createComponent(PhoneLazyHost);
+    fixture.componentInstance.value.set(null);
+    fixture.detectChanges();
+
+    expect(prefix(fixture)?.textContent?.trim()).toBe('🇩🇪');
+  });
+
+  it('a field created after the engine landed renders upgraded from its first frame', async () => {
+    TestBed.configureTestingModule({ providers: [providePhoneCodec(async () => codec)] });
+    await TestBed.inject(PhoneCodecLoader).ensureLoaded();
+
+    const fixture = TestBed.createComponent(PhoneLazyHost);
+    fixture.detectChanges();
+
+    expect(display(fixture).textContent).toBe('+49 171 2345678');
+  });
+
+  it('a bound [codec] never touches the shared loader', () => {
+    const source = vi.fn(async () => codec);
+    TestBed.configureTestingModule({ providers: [providePhoneCodec(source)] });
+
+    const h = setup(PhoneValueHost);
+    h.fixture.nativeElement
+      .querySelector('angular-inline-phone')
+      .dispatchEvent(new Event('mouseenter'));
+
+    expect(source).not.toHaveBeenCalled();
+    expect(TestBed.inject(PhoneCodecLoader).codec()).toBeNull();
   });
 });
 

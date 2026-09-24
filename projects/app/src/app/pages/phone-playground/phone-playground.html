@@ -3,9 +3,11 @@
     <header class="example__header">
       <h2>Inline phone</h2>
       <p>
-        <code>angular-inline-phone</code> composes the text control over an injected <code>PhoneCodec</code>
-        (libphonenumber-js, metadata of your choice). Canonical value: E.164. No third-party DOM, no CSS to break —
-        the flag is a unicode emoji.
+        <code>angular-inline-phone</code> composes the text control over a
+        <code>PhoneCodec</code> (libphonenumber-js, metadata of your choice) — by default ONE
+        app-wide engine, registered with <code>providePhoneCodec</code> and loaded lazily,
+        idle-until-urgent; the flag's box is reserved up front so the upgrade shifts nothing.
+        Canonical value: E.164. No third-party DOM — the flag is a unicode emoji.
       </p>
     </header>
 
@@ -16,13 +18,14 @@
           New number:
           <angular-inline-phone
             [(value)]="freshPhone"
-            [codec]="codec"
             defaultCountry="DE"
             ariaLabel="New phone number"
           />
-          — starting from nothing. Type “/” for the country menu (Notion-style: only at the start), or tap the flag
-          for the searchable picker. Both set the calling code so you can type the rest — model:
-          <code>{{ freshPhone() ?? '∅' }}</code>.
+          — starting from nothing. Type “/” for the country menu (Notion-style: only at the start),
+          or tap the flag for the searchable picker. Both set the calling code so you can type the
+          rest — model:
+          <code>{{ freshPhone() ?? '∅' }}</code
+          >.
         </p>
       </div>
 
@@ -32,13 +35,13 @@
           Support hotline:
           <angular-inline-phone
             [(value)]="hotline"
-            [codec]="codec"
             defaultCountry="DE"
             ariaLabel="Support hotline phone number"
           />
-          — the flag shows the <em>detected</em> country; tap it for the searchable picker, which swaps the calling
-          code while keeping the national number (try switching to another country — the digits stay). The panel
-          previews the engine's interpretation on every keystroke — model: <code>{{ hotline() ?? '∅' }}</code
+          — the flag shows the <em>detected</em> country; tap it for the searchable picker, which
+          swaps the calling code while keeping the national number (try switching to another country
+          — the digits stay). The panel previews the engine's interpretation on every keystroke —
+          model: <code>{{ hotline() ?? '∅' }}</code
           >.
         </p>
       </div>
@@ -50,7 +53,6 @@
           <angular-inline-phone
             #contact
             [formField]="contactForm.phone"
-            [codec]="codec"
             defaultCountry="DE"
             [displayFormat]="displayFormat()"
             [menuLocale]="menuLocale()"
@@ -66,9 +68,10 @@
               }
             </span>
           </angular-inline-phone>
-          — typed nationally (“0171…”) it resolves against <code>defaultCountry</code>; typed with “+CC” the detected
-          country wins. Structurally unreadable drafts can’t save; suspicious ones (too short, unrecognized) save with
-          a ⚠ in the preview — model: <code>{{ contactModel().phone ?? '∅' }}</code
+          — typed nationally (“0171…”) it resolves against <code>defaultCountry</code>; typed with
+          “+CC” the detected country wins. Structurally unreadable drafts can’t save; suspicious
+          ones (too short, unrecognized) save with a ⚠ in the preview — model:
+          <code>{{ contactModel().phone ?? '∅' }}</code
           >.
         </p>
 
@@ -84,7 +87,9 @@
           </button>
           <button
             mat-stroked-button
-            (click)="displayFormat.set(displayFormat() === 'national' ? 'international' : 'national')"
+            (click)="
+              displayFormat.set(displayFormat() === 'national' ? 'international' : 'national')
+            "
           >
             Display: {{ displayFormat() }}
           </button>
@@ -96,10 +101,11 @@
         </div>
 
         <p class="form-toggles__hint">
-          Try “0171 2345678” (✓), “017” (⚠ too short — still saves), “abc” (parse gate — Save stays blocked), or
-          “+33 1 42 68 53 00” (the flag flips to 🇫🇷). Type “/” for the country menu — <code>/germany</code>,
-          <code>/deutschland</code>, <code>/de</code> and <code>/49</code> all find 🇩🇪 regardless of the Menu locale.
-          The model always holds E.164 or <code>null</code>.
+          Try “0171 2345678” (✓), “017” (⚠ too short — still saves), “abc” (parse gate — Save stays
+          blocked), or “+33 1 42 68 53 00” (the flag flips to 🇫🇷). Type “/” for the country menu —
+          <code>/germany</code>, <code>/deutschland</code>, <code>/de</code> and
+          <code>/49</code> all find 🇩🇪 regardless of the Menu locale. The model always holds E.164
+          or <code>null</code>.
         </p>
 
         @if (emittedEvents().length > 0) {

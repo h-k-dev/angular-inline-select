@@ -15,7 +15,7 @@ import type {
   PhoneCountry,
   PhoneParseResult,
   PhoneParseWarning,
-} from './phone-codec';
+} from 'angular-inline-select/phone';
 
 /**
  * `PhoneCodec` over `libphonenumber-js/core` — the metadata-free build; the
@@ -89,7 +89,11 @@ export function createLibphonenumberCodec(metadata: MetadataJson, examples?: Exa
       };
     },
 
-    format(value: string, style: 'national' | 'international', defaultCountry?: PhoneCountry): string {
+    format(
+      value: string,
+      style: 'national' | 'international',
+      defaultCountry?: PhoneCountry,
+    ): string {
       const phone = parsePhoneNumberFromString(
         value,
         { defaultCountry: defaultCountry as CountryCode | undefined, extract: false },

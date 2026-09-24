@@ -52,9 +52,7 @@ import {
 } from '../../../../../../angular-inline-select/src/lib/bubble-menu/editable-actions';
 
 // Secondary entry points
-import { AngularInlinePhone, createLibphonenumberCodec } from 'angular-inline-select/phone';
-import metadata from 'libphonenumber-js/metadata.min.json';
-import examples from 'libphonenumber-js/examples.mobile.json';
+import { AngularInlinePhone } from 'angular-inline-select/phone';
 import {
   AngularInlineDate,
   AngularInlineTime,
@@ -65,9 +63,6 @@ import {
   type IsoDateRange,
   type DbTimeRange,
 } from 'angular-inline-select/temporal';
-
-/** One phone engine for every instance of the grid — the metadata is expensive. */
-const phoneCodec = createLibphonenumberCodec(metadata, examples);
 
 /** The record behind the grid: one model, one signal form, every control. */
 export interface RecordModel {
@@ -207,7 +202,6 @@ export class FieldGrid {
   /** Every settled commit, for the page's event console. */
   readonly emitted = output<FieldGridEmission>();
 
-  protected readonly codec = phoneCodec;
   protected readonly statusOptions = STATUS_OPTIONS;
   protected readonly summaryMax = SUMMARY_MAX;
 

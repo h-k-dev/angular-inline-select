@@ -25,6 +25,17 @@
   </button>
 </ng-template>
 
+<!--
+  The flag's RESERVED box while the shared lazy engine loads: same class, same
+  box as the trigger, so the upgrade swaps the glyph in without moving the
+  number. Inert — the picker needs the engine's country list.
+-->
+<ng-template #pendingFlagTpl>
+  <span class="country-trigger country-trigger--pending" aria-hidden="true">{{
+    pendingFlag()
+  }}</span>
+</ng-template>
+
 <!-- Live interpretation preview: ✓/⚠/… + what the engine understood. -->
 <ng-template #previewTpl>{{ preview() }}</ng-template>
 
@@ -63,36 +74,62 @@
 <!--
   Composition, not inheritance: the inner text control owns the session
   machinery; this component translates at the contract boundary through the
-  injected PhoneCodec.
+  PhoneCodec. Until the shared lazy engine lands (idle-until-urgent, see
+  PhoneCodecLoader) the field is a plain text passthrough that upgrades in
+  place — after an open session settles, never under it; a bound [codec]
+  never sees that branch.
 -->
-<angular-inline-text
-  [value]="innerValue()"
-  (valueChange)="handleInnerValue($event)"
-  [(editing)]="innerEditing"
-  [isSingleLine]="true"
-  [normalizeValue]="true"
-  inputMode="tel"
-  [errors]="innerErrors()"
-  [invalid]="invalid()"
-  [disabled]="disabled()"
-  [readonly]="readonly()"
-  [required]="required()"
-  [touched]="touched()"
-  [placeholder]="effectivePlaceholder()"
-  [ariaLabel]="ariaLabel()"
-  [prefixTemplate]="consumerPrefixTpl() ?? (flag() ? flagTpl : undefined)"
-  [suffixTemplate]="suffixTpl()"
-  [clearTemplate]="clearTpl()"
-  [showClear]="showClear()"
-  [actionsTemplate]="actionsTpl()"
-  [actionsData]="actionsData()"
-  [hintTemplate]="preview() ? previewTpl : undefined"
-  [menuTemplate]="showCountryMenu() ? countryMenu : undefined"
-  (touch)="touch.emit()"
-  (saved)="handleInnerSaved($event)"
->
-  <ng-content select="[editable-error]" ngProjectAs="[editable-error]" />
-</angular-inline-text>
+@if (upgraded()) {
+  <angular-inline-text
+    [value]="innerValue()"
+    (valueChange)="handleInnerValue($event)"
+    [(editing)]="innerEditing"
+    [isSingleLine]="true"
+    [normalizeValue]="true"
+    inputMode="tel"
+    [errors]="innerErrors()"
+    [invalid]="invalid()"
+    [disabled]="disabled()"
+    [readonly]="readonly()"
+    [required]="required()"
+    [touched]="touched()"
+    [placeholder]="effectivePlaceholder()"
+    [ariaLabel]="ariaLabel()"
+    [prefixTemplate]="consumerPrefixTpl() ?? (flag() ? flagTpl : undefined)"
+    [suffixTemplate]="suffixTpl()"
+    [clearTemplate]="clearTpl()"
+    [showClear]="showClear()"
+    [actionsTemplate]="actionsTpl()"
+    [actionsData]="actionsData()"
+    [hintTemplate]="preview() ? previewTpl : undefined"
+    [menuTemplate]="showCountryMenu() ? countryMenu : undefined"
+    (touch)="touch.emit()"
+    (saved)="handleInnerSaved($event)"
+  >
+    <ng-content select="[editable-error]" ngProjectAs="[editable-error]" />
+  </angular-inline-text>
+} @else {
+  <angular-inline-text
+    [value]="value() ?? ''"
+    (valueChange)="value.set($event || null)"
+    [(editing)]="innerEditing"
+    [isSingleLine]="true"
+    [normalizeValue]="true"
+    inputMode="tel"
+    [errors]="errors()"
+    [invalid]="invalid()"
+    [disabled]="disabled()"
+    [readonly]="readonly()"
+    [required]="required()"
+    [touched]="touched()"
+    [placeholder]="effectivePlaceholder()"
+    [ariaLabel]="ariaLabel()"
+    [prefixTemplate]="consumerPrefixTpl() ?? (reservesFlag() ? pendingFlagTpl : undefined)"
+    (touch)="touch.emit()"
+    (savedModelChange)="savedModelChange.emit({ value: $event.value || null })"
+    (saved)="saved.emit({ value: $event.value || null, changed: $event.changed })"
+  />
+}
 
 <!--
   Flag country picker — CDK overlay, its own search field, draft untouched.

@@ -10,6 +10,7 @@ import {
   viewChild,
   contentChild,
   afterNextRender,
+  effect,
   ElementRef,
   Injector,
   inject,
@@ -36,6 +37,7 @@ import {
   type PhoneNumberKind,
   type PhoneParseWarning,
 } from './phone-codec';
+import { PhoneCodecLoader } from './phone-codec-loader';
 
 /** The `editableActions` payload: everything a house needs to act on a phone number. */
 export interface InlinePhoneActions {
@@ -104,6 +106,18 @@ export interface InlinePhoneSaved {
     .country-trigger,
     .country-flag {
       font-family: var(--editable-phone-flag-font, 'Twemoji Country Flags'), sans-serif;
+
+      /*
+       * A RESERVED box, not the glyph's own advance: flag widths differ per
+       * emoji font (and "DE" letters are wider still), so a late font swap or
+       * the passthrough → engine upgrade would otherwise shift the number.
+       */
+      display: inline-block;
+      flex: none;
+      inline-size: var(--editable-phone-flag-width, 1.35em);
+      text-align: center;
+      white-space: nowrap;
+      overflow: clip;
     }
     .country-trigger {
       font-size: inherit;
@@ -117,6 +131,9 @@ export interface InlinePhoneSaved {
     .country-trigger:focus-visible {
       outline: 2px solid var(--mat-sys-primary, #4285f4);
       outline-offset: 2px;
+    }
+    .country-trigger--pending {
+      cursor: default;
     }
 
     .country-picker {
@@ -162,6 +179,8 @@ export interface InlinePhoneSaved {
   `,
   host: {
     '[style.display]': 'hidden() ? "none" : null',
+    '(mouseenter)': 'loadCodec()',
+    '(focusin)': 'loadCodec()',
   },
 })
 export class AngularInlinePhone implements FormValueControl<string | null> {
@@ -174,8 +193,44 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
    */
   value = model<string | null>(null);
 
-  /** The engine. See `createLibphonenumberCodec` for the shipped adapter. */
-  codec = input.required<PhoneCodec>();
+  /**
+   * The engine, bound directly. Optional: left unset, the field shares the
+   * app-wide lazy engine registered with `providePhoneCodec` — the default.
+   */
+  codec = input<PhoneCodec | undefined>(undefined);
+
+  readonly #codecLoader = inject(PhoneCodecLoader);
+
+  /**
+   * The effective engine — `null` only while the shared lazy engine loads, in
+   * which the template renders a plain text passthrough. Every `engine()!`
+   * below runs only from bindings inside the engine branch of the template,
+   * hence the non-null assertions.
+   */
+  protected engine = computed(() => this.codec() ?? this.#codecLoader.codec());
+
+  /**
+   * The template's branch gate: the engine has landed AND the swap is safe.
+   * The upgrade replaces the inner control, so it never happens under an open
+   * passthrough session (focus and draft would die with it) — it waits for
+   * the session to settle. Once upgraded, sessions no longer hold it back.
+   */
+  protected upgraded = linkedSignal<{ ready: boolean; editing: boolean }, boolean>({
+    source: () => ({ ready: this.engine() !== null, editing: this.innerEditing() }),
+    computation: ({ ready, editing }, prev) => ready && (prev?.value === true || !editing),
+  });
+
+  /** The urgent half of idle-until-urgent: hover/focus skip the idle wait. */
+  protected loadCodec() {
+    if (!this.codec()) void this.#codecLoader.ensureLoaded();
+  }
+
+  constructor() {
+    // The polite half: the first rendered field schedules the one shared load.
+    effect(() => {
+      if (!this.codec()) this.#codecLoader.loadWhenIdle();
+    });
+  }
 
   /** Country assumed for national-format input; `+CC` input overrides it. */
   defaultCountry = input<PhoneCountry | undefined>(undefined);
@@ -269,7 +324,7 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     };
     if (canonical === null) return empty;
 
-    const result = this.codec().parse(canonical, this.defaultCountry());
+    const result = this.engine()!.parse(canonical, this.defaultCountry());
     if (!result?.ok) return empty;
 
     return {
@@ -303,7 +358,7 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     const value = this.value();
     if (value === null || value === undefined || value === '') return null;
 
-    const result = this.codec().parse(value, this.defaultCountry());
+    const result = this.engine()!.parse(value, this.defaultCountry());
     return result?.ok ? result.e164 : value;
   });
 
@@ -320,7 +375,7 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
       const canonical = this.canonical();
       if (canonical === null) return '';
 
-      return this.codec().format(canonical, this.displayFormat(), this.defaultCountry());
+      return this.engine()!.format(canonical, this.displayFormat(), this.defaultCountry());
     },
     computation: (source, prev) => (this.innerEditing() ? (prev?.value ?? source) : source),
     // The live channel IS the setter (22.1): every raw write parses, and a
@@ -330,7 +385,7 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     set: (raw, rawSet) => {
       rawSet(raw);
 
-      const result = this.codec().parse(raw, this.defaultCountry());
+      const result = this.engine()!.parse(raw, this.defaultCountry());
       if (result === null) {
         if (this.canonical() !== null) this.value.set(null);
         return;
@@ -340,10 +395,15 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     },
   });
 
-  /** The engine's live interpretation of the current draft. Public — consumers render from it. */
-  readonly parseResult = computed(() =>
-    this.codec().parse(this.innerValue(), this.defaultCountry()),
-  );
+  /**
+   * The engine's live interpretation of the current draft. Public — consumers
+   * render from it, possibly before the lazy engine has landed: `null` then,
+   * same as an empty draft.
+   */
+  readonly parseResult = computed(() => {
+    const engine = this.engine();
+    return engine ? engine.parse(this.innerValue(), this.defaultCountry()) : null;
+  });
 
   /** The parse gate: structurally unreadable input cannot commit. */
   readonly parseFailed = computed(() => this.parseResult()?.ok === false);
@@ -372,6 +432,26 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
   });
 
   /**
+   * Passthrough only: whether the engine branch WILL show a flag, so its box
+   * is reserved before the engine lands and the upgrade shifts nothing. A
+   * value with a `+CC` the engine cannot read and no default country is the
+   * one over-reservation — it collapses on upgrade.
+   */
+  protected reservesFlag = computed(
+    () => this.showFlag() && (this.defaultCountry() !== undefined || !!this.value()),
+  );
+
+  /**
+   * Passthrough only: what the reserved box shows. An empty field's flag IS
+   * the default country's; with a value the country is the engine's call, so
+   * the box stays blank rather than flash a guess.
+   */
+  protected pendingFlag = computed(() => {
+    const country = this.defaultCountry();
+    return !this.value() && country ? countryFlagEmoji(country) : '';
+  });
+
+  /**
    * The interpretation preview, rebuilt per keystroke and rendered in the
    * panel hint: language-neutral (flag, digits, ✓/⚠/… markers) so the
    * library ships no words to translate.
@@ -387,7 +467,7 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     }
 
     // `||`: an empty pretty-print (e.g. no digits at all) falls back to the raw draft
-    const incomplete = this.codec().formatIncomplete?.(raw, this.defaultCountry()) || raw;
+    const incomplete = this.engine()!.formatIncomplete?.(raw, this.defaultCountry()) || raw;
     return `… ${incomplete}`;
   });
 
@@ -405,10 +485,12 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     const placeholder = this.placeholder();
     if (placeholder !== undefined) return placeholder;
 
+    // The passthrough reads this too, so it runs before the lazy engine has
+    // landed — no non-null assertion here.
+    const engine = this.engine();
     const country = this.defaultCountry();
-    const example = country
-      ? this.codec().placeholderExample?.(country, this.numberKind())
-      : undefined;
+    const example =
+      engine && country ? engine.placeholderExample?.(country, this.numberKind()) : undefined;
 
     return example ?? 'phone';
   });
@@ -425,7 +507,7 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
 
   /** Retype the settled session: raw strings inside, E.164 outside. */
   protected handleInnerSaved(session: InlineTextSaved) {
-    const result = this.codec().parse(session.value, this.defaultCountry());
+    const result = this.engine()!.parse(session.value, this.defaultCountry());
     // The parse gate blocks unreadable commits; the fallback covers discards
     // rolling back to a baseline the current codec cannot read.
     const value = result === null ? null : result.ok ? result.e164 : this.canonical();
@@ -466,13 +548,13 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
 
   /** The full country list, rebuilt when the codec or display locale changes. */
   #countries = computed(() => {
-    const codec = this.codec();
+    const codec = this.engine();
     const names = this.#regionNames();
-    const list = codec.listCountries?.() ?? [];
+    const list = codec?.listCountries?.() ?? [];
 
     return list
       .map((country) => {
-        const dialCode = codec.dialCodeOf?.(country) ?? '';
+        const dialCode = codec?.dialCodeOf?.(country) ?? '';
         return {
           id: `ai-country-${country}`,
           country,
@@ -588,13 +670,13 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
    */
   protected pickCountry(option: { country: PhoneCountry; dialCode: string }) {
     const base = this.canonical();
-    const parsed = base ? this.codec().parse(base, this.defaultCountry()) : null;
+    const parsed = base ? this.engine()!.parse(base, this.defaultCountry()) : null;
     const nsn = parsed?.ok ? parsed.nationalNumber : undefined;
 
     if (this.innerEditing()) {
       // Editing: rewrite the live draft, keep the session open.
       const draft = nsn
-        ? this.codec().format(`+${option.dialCode}${nsn}`, this.displayFormat(), option.country)
+        ? this.engine()!.format(`+${option.dialCode}${nsn}`, this.displayFormat(), option.country)
         : `+${option.dialCode} `;
       this.handleInnerValue(draft);
     } else if (nsn) {

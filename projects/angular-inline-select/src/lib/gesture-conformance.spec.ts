@@ -47,9 +47,12 @@ import {
   dayToDbEntry,
 } from 'angular-inline-select/temporal';
 import { AngularInlinePhone } from 'angular-inline-select/phone';
-import { createLibphonenumberCodec } from '../../phone/src/libphonenumber-codec';
+import { createLibphonenumberCodec } from '../../phone-libphonenumber/src/libphonenumber-codec';
 
-import { EditableScope, type EditableScopeBlockedPolicy } from './utils/editable-scope/editable-scope';
+import {
+  EditableScope,
+  type EditableScopeBlockedPolicy,
+} from './utils/editable-scope/editable-scope';
 
 const phoneCodec = createLibphonenumberCodec(metadata, examples);
 
@@ -69,8 +72,16 @@ interface Settlement {
   template: `
     <div editableScope [tabCommits]="tabCommits()" [onBlocked]="onBlocked()">
       <angular-inline-date [(value)]="dateValue" locale="en" (saved)="dateSaved.push($event)" />
-      <angular-inline-time [(value)]="timeValue" locale="en-u-hc-h23" (saved)="timeSaved.push($event)" />
-      <angular-inline-duration [(value)]="durationValue" [step]="60" (saved)="durationSaved.push($event)" />
+      <angular-inline-time
+        [(value)]="timeValue"
+        locale="en-u-hc-h23"
+        (saved)="timeSaved.push($event)"
+      />
+      <angular-inline-duration
+        [(value)]="durationValue"
+        [step]="60"
+        (saved)="durationSaved.push($event)"
+      />
       <input class="after" type="text" />
     </div>
   `,
@@ -189,7 +200,9 @@ function type(h: Harness, text: string) {
 }
 
 function press(h: Harness, key: string, options: KeyboardEventInit = {}) {
-  h.input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options }));
+  h.input.dispatchEvent(
+    new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options }),
+  );
   h.fixture.detectChanges();
 }
 
@@ -403,7 +416,9 @@ describe('gesture conformance — phone (characterization)', () => {
     const panel = document.querySelector('.editable-panel');
     expect(panel).not.toBeNull(); // the engine's session opened
 
-    panel!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    panel!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }),
+    );
     fixture.detectChanges();
 
     // The engine owned the Tab: the session settled rather than the panel

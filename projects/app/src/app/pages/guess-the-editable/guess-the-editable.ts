@@ -8,7 +8,7 @@ import {
 
 // Every editable family, so we can scatter one of each through the prose.
 import { AngularInlineText, AngularInlineNumber } from 'angular-inline-select';
-import { AngularInlinePhone, createLibphonenumberCodec } from 'angular-inline-select/phone';
+import { AngularInlinePhone } from 'angular-inline-select/phone';
 import {
   AngularInlineDate,
   AngularInlineTime,
@@ -18,10 +18,6 @@ import {
   type InlineTimeValue,
 } from 'angular-inline-select/temporal';
 import { AngularInlineJson } from 'angular-inline-select/json';
-import metadata from 'libphonenumber-js/metadata.min.json';
-import examples from 'libphonenumber-js/examples.mobile.json';
-
-const phoneCodec = createLibphonenumberCodec(metadata, examples);
 
 /**
  * "Guess the Editable" — a benchmark, not a demo.
@@ -65,8 +61,6 @@ export class GuessTheEditable {
     this.revealed.set(event.ctrlKey || event.metaKey);
   }
 
-  protected codec = phoneCodec;
-
   // The scattered values — one of every family, seeded so each shows real
   // content (an empty field's italic placeholder would be a giveaway).
   protected title = signal('The Quiet Craft of Inline Editing');
@@ -84,5 +78,6 @@ export class GuessTheEditable {
   // Price is a number with a currency FORMAT — two decimals — so it reads as
   // money. The € stays inline prose so nothing but the digits is the field.
   protected price = signal<number | string | null>(9);
-  protected priceFormat = (value: number | null): string => (value === null ? '' : value.toFixed(2));
+  protected priceFormat = (value: number | null): string =>
+    value === null ? '' : value.toFixed(2);
 }

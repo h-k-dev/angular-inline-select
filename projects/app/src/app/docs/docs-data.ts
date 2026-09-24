@@ -458,13 +458,19 @@ const CHROME_TOKENS: TokenGroup = {
 const PHONE_TOKENS: TokenGroup = {
   title: 'Phone flag',
   description:
-    'The country flag is a unicode emoji. Windows ships no flag glyphs (Chrome/Edge show the letters “DE” instead), so load a flag font — e.g. “Twemoji Country Flags” with a flag-only unicode-range — and the control picks it up. Without one, the platform’s native flags are used.',
+    'The country flag is a unicode emoji. Windows ships no flag glyphs (Chrome/Edge show the letters “DE” instead), so load a flag font — e.g. “Twemoji Country Flags” with a flag-only unicode-range — and the control picks it up (declare it with font-display: block — the fallback is letters). Without one, the platform’s native flags are used.',
   tokens: [
     {
       token: '--editable-phone-flag-font',
       fallback: "'Twemoji Country Flags'",
       description:
         'Font family tried first for the flag prefix and the country rows. An undeclared family is skipped.',
+    },
+    {
+      token: '--editable-phone-flag-width',
+      fallback: '1.35em',
+      description:
+        'Inline size RESERVED for the flag — a fixed box instead of the glyph’s own advance, so neither a late flag font nor the lazy engine’s upgrade shifts the number. Flag glyphs are 1em (Apple, Twemoji) to ~1.3em (Noto) wide.',
     },
   ],
 };
@@ -813,10 +819,10 @@ export const DOCS: Record<string, SectionDocs> = {
         inputs: [
           {
             name: 'codec',
-            type: 'PhoneCodec',
-            default: '— (required)',
+            type: 'PhoneCodec | undefined',
+            default: 'undefined',
             description:
-              'The parsing/formatting engine. Required — the component ships no engine of its own.',
+              'The parsing/formatting engine, bound directly. Leave it unset (the default) and every phone field shares ONE app-wide lazy engine registered with providePhoneCodec(() => import(…)): it loads once, idle-until-urgent (first rendered field schedules it on idle, hover/focus skip the wait), and until it lands the field is a plain-text passthrough with the flag box already reserved.',
           },
           {
             name: 'defaultCountry',

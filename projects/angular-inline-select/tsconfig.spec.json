@@ -11,6 +11,8 @@
     "src/**/*.spec.ts",
     "phone/src/**/*.d.ts",
     "phone/src/**/*.spec.ts",
+    "phone-libphonenumber/src/**/*.d.ts",
+    "phone-libphonenumber/src/**/*.spec.ts",
     "json/src/**/*.d.ts",
     "json/src/**/*.spec.ts",
     "temporal/src/**/*.d.ts",

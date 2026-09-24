@@ -19,9 +19,7 @@ import { AngularInlineNumber } from '../../../../angular-inline-select/src/lib/a
 import { EditableSuffix } from '../../../../angular-inline-select/src/lib/angular-inline-text/editable-affix';
 
 // Phone entry point
-import { AngularInlinePhone, createLibphonenumberCodec } from 'angular-inline-select/phone';
-import metadata from 'libphonenumber-js/metadata.min.json';
-import examples from 'libphonenumber-js/examples.mobile.json';
+import { AngularInlinePhone } from 'angular-inline-select/phone';
 
 // Temporal entry point
 import {
@@ -32,8 +30,6 @@ import {
   localDayOf,
   dateToDbEntry,
 } from 'angular-inline-select/temporal';
-
-const phoneCodec = createLibphonenumberCodec(metadata, examples);
 
 /**
  * Sign-in dialog: a centered signal form exercising every inline control —
@@ -70,8 +66,6 @@ const phoneCodec = createLibphonenumberCodec(metadata, examples);
   styleUrl: './login.scss',
 })
 export class Login {
-  protected codec = phoneCodec;
-
   /**
    * The sign-in model. `name` is returned as the dialog result on
    * "Sign In" and becomes the app's toolbar title.
@@ -107,11 +101,17 @@ export class Login {
   // Which error the projected [editable-error] content describes —
   // WHEN errors show is the field's job.
   protected nameMissing = computed(() =>
-    this.signInForm.name().errors().some((error) => error.kind === 'required'),
+    this.signInForm
+      .name()
+      .errors()
+      .some((error) => error.kind === 'required'),
   );
 
   protected telephoneMissing = computed(() =>
-    this.signInForm.telephone().errors().some((error) => error.kind === 'required'),
+    this.signInForm
+      .telephone()
+      .errors()
+      .some((error) => error.kind === 'required'),
   );
 
   /** Two decimals for the income field — the € lives in the suffix. */

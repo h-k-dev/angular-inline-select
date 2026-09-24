@@ -175,7 +175,6 @@
         [clearTemplate]="confirmClear"
         #telephone
         [formField]="recordForm.telephone"
-        [codec]="codec"
         defaultCountry="DE"
         ariaLabel="Telephone number"
         (saved)="logEmit('telephone.saved', $event)"
@@ -550,7 +549,6 @@
         [clearTemplate]="confirmClear"
         #mobile
         [formField]="recordForm.mobile"
-        [codec]="codec"
         defaultCountry="DE"
         numberKind="mobile"
         displayFormat="national"

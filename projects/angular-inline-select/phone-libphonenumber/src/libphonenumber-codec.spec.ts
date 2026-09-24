@@ -2,7 +2,7 @@ import metadata from 'libphonenumber-js/metadata.min.json';
 import examples from 'libphonenumber-js/examples.mobile.json';
 
 import { createLibphonenumberCodec } from './libphonenumber-codec';
-import { countryFlagEmoji } from './phone-codec';
+import { countryFlagEmoji } from 'angular-inline-select/phone';
 
 const codec = createLibphonenumberCodec(metadata, examples);
 
