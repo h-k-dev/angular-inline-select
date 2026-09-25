@@ -209,3 +209,41 @@ describe('InlineMatFormField calendar anchoring', () => {
     expect(control.overlayOrigin()).toBeNull();
   });
 });
+
+// =============================================================================
+// floatLabel="always" — the label floats, so the placeholder must SHOW
+//
+// Material floats the label on `shouldLabelFloat` OR `floatLabel="always"`.
+// Keying the placeholder-hiding class off `shouldLabelFloat` alone hid the
+// placeholder in exactly the layout that reserves room for it.
+// =============================================================================
+
+@Component({
+  imports: [MatFormFieldModule, AngularInlineTime, InlineMatFormField, FormField],
+  template: `
+    <mat-form-field floatLabel="always">
+      <mat-label>Starts</mat-label>
+      <angular-inline-time inlineMatFormField [formField]="field" locale="en-u-hc-h23" />
+    </mat-form-field>
+  `,
+})
+class MatAlwaysFloatHost {
+  model = signal<string | null>(null);
+  field = form(this.model);
+}
+
+describe('InlineMatFormField — floatLabel="always"', () => {
+  it('keeps the placeholder visible while empty and unfocused', () => {
+    const fixture = TestBed.createComponent(MatAlwaysFloatHost);
+    fixture.detectChanges();
+    const controlHost = fixture.nativeElement.querySelector('angular-inline-time') as HTMLElement;
+    const adapter = fixture.debugElement
+      .query((el) => el.name === 'angular-inline-time')!
+      .injector.get(MatFormFieldControl) as InlineMatFormField;
+
+    expect(adapter.shouldLabelFloat).toBe(false); // empty + unfocused…
+    expect(adapter.labelIsFloating).toBe(true); // …but the form field floats it anyway
+    expect(controlHost.classList).toContain('inline-field-bare');
+    expect(controlHost.classList).not.toContain('inline-field-bare--hide-placeholder');
+  });
+});

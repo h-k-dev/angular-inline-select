@@ -1443,6 +1443,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       side.baselineDay = side.committed();
       side.baselineRaw = this.#unresolvedRawOf(key);
       side.restore();
+      side.dirty.set(false);
       side.saveAttempted.set(false);
     }
 

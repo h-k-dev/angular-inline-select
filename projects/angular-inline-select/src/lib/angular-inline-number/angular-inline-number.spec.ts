@@ -634,3 +634,22 @@ describe('AngularInlineNumber — locale codec', () => {
     expect(h.host.value()).toBe(1000.5);
   });
 });
+
+// =============================================================================
+// Host styles — the component ships its own `:host { display: inline }`
+//
+// A custom element is inline by default, so a computed-display check passes
+// with or without the rule; the structural proof is the host marker Angular
+// only stamps when the component actually carries encapsulated styles.
+// =============================================================================
+
+describe('AngularInlineNumber — host styles', () => {
+  it('ships its encapsulated host rule and renders inline', () => {
+    const fixture = TestBed.createComponent(NumberFormHost);
+    fixture.detectChanges();
+    const host = fixture.nativeElement.querySelector('angular-inline-number') as HTMLElement;
+
+    expect(host.getAttributeNames().some((name) => name.startsWith('_nghost-'))).toBe(true);
+    expect(getComputedStyle(host).display).toBe('inline');
+  });
+});

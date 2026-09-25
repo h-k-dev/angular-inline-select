@@ -53,13 +53,14 @@ type InlineTemporalControl = AngularInlineDate | AngularInlineTime | AngularInli
   providers: [{ provide: MatFormFieldControl, useExisting: InlineMatFormField }],
   host: {
     class: 'inline-field-bare',
-    '[class.inline-field-bare--hide-placeholder]': '!shouldLabelFloat',
+    '[class.inline-field-bare--hide-placeholder]': '!labelIsFloating',
     '[attr.id]': 'id',
   },
 })
 export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestroy {
   readonly #control: InlineTemporalControl;
   readonly #element = inject<ElementRef<HTMLElement>>(ElementRef);
+  readonly #formField = inject(MAT_FORM_FIELD, { optional: true });
 
   /** Signals → the Subject Material still wants (it runs its own CD off this). */
   readonly stateChanges = new Subject<void>();
@@ -104,7 +105,7 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
     // The control never learns what mat is; it only receives a CDK-generic
     // ElementRef through its `overlayOrigin` seam. `getConnectedOverlayOrigin`
     // reads a ViewChild, so defer to afterNextRender below.
-    const formField = inject(MAT_FORM_FIELD, { optional: true });
+    const formField = this.#formField;
 
     // Container CHROME must not steal focus: a mousedown on the box's
     // padding/label/outline would blur the input, settle the session and
@@ -179,6 +180,18 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
 
   get shouldLabelFloat(): boolean {
     return this.focused || !this.empty;
+  }
+
+  /**
+   * Whether the label ACTUALLY floats — mirroring the form field's own
+   * decision, which floats on `shouldLabelFloat` OR `floatLabel="always"`.
+   * The placeholder-hiding class keys off this, not `shouldLabelFloat`
+   * alone: with `floatLabel="always"` Material keeps the label floated and
+   * leaves room for the placeholder even while empty and unfocused, so we
+   * must NOT hide it there.
+   */
+  get labelIsFloating(): boolean {
+    return this.shouldLabelFloat || this.#formField?.floatLabel === 'always';
   }
 
   get required(): boolean {

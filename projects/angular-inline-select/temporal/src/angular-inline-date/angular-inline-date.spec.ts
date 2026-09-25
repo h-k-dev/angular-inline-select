@@ -1481,3 +1481,35 @@ describe('AngularInlineDate — tabular figures', () => {
     expect(getComputedStyle(input).fontVariantNumeric).toBe('tabular-nums');
   });
 });
+
+// =============================================================================
+// reset() leaves a CLEAN session — the next settle is untouched
+//
+// `reset()` rolls the draft back to the baseline; if it left the side dirty,
+// the next blur would re-derive from that restored text. Over an unresolved
+// injected value that text does not parse, so the blur "snapped back" and
+// announced a revert of an edit the reset had already discarded.
+// =============================================================================
+
+describe('AngularInlineDate — reset() leaves a clean session', () => {
+  const RAW = '0000-00-00 00:00:00';
+
+  it('a blur after reset() is an UNTOUCHED settle — no revert announced, nothing written', async () => {
+    const h = setupHost(DateShapeHost);
+    const control = h.fixture.debugElement.query(By.directive(AngularInlineDate))
+      .componentInstance as AngularInlineDate;
+    h.host.value.set(RAW);
+    h.fixture.detectChanges();
+
+    type(h, h.start(), '24.12.2026');
+    control.reset();
+    h.fixture.detectChanges();
+    expect(h.start().value).toBe(RAW);
+
+    await blurAway(h);
+    const sr = h.fixture.nativeElement.querySelector('.inline-date__sr') as HTMLElement;
+    expect(sr.textContent?.trim()).toBe('');
+    expect(h.host.value()).toBe(RAW);
+    expect(h.host.sessions.filter((s) => s.changed)).toEqual([]);
+  });
+});
