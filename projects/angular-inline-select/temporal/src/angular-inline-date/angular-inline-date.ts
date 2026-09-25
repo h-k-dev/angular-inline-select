@@ -1385,7 +1385,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   #clearContexts = makeClearContexts({
     clear: (key) => this.clearBubble(key),
     focus: (key) => this.#inputOf(key)?.focus(),
-    label: (side) => this.intl.clearLabel(side, this.intl.dateLabel().toLowerCase()),
+    label: (side) => this.intl.clearLabel(side, this.intl.dateLabel()),
   });
 
   protected clearContextSingle = this.#clearContexts.single;

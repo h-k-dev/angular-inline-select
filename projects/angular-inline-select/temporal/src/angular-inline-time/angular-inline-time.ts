@@ -1092,7 +1092,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   #clearContexts = makeClearContexts({
     clear: (key) => this.clearBubble(key),
     focus: (key) => this.#inputOf(key)?.focus(),
-    label: (side) => this.#intl.clearLabel(side, this.#intl.timeLabel().toLowerCase()),
+    label: (side) => this.#intl.clearLabel(side, this.#intl.timeLabel()),
   });
 
   protected clearContextSingle = this.#clearContexts.single;

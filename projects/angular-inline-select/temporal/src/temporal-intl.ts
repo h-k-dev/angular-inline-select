@@ -84,12 +84,14 @@ export class TemporalIntl {
    * `editableClear` template context, so a custom clear button stays
    * localized for free.
    *
-   * `noun` is the field being cleared, lower-cased by the caller's convention
-   * (each control passes its own — "date", "time", "duration"); it defaults
-   * to the date noun for callers that predate the parameter.
+   * `noun` is the field being cleared, AS its label reads (each control
+   * passes its own — `dateLabel()`, `timeLabel()`, `durationLabel()`); it
+   * defaults to the date label. Casing is the sentence's business: English
+   * lower-cases the noun mid-sentence, a German override keeps "Datum".
    */
-  clearLabel(side: SideKey | 'single', noun: string = this.dateLabel().toLowerCase()): string {
-    return side === 'single' ? `Clear ${noun}` : `Clear ${this.#sideWord(side)} ${noun}`;
+  clearLabel(side: SideKey | 'single', noun: string = this.dateLabel()): string {
+    const word = noun.toLowerCase();
+    return side === 'single' ? `Clear ${word}` : `Clear ${this.#sideWord(side)} ${word}`;
   }
 
   /**

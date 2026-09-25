@@ -695,7 +695,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
     $implicit: this.#clearCallback,
     clear: this.#clearCallback,
     side: null,
-    label: this.#intl.clearLabel('single', this.#intl.durationLabel().toLowerCase()),
+    label: this.#intl.clearLabel('single', this.#intl.durationLabel()),
     focus: this.#focusCallback,
   }));
 

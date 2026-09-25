@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { Calendar } from './calendar';
+import { TemporalIntl } from '../../temporal-intl';
 
 describe('Calendar', () => {
   let component: Calendar;
@@ -36,6 +37,31 @@ describe('Calendar', () => {
     fixture.componentRef.setInput('activeDay', '2026-09-15');
     await fixture.whenStable();
     fixture.detectChanges();
+  });
+
+  it('weekday headers show the narrow name and speak the LONG one', () => {
+    const headers = Array.from(host.querySelectorAll<HTMLElement>('.cal__weekday'));
+    expect(headers.length).toBe(7);
+    // en-US starts the week on Sunday.
+    expect(headers[0].textContent!.trim()).toBe('S');
+    expect(headers.map((h) => h.getAttribute('aria-label'))).toEqual([
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+    ]);
+  });
+
+  it('the navigation speaks through TemporalIntl — an override relabels it live', () => {
+    const intl = TestBed.inject(TemporalIntl);
+    expect(navButtons()[0].getAttribute('aria-label')).toBe('Previous month');
+
+    intl.prevMonthLabel.set('Vorheriger Monat');
+    fixture.detectChanges();
+    expect(navButtons()[0].getAttribute('aria-label')).toBe('Vorheriger Monat');
   });
 
   it('should create', () => {
