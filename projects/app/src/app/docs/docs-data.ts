@@ -935,7 +935,8 @@ export const DOCS: Record<string, SectionDocs> = {
             name: 'ranged',
             type: 'boolean',
             default: 'false',
-            description: 'Range mode: start and end dates.',
+            description:
+              'Declares range mode: `true` renders the start and end dates. The bound value’s shape never decides it — it only picks what the field echoes back (a string single, `{ start, end }` ranged, the one-key `{ start }` either way).',
           },
           ...FORM_CONTRACT_INPUTS,
           {
@@ -1029,7 +1030,8 @@ export const DOCS: Record<string, SectionDocs> = {
             name: 'ranged',
             type: 'boolean',
             default: 'false',
-            description: 'Range mode: start and end times.',
+            description:
+              'Declares range mode: `true` renders the start and end times. The bound value’s shape never decides it — it only picks what the field echoes back (a string single, `{ start, end }` ranged, the one-key `{ start }` either way).',
           },
           {
             name: 'format',
@@ -1075,6 +1077,19 @@ export const DOCS: Record<string, SectionDocs> = {
             type: 'number',
             default: '60',
             description: 'Granularity of the native picker, in seconds (forwarded to its `step`).',
+          },
+          {
+            name: 'intervalStep',
+            type: 'number',
+            default: '1',
+            description:
+              'Rounding grid for a range’s length, in seconds (1 = off): the settled duration lands on a multiple and the end snaps to start + duration.',
+          },
+          {
+            name: 'intervalRounding',
+            type: "'ceil' | 'round' | 'floor'",
+            default: "'ceil'",
+            description: 'How the length lands on the `intervalStep` grid — up (billing), nearest, or down.',
           },
           {
             name: 'pickerMin',
@@ -1155,10 +1170,17 @@ export const DOCS: Record<string, SectionDocs> = {
             description: 'How colon notation reads and how committed values render.',
           },
           {
-            name: 'step',
+            name: 'intervalStep',
             type: 'number',
             default: '1',
-            description: 'Snap committed values to a multiple of this many seconds (1 = off).',
+            description:
+              'Rounding grid in seconds (1 = off): committed lengths land on a multiple; a required-but-shorter length settles as the step.',
+          },
+          {
+            name: 'intervalRounding',
+            type: "'ceil' | 'round' | 'floor'",
+            default: "'ceil'",
+            description: 'How the length lands on the `intervalStep` grid — up (billing), nearest, or down.',
           },
           ...AFFIX_INPUTS,
           CLEAR_TEMPLATE_INPUT,

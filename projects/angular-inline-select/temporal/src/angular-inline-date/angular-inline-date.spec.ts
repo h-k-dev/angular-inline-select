@@ -722,18 +722,26 @@ describe('AngularInlineDate two-field range', () => {
 
   beforeEach(() => {
     h = setupHost(DateShapeHost);
+    h.host.ranged.set(true); // the mode is DECLARED — the pair renders
+    h.fixture.detectChanges();
   });
 
   afterEach(async () => {
     await blurAway(h);
   });
 
-  it('a string binding renders one field; object shapes render the pair', () => {
+  it('`ranged` declares the pair — the bound shape never decides the field count', () => {
+    h.host.ranged.set(false);
     h.host.value.set(db('2026-05-12'));
     h.fixture.detectChanges();
     expect(h.inputs().length).toBe(1);
 
+    // An object bound to a SINGLE field stays one field.
     h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.fixture.detectChanges();
+    expect(h.inputs().length).toBe(1);
+
+    h.host.ranged.set(true);
     h.fixture.detectChanges();
     expect(h.inputs().length).toBe(2);
     expect(h.start().value).toBe('May 12, 2026');

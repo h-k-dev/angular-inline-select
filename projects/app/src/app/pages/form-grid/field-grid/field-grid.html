@@ -621,7 +621,7 @@
         [clearTemplate]="confirmClear"
         [formField]="recordForm.estimate"
         durationFormat="h:mm"
-        [step]="60"
+        [intervalStep]="60"
         placeholder="Estimate…"
         ariaLabel="Work estimate"
         (saved)="logEmit('estimate.saved', $event)"

@@ -246,7 +246,12 @@ export function createTemporalRangeGroup(
   const end = computed<DbDateTime | null>(
     () => endCtl()?.internalRange().start ?? timesCtl()?.internalRange().end ?? null,
   );
-  const length = computed<number | null>(() => lengthCtl()?.value() ?? null);
+  // The length leaf decides what EMPTY is on its channel (`emptyValue`) —
+  // the group speaks `null` and maps at the boundary, both ways.
+  const length = computed<number | null>(() => {
+    const control = lengthCtl();
+    return !control || control.isEmpty() ? null : control.value();
+  });
 
   /** The composed domain value read live off the leaves, in the echoed shape. */
   const composedValue = computed<TemporalRangeValue | null>(() => {
@@ -352,7 +357,9 @@ export function createTemporalRangeGroup(
 
   function writeLength(next: number | null) {
     const control = lengthCtl();
-    if (control && control.value() !== next) control.value.set(next);
+    if (!control) return;
+    const mapped = next ?? control.emptyValue();
+    if (control.value() !== mapped) control.value.set(mapped);
   }
 
   /**
@@ -387,7 +394,7 @@ export function createTemporalRangeGroup(
     endCtl()?.internalRange.set({ start: endValue, end: null });
     // The ranged pair: both endpoints in one internal write, echoed by the leaf.
     timesCtl()?.internalRange.set({ start: startValue, end: endValue });
-    lengthCtl()?.value.set(duration);
+    writeLength(duration);
     writeDayLeaf(dayCtl(), startValue);
     writeDayLeaf(endDayCtl(), endValue);
   }

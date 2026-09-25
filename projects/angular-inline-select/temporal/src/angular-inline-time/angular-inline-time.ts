@@ -77,11 +77,13 @@ import {
   localTimeOf,
   parseDbEntryDraft,
   rollDbEntryForward,
+  shiftDbEntry,
   toDateTime,
   todayIn,
   type DbDateTime,
 } from '../datetime/db-entry';
 import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
+import { roundToInterval, type IntervalRounding } from '../interval-rounding';
 
 /** The `editableActions` payload of the time control: the committed instant (UTC ISO DB entry) of that side. */
 export interface InlineTimeActions {
@@ -202,8 +204,10 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   value = model<InlineTimeValue>(null);
 
   /**
-   * Cold-start shape default: which shape a `null`-bound field emits before
-   * any non-null value has declared one. Ignored once a shape has been seen.
+   * Declares the mode: `true` renders the start–end input pair, `false` one
+   * field. The bound value's shape never decides it — the shape only picks
+   * what the field ECHOES back among the mode's own shapes (see
+   * `makeShapeMemory`).
    */
   ranged = input(false);
 
@@ -283,6 +287,15 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
 
   /** Granularity of the native picker, in seconds (forwarded to its `step`). */
   step = input(60);
+
+  /**
+   * The rounding grid for a RANGE's length, in seconds (1 = off): the settled
+   * duration lands on a multiple and the END SNAPS to `start + duration`.
+   */
+  intervalStep = input<number>(1);
+
+  /** How the range's length lands on the `intervalStep` grid (default: up). */
+  intervalRounding = input<IntervalRounding>('ceil');
 
   /**
    * T3 — native picker bounds, forwarded to the OS input's `min`/`max`
@@ -388,12 +401,15 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     ranged: this.ranged,
     singleShape: 'single',
     rangeShape: 'range',
+    // The one-key `{ start }` fits BOTH modes: one field single, the one-key
+    // range ranged — either way the consumer's shape echoes back.
+    fits: (shape, ranged) => shape === 'start-only' || (shape === 'range') === ranged,
   });
 
-  /** The effective shape: last seen, or the `ranged` cold-start default. */
+  /** The echoed shape: the last one seen that fits the mode, else the mode's default. */
   readonly shape = this.#shapeMemory.shape;
 
-  /** Object shapes render the start–end input pair; a string renders one field. */
+  /** The declared mode (`ranged`) renders the pair; the value's shape never does. */
   protected twoFields = this.#shapeMemory.twoFields;
 
   /**
@@ -781,6 +797,14 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     const skipRoll = explicit && key === 'end';
     if (this.twoFields() && !skipRoll && start !== null && end !== null) {
       end = rollDbEntryForward(start, end, this.effectiveZone());
+
+      // The rounding grid: the settled length lands on `intervalStep` and the
+      // END SNAPS to `start + duration`.
+      const step = this.intervalStep();
+      if (step > 1) {
+        const diff = diffDbEntrySeconds(start, end)!;
+        end = shiftDbEntry(start, roundToInterval(diff, step, this.intervalRounding()));
+      }
     }
 
     this.internalRange.set({ start, end });

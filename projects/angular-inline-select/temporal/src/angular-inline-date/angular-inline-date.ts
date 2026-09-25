@@ -207,8 +207,10 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   value = model<InlineDateValue>(null);
 
   /**
-   * Cold-start shape default: which shape a `null`-bound field emits before
-   * any non-null value has declared one. Ignored once a shape has been seen.
+   * Declares the mode: `true` renders the start–end input pair, `false` one
+   * field. The bound value's shape never decides it — the shape only picks
+   * what the field ECHOES back among the mode's own shapes (see
+   * `makeShapeMemory`).
    */
   ranged = input(false);
 
@@ -373,12 +375,15 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     ranged: this.ranged,
     singleShape: 'single',
     rangeShape: 'range',
+    // The one-key `{ start }` fits BOTH modes: one field single, the one-key
+    // range ranged — either way the consumer's shape echoes back.
+    fits: (shape, ranged) => shape === 'start-only' || (shape === 'range') === ranged,
   });
 
-  /** The effective shape: last seen, or the `ranged` cold-start default. */
+  /** The echoed shape: the last one seen that fits the mode, else the mode's default. */
   readonly shape = this.#shapeMemory.shape;
 
-  /** Object shapes render the start–end input pair; a string renders one field. */
+  /** The declared mode (`ranged`) renders the pair; the value's shape never does. */
   protected twoFields = this.#shapeMemory.twoFields;
 
   /**

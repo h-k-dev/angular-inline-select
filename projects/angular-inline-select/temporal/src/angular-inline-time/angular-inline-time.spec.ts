@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineTime, type InlineTimeSaved } from './angular-inline-time';
+import type { IntervalRounding } from '../interval-rounding';
 import { EditableClear, EditableClearTemplate } from 'angular-inline-select';
 import {
   parseTime,
@@ -469,6 +470,8 @@ describe('AngularInlineTime (input rehost)', () => {
       [(value)]="value"
       [ranged]="ranged()"
       [native]="native()"
+      [intervalStep]="step()"
+      [intervalRounding]="rounding()"
       locale="en-u-hc-h23"
       (savedModelChange)="saved.push($event)"
       (saved)="sessions.push($event)"
@@ -483,6 +486,8 @@ class TimeShapeHost {
   });
   ranged = signal(false);
   native = signal(false);
+  step = signal(1);
+  rounding = signal<IntervalRounding>('ceil');
 
   saved: TimeSavedDetails[] = [];
   sessions: InlineTimeSaved[] = [];
@@ -543,19 +548,27 @@ describe('AngularInlineTime two-field range', () => {
 
   beforeEach(() => {
     r = setupRange();
+    r.host.ranged.set(true); // the mode is DECLARED — the pair renders
+    r.fixture.detectChanges();
   });
 
   afterEach(async () => {
     await blurAwayRange(r);
   });
 
-  it('a string binding renders one field; object shapes render the pair with the +n badge', () => {
+  it('`ranged` declares the pair — the bound shape never decides the field count', () => {
+    r.host.ranged.set(false);
     r.host.value.set(at('09:30'));
     r.fixture.detectChanges();
     expect(r.inputs().length).toBe(1);
     expect(r.badge()).toBeNull(); // standalone single: no group feed, no badge
 
+    // An object bound to a SINGLE field stays one field.
     r.host.value.set({ start: at('22:00'), end: composeDbEntry('2026-07-22', '01:30') });
+    r.fixture.detectChanges();
+    expect(r.inputs().length).toBe(1);
+
+    r.host.ranged.set(true);
     r.fixture.detectChanges();
     expect(r.inputs().length).toBe(2);
     expect(r.start().value).toBe('22:00');
@@ -953,5 +966,56 @@ describe('AngularInlineTime — the interactive unit', () => {
     const own = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 });
     h.input().dispatchEvent(own);
     expect(own.defaultPrevented).toBe(false);
+  });
+});
+
+// =============================================================================
+// The rounding grid — `intervalStep` / `intervalRounding` on a range's length;
+// the native picker's `step` is a separate knob (granularity only)
+// =============================================================================
+
+describe('AngularInlineTime — the rounding grid', () => {
+  let r: RangeHarness;
+
+  beforeEach(() => {
+    r = setupRange();
+    r.host.value.set({ start: at('22:00'), end: at('23:00') });
+    r.host.ranged.set(true);
+    r.host.step.set(900); // 15 min
+    r.fixture.detectChanges();
+  });
+
+  afterEach(async () => {
+    await blurAwayRange(r);
+  });
+
+  function commitEnd(text: string) {
+    typeInto(r, r.end()!, text);
+    pressOn(r, r.end()!, 'Enter');
+  }
+
+  it("'ceil' (the default) lands the length UP and snaps the end — 1 h 37 → 1 h 45", () => {
+    commitEnd('23:37');
+    expect(r.host.value()).toEqual({ start: at('22:00'), end: at('23:45') });
+    expect(r.host.saved.at(-1)?.duration).toBe(105 * 60);
+  });
+
+  it("'round' lands on the NEAREST multiple — 1 h 37 → 1 h 30", () => {
+    r.host.rounding.set('round');
+    r.fixture.detectChanges();
+    commitEnd('23:37');
+    expect(r.host.value()).toEqual({ start: at('22:00'), end: at('23:30') });
+  });
+
+  it("'floor' lands DOWN — 1 h 44 → 1 h 30", () => {
+    r.host.rounding.set('floor');
+    r.fixture.detectChanges();
+    commitEnd('23:44');
+    expect(r.host.value()).toEqual({ start: at('22:00'), end: at('23:30') });
+  });
+
+  it('the native picker keeps its own granularity (`step`, default 60 s)', () => {
+    const native = r.fixture.nativeElement.querySelector('.inline-time__native') as HTMLInputElement;
+    expect(native.getAttribute('step')).toBe('60');
   });
 });

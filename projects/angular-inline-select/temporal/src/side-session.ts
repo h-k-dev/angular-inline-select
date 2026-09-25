@@ -127,9 +127,12 @@ export function sideSize(draft: string, placeholder: string): number {
 }
 
 /**
- * The `null`-shape memory: `null` is the only shape-ambiguous value, so a
- * cleared field keeps emitting the shape its consumer last spoke —
- * `ranged` only seeds the cold start.
+ * The echo-shape memory. The MODE is declared (`ranged`) — the value's shape
+ * never decides how many fields render. What the shape does decide is the
+ * ECHO: a field writes back the shape its consumer last spoke, chosen among
+ * the declared mode's own shapes (a shape from the other mode falls back to
+ * the mode's default), and `null` — the only shape-ambiguous value — keeps
+ * the last one seen.
  */
 export function makeShapeMemory<V, S>(options: {
   value: Signal<V>;
@@ -137,16 +140,26 @@ export function makeShapeMemory<V, S>(options: {
   ranged: Signal<boolean>;
   singleShape: S;
   rangeShape: S;
+  /**
+   * Whether a seen shape belongs to the declared mode. Default: the single
+   * shape fits single mode, every other shape fits ranged mode. A shape that
+   * fits BOTH (the date/time one-key `{ start }`) keeps echoing either way.
+   */
+  fits?: (shape: S, ranged: boolean) => boolean;
 }): { shape: Signal<S>; twoFields: Signal<boolean> } {
+  const fits = options.fits ?? ((shape: S, ranged: boolean) => (shape !== options.singleShape) === ranged);
   const last = linkedSignal<V, S | null>({
     source: options.value,
     computation: (value, prev) => options.infer(value) ?? prev?.value ?? null,
   });
 
-  const shape = computed(
-    () => last() ?? (options.ranged() ? options.rangeShape : options.singleShape),
-  );
-  return { shape, twoFields: computed(() => shape() !== options.singleShape) };
+  const shape = computed(() => {
+    const ranged = options.ranged();
+    const seen = last();
+    if (seen !== null && fits(seen, ranged)) return seen;
+    return ranged ? options.rangeShape : options.singleShape;
+  });
+  return { shape, twoFields: options.ranged };
 }
 
 /** The actions slot's guards: none of the clear's house rules apply. */

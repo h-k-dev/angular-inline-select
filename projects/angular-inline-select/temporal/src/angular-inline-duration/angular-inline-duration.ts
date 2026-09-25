@@ -48,6 +48,7 @@ import {
 import { TemporalIntl } from '../temporal-intl';
 import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 import { focusInputNearPoint, isUnitSpacePress } from '../inline-unit';
+import { roundToInterval, type IntervalRounding } from '../interval-rounding';
 
 /** The `editableActions` payload of the duration control: the committed seconds. */
 export interface InlineDurationActions {
@@ -78,7 +79,8 @@ export interface InlineDurationSaved {
  *   tokens (`'1h 30m'`, `'45m'`, `'1.5h'`), or a bare number (minutes under
  *   hour formats, seconds under `mm:ss`).
  * - Commits round-trip the codec (`'90'` under `h:mm` settles as `'01:30'`)
- *   and snap to `step` seconds when set (e.g. 60 for whole minutes).
+ *   and land on the `intervalStep` grid when set — `intervalRounding`
+ *   (default `'ceil'`) says how.
  */
 @Component({
   selector: 'angular-inline-duration',
@@ -98,8 +100,16 @@ export interface InlineDurationSaved {
 export class AngularInlineDuration implements FormValueControl<number | null> {
   #document = inject(DOCUMENT);
 
-  /** The committed value channel: duration in SECONDS, or `null`. */
+  /** The committed value channel: duration in SECONDS; empty is `emptyValue`. */
   value = model<number | null>(null);
+
+  /**
+   * What EMPTY is on the value channel — `null` by default. A backend that
+   * stores "no duration" as a number (`0`) passes it here: the field then
+   * reads that value as empty (placeholder, no clear bubble) and writes it
+   * when cleared or emptied. The one wire-format escape hatch.
+   */
+  emptyValue = input<number | null>(null);
 
   /** Form Value Contract. */
   errors = input<readonly ValidationError.WithOptionalFieldTree[]>([]);
@@ -138,8 +148,15 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   /** How colon notation reads and how committed values render. */
   durationFormat = input<DurationFormat>('h:mm');
 
-  /** Snap committed values to a multiple of this many seconds (1 = off). */
-  step = input(1);
+  /**
+   * The rounding grid in seconds — committed lengths land on a multiple
+   * (1 = off). A required-but-shorter length settles AS the step: a required
+   * duration never commits as nothing.
+   */
+  intervalStep = input<number>(1);
+
+  /** How a committed length lands on the `intervalStep` grid (default: up). */
+  intervalRounding = input<IntervalRounding>('ceil');
 
   /** Affix template passthrough (composition channel + content sugar). */
   prefixTemplate = input<TemplateRef<unknown> | undefined>(undefined);
@@ -193,7 +210,9 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   /** Whether an edit session is open (= focus is within). Two-way bindable. */
   editing = model(false);
 
-  protected display = computed(() => formatDuration(this.value(), this.durationFormat()));
+  protected display = computed(() =>
+    this.isEmpty() ? '' : formatDuration(this.value(), this.durationFormat()),
+  );
 
   // -- The session (one field, the date control's side pattern) ------------------
 
@@ -217,7 +236,10 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
       // The live channel: readable drafts flow into the model in the same
       // synchronous push (unsnapped — rounding is settlement's job).
       const parsed = parseDuration(value, this.durationFormat());
-      if (parsed !== undefined && parsed !== this.value()) this.value.set(parsed);
+      if (parsed === undefined) return;
+
+      const next = parsed ?? this.emptyValue();
+      if (next !== this.value()) this.value.set(next);
     },
   });
 
@@ -275,7 +297,10 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   );
 
   /** Public: whether the field holds no value. */
-  readonly isEmpty = computed(() => this.value() === null);
+  readonly isEmpty = computed(() => {
+    const value = this.value();
+    return value === null || value === this.emptyValue();
+  });
 
   protected parseGateVisible = computed(() => this.#saveAttempted() && this.parseFailed());
 
@@ -340,9 +365,18 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
     });
   }
 
-  #snap(seconds: number): number {
-    const step = this.step();
-    return step > 1 ? Math.round(seconds / step) * step : seconds;
+  /**
+   * Lands a committed length on the `intervalStep` grid. Required-but-shorter
+   * settles AS the step — an emptied required field on a grid included;
+   * otherwise empty settles as `emptyValue`.
+   */
+  #round(seconds: number | null): number | null {
+    const step = this.intervalStep();
+    if (seconds === null) return this.required() && step > 1 ? step : this.emptyValue();
+    if (step <= 1) return seconds;
+    if (seconds < step && this.required()) return step;
+
+    return roundToInterval(seconds, step, this.intervalRounding());
   }
 
   protected sizeOf(): number {
@@ -488,7 +522,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
         snappedBack = true;
         value = this.#baselineValue;
       } else {
-        value = parsed === null ? null : this.#snap(parsed);
+        value = this.#round(parsed);
       }
     }
 
@@ -521,7 +555,8 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   }
 
   #announceRevert(value: number | null) {
-    const restored = value === null ? '' : formatDuration(value, this.durationFormat());
+    const restored =
+      value === null || value === this.emptyValue() ? '' : formatDuration(value, this.durationFormat());
     this.revertNotice.set(this.#intl.revertedLabel(restored));
     this.revertFlash.set(true);
 
@@ -666,22 +701,23 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
 
   /**
    * Clears the field from the idle hover bubble — a commit AND an interaction
-   * (mat-faithful): writes `null`, marks the field touched, and settles once
-   * so a bound schema (and a range group) sees the clear.
+   * (mat-faithful): writes `emptyValue`, marks the field touched, and settles
+   * once so a bound schema (and a range group) sees the clear.
    */
   protected clearBubble() {
     // Idle-only: the bubble is hidden while editing; guard anyway.
-    if (this.editing() || this.value() === null) return;
+    if (this.editing() || this.isEmpty()) return;
 
-    this.value.set(null);
-    this.#baselineValue = null;
+    const empty = this.emptyValue();
+    this.value.set(empty);
+    this.#baselineValue = empty;
     this.#restoreDraft();
     this.#saveAttempted.set(false);
 
     this.#selfTouched.set(true);
     this.touch.emit();
     this.#emitSavedModel();
-    this.saved.emit({ value: null, changed: true });
+    this.saved.emit({ value: empty, changed: true });
   }
 
   // -- Form Value Contract ------------------------------------------------------------------

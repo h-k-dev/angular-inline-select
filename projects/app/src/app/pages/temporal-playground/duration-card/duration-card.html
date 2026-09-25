@@ -20,7 +20,7 @@
           <angular-inline-duration
             [formField]="durationForm.estimate"
             [durationFormat]="durationFormat()"
-            [step]="60"
+            [intervalStep]="60"
             ariaLabel="Estimated effort"
             (savedModelChange)="logEmit('estimate.savedModelChange', $event)"
           />

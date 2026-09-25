@@ -1,8 +1,9 @@
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { FormField, form } from '@angular/forms/signals';
+import { FormField, form, required } from '@angular/forms/signals';
 
 import { AngularInlineDuration, type InlineDurationSaved } from './angular-inline-duration';
+import type { IntervalRounding } from '../interval-rounding';
 import { EditableClear, EditableClearTemplate } from 'angular-inline-select';
 import {
   parseDuration,
@@ -59,7 +60,7 @@ describe('duration codec', () => {
   template: `
     <angular-inline-duration
       [formField]="field"
-      [step]="60"
+      [intervalStep]="60"
       (savedModelChange)="saved.push($event)"
       (saved)="sessions.push($event)"
     />
@@ -287,5 +288,124 @@ describe('AngularInlineDuration — the interactive unit', () => {
     expect(event.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(h.input());
     expect(h.input().selectionStart).toBe(h.input().value.length);
+  });
+});
+
+// =============================================================================
+// The rounding grid — `intervalStep` / `intervalRounding` on the committed length
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineDuration, FormField],
+  template: `
+    <angular-inline-duration
+      [formField]="field"
+      [intervalStep]="900"
+      [intervalRounding]="rounding()"
+    />
+  `,
+})
+class DurationGridHost {
+  model = signal<number | null>(null);
+  field = form(this.model, (path) => required(path, { when: () => this.required() }));
+  rounding = signal<IntervalRounding>('ceil');
+  required = signal(false);
+}
+
+describe('AngularInlineDuration — the rounding grid', () => {
+  function commit(text: string, setup?: (host: DurationGridHost) => void) {
+    const fixture = TestBed.createComponent(DurationGridHost);
+    setup?.(fixture.componentInstance);
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector('.inline-duration__input') as HTMLInputElement;
+    input.focus();
+    fixture.detectChanges();
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+    return fixture.componentInstance.model();
+  }
+
+  it("'ceil' (the default) lands the length UP — 16 min → 30 min", () => {
+    expect(commit('16m')).toBe(30 * 60);
+  });
+
+  it("'round' lands on the NEAREST multiple — 22 min → 15 min", () => {
+    expect(commit('22m', (h) => h.rounding.set('round'))).toBe(15 * 60);
+  });
+
+  it("'floor' lands DOWN — 29 min → 15 min", () => {
+    expect(commit('29m', (h) => h.rounding.set('floor'))).toBe(15 * 60);
+  });
+
+  it('a required-but-shorter length settles AS the step, whatever the rounding', () => {
+    expect(
+      commit('5m', (h) => {
+        h.required.set(true);
+        h.rounding.set('floor');
+      }),
+    ).toBe(15 * 60);
+  });
+});
+
+// =============================================================================
+// emptyValue — what EMPTY is on the value channel (`null` by default)
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineDuration],
+  template: `<angular-inline-duration [(value)]="value" [emptyValue]="emptyValue()" (saved)="sessions.push($event)" />`,
+})
+class EmptyValueHost {
+  value = signal<number | null>(null);
+  emptyValue = signal<number | null>(null);
+  sessions: InlineDurationSaved[] = [];
+}
+
+describe('AngularInlineDuration — emptyValue', () => {
+  function mount(init: (host: EmptyValueHost) => void) {
+    const fixture = TestBed.createComponent(EmptyValueHost);
+    init(fixture.componentInstance);
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector('.inline-duration__input') as HTMLInputElement;
+    const field = fixture.debugElement.query((el) => el.name === 'angular-inline-duration')!
+      .componentInstance as AngularInlineDuration;
+    return { fixture, input, field, host: fixture.componentInstance };
+  }
+
+  function commitEmpty(m: ReturnType<typeof mount>) {
+    m.input.focus();
+    m.fixture.detectChanges();
+    m.input.value = '';
+    m.input.dispatchEvent(new Event('input', { bubbles: true }));
+    m.fixture.detectChanges();
+    m.input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    m.fixture.detectChanges();
+  }
+
+  it('by default EMPTY is null — and a real 0 is a value, not empty', () => {
+    const m = mount((h) => h.value.set(0));
+    expect(m.field.isEmpty()).toBe(false);
+    expect(m.input.value).not.toBe('');
+
+    commitEmpty(m);
+    expect(m.host.value()).toBeNull();
+  });
+
+  it('[emptyValue]="0": 0 reads as empty (placeholder), and emptying writes 0', () => {
+    const m = mount((h) => {
+      h.emptyValue.set(0);
+      h.value.set(0);
+    });
+    expect(m.field.isEmpty()).toBe(true);
+    expect(m.input.value).toBe(''); // the placeholder shows, not "0:00"
+
+    m.host.value.set(5400);
+    m.fixture.detectChanges();
+    commitEmpty(m);
+    expect(m.host.value()).toBe(0);
+    expect(m.host.sessions.at(-1)).toEqual({ value: 0, changed: true });
   });
 });

@@ -79,7 +79,7 @@ interface Settlement {
       />
       <angular-inline-duration
         [(value)]="durationValue"
-        [step]="60"
+        [intervalStep]="60"
         (saved)="durationSaved.push($event)"
       />
       <input class="after" type="text" />
