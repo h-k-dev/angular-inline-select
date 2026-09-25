@@ -16,6 +16,7 @@ import {
   inject,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
+import { _IdGenerator } from '@angular/cdk/a11y';
 import { OverlayModule, type ConnectedPosition } from '@angular/cdk/overlay';
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
@@ -608,6 +609,22 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
 
   protected pickerOptions = computed(() => this.countryOptions(this.pickerQuery()));
   protected pickerActiveId = computed(() => this.pickerOptions()[this.pickerActiveIndex()]?.id);
+
+  /**
+   * The picker list's DOM id — per instance, so the search combobox's
+   * `aria-controls` names THIS list. Options derive their DOM ids from it via
+   * `pickerOptionDomId`, the one recipe `aria-activedescendant` reads too.
+   */
+  protected readonly pickerListId = inject(_IdGenerator).getId('country-picker-');
+
+  protected pickerOptionDomId(optionId: string) {
+    return `${this.pickerListId}-${optionId}`;
+  }
+
+  protected pickerActiveDomId = computed(() => {
+    const id = this.pickerActiveId();
+    return id === undefined ? null : this.pickerOptionDomId(id);
+  });
 
   protected pickerPositions: ConnectedPosition[] = [
     { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },

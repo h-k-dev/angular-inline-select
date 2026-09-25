@@ -150,19 +150,20 @@
       class="country-picker__search"
       type="text"
       role="combobox"
+      [attr.aria-controls]="pickerListId"
       aria-autocomplete="list"
       [attr.aria-expanded]="true"
-      [attr.aria-activedescendant]="pickerActiveId()"
+      [attr.aria-activedescendant]="pickerActiveDomId()"
       placeholder="Search country"
       [value]="pickerQuery()"
       (input)="onPickerSearch($any($event.target).value)"
       (keydown)="onPickerKeydown($event)"
     />
-    <div class="country-picker__list" role="listbox" aria-label="Countries">
+    <div class="country-picker__list" role="listbox" aria-label="Countries" [id]="pickerListId">
       @for (option of pickerOptions(); track option.country) {
         <div
           role="option"
-          [id]="'picker-' + option.id"
+          [id]="pickerOptionDomId(option.id)"
           [attr.data-active]="option.id === pickerActiveId()"
           [attr.aria-selected]="option.id === pickerActiveId()"
           (click)="pickCountry(option)"

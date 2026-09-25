@@ -1593,3 +1593,72 @@ describe('AngularInlineText — primary actions', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 });
+
+// =============================================================================
+// Panel keys reach the panel from its action buttons
+//
+// Escape (revert), Ctrl+Enter (save) and Tab (scope handover) are the PANEL's
+// keys — they must work wherever focus sits inside it, the action buttons
+// included. A button that swallows keydown strands the user on it.
+// =============================================================================
+
+describe('AngularInlineText — panel keys from the action buttons', () => {
+  let h: Harness<ValueBindingHost>;
+
+  beforeEach(() => {
+    h = setup(ValueBindingHost);
+  });
+
+  function actionButtons(): HTMLButtonElement[] {
+    return Array.from(document.querySelectorAll<HTMLButtonElement>('.editable-panel .editable-panel__actions button'));
+  }
+
+  function keydown(target: Element, init: KeyboardEventInit) {
+    const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+    target.dispatchEvent(event);
+    h.fixture.detectChanges();
+    return event;
+  }
+
+  it('Escape on an action button reverts the session', async () => {
+    await typeText(h, 'draft');
+    const [discard, save] = actionButtons();
+    expect(discard).toBeTruthy();
+    expect(save).toBeTruthy();
+
+    save.focus();
+    keydown(save, { key: 'Escape' });
+    await h.fixture.whenStable();
+
+    expect(h.editable().editing()).toBe(false);
+    expect(h.host.value()).toBe('initial');
+    expect(h.host.saved).toEqual([]);
+  });
+
+  it('Ctrl+Enter on an action button saves the session', async () => {
+    await typeText(h, 'draft');
+    const [discard] = actionButtons();
+
+    discard.focus();
+    keydown(discard, { key: 'Enter', ctrlKey: true });
+    await h.fixture.whenStable();
+
+    expect(h.editable().editing()).toBe(false);
+    expect(h.host.value()).toBe('draft');
+    expect(h.host.saved).toEqual([{ value: 'draft' }]);
+  });
+
+  it('Tab on an action button reaches the panel (its scope handover), not swallowed', async () => {
+    await typeText(h, 'draft');
+    const [, save] = actionButtons();
+    const panel = document.querySelector('.editable-panel')!;
+
+    const heard: string[] = [];
+    panel.addEventListener('keydown', (event) => heard.push((event as KeyboardEvent).key));
+
+    save.focus();
+    keydown(save, { key: 'Tab' });
+    keydown(save, { key: 'Tab', shiftKey: true });
+    expect(heard).toEqual(['Tab', 'Tab']);
+  });
+});

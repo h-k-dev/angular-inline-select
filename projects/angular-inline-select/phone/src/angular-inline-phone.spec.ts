@@ -452,3 +452,90 @@ describe('AngularInlinePhone — clear affordance', () => {
     expect(host.sessions).toEqual([{ value: null, changed: true }]);
   });
 });
+
+// =============================================================================
+// Country options — keyboard model and ARIA wiring
+//
+// Both lists are aria-activedescendant listboxes: focus stays in the field
+// that owns the keyboard (the picker's search, the slash menu's editor), so an
+// option must never be a tab stop — a focusable option that also swallows
+// keydown is a Tab trap. The combobox must name ITS list, and the active
+// descendant must resolve to a rendered option, or a screen reader announces
+// nothing while the highlight moves.
+// =============================================================================
+
+describe('AngularInlinePhone — country options a11y', () => {
+  let h: Harness<PhoneValueHost>;
+
+  beforeEach(() => {
+    h = setup(PhoneValueHost);
+  });
+
+  async function openPicker() {
+    const trigger = h.fixture.nativeElement.querySelector('.country-trigger') as HTMLButtonElement;
+    trigger.click();
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    const search = document.querySelector('.country-picker__search') as HTMLInputElement | null;
+    if (!search) throw new Error('country picker not open');
+    return search;
+  }
+
+  it('picker: the search combobox controls its own, rendered listbox', async () => {
+    const search = await openPicker();
+
+    const controls = search.getAttribute('aria-controls');
+    expect(controls).toBeTruthy();
+    const list = document.getElementById(controls!);
+    expect(list?.getAttribute('role')).toBe('listbox');
+    expect(list?.classList.contains('country-picker__list')).toBe(true);
+  });
+
+  it('picker: the active descendant resolves to an option of that list — and follows ArrowDown', async () => {
+    const search = await openPicker();
+    const list = document.getElementById(search.getAttribute('aria-controls')!)!;
+
+    const first = document.getElementById(search.getAttribute('aria-activedescendant') ?? '');
+    expect(first?.getAttribute('role')).toBe('option');
+    expect(list.contains(first)).toBe(true);
+    expect(first?.getAttribute('aria-selected')).toBe('true');
+
+    search.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    h.fixture.detectChanges();
+
+    const second = document.getElementById(search.getAttribute('aria-activedescendant') ?? '');
+    expect(second).not.toBe(first);
+    expect(list.contains(second)).toBe(true);
+    expect(second?.getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('picker: options are not tab stops and do not swallow keys', async () => {
+    await openPicker();
+    const options = Array.from(document.querySelectorAll('.country-picker__list [role="option"]'));
+    expect(options.length).toBeGreaterThan(0);
+
+    for (const option of options) {
+      expect(option.hasAttribute('tabindex')).toBe(false);
+      const key = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+      option.dispatchEvent(key);
+      expect(key.defaultPrevented).toBe(false);
+    }
+  });
+
+  it('slash menu: options are not tab stops and do not swallow keys', async () => {
+    await typeText(h, '/de');
+    h.fixture.detectChanges();
+
+    const options = Array.from(document.querySelectorAll('.editable-menu [role="option"]'));
+    expect(options.length).toBeGreaterThan(0);
+
+    for (const option of options) {
+      expect(option.hasAttribute('tabindex')).toBe(false);
+      const key = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+      option.dispatchEvent(key);
+      expect(key.defaultPrevented).toBe(false);
+    }
+  });
+});

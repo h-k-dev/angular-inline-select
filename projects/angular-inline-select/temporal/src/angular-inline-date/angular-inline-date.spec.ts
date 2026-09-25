@@ -237,6 +237,7 @@ class DateFormHost {
       [now]="now"
       (savedModelChange)="saved.push($event)"
       (saved)="sessions.push($event)"
+      (touch)="touches = touches + 1"
     />
   `,
 })
@@ -248,6 +249,7 @@ class DateShapeHost {
 
   saved: DateSavedDetails[] = [];
   sessions: InlineDateSaved[] = [];
+  touches = 0;
 }
 
 @Component({
@@ -907,6 +909,49 @@ describe('AngularInlineDate two-field range', () => {
     expect(h.host.value()).toEqual({ start: db('2026-05-22'), end: dbEnd('2026-05-25') });
   });
 
+  // Ctrl+click and drag are SETTLEMENTS, not side doors: touch, then exactly
+  // one change-gated `saved`, and the model event only when something changed.
+  it('Ctrl+click settles like any commit — touch, ONE saved, the half-open model', async () => {
+    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.fixture.detectChanges();
+
+    focusInput(h, h.start());
+    const touchesBefore = h.host.touches;
+    gridCell('2026-05-20')!.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, ctrlKey: true }),
+    );
+    await settle(h);
+
+    expect(h.host.touches).toBeGreaterThan(touchesBefore);
+    // The start session then closes on the handover to the end side — an
+    // unchanged close, so the CHANGED settlement is the Ctrl+click alone.
+    expect(h.host.sessions.filter((s) => s.changed)).toEqual([
+      { value: { start: db('2026-05-20'), end: null }, changed: true },
+    ]);
+    expect(h.host.saved.length).toBe(1);
+    expect(h.host.saved[0].start?.toFormat('yyyy-MM-dd')).toBe('2026-05-20');
+    expect(h.host.saved[0].end).toBeNull();
+  });
+
+  it('a drag that repaints the committed range is an UNCHANGED settlement — no model event', async () => {
+    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.fixture.detectChanges();
+
+    focusInput(h, h.start());
+    gridCell('2026-05-12')!.dispatchEvent(
+      new MouseEvent('mousedown', { bubbles: true, button: 0 }),
+    );
+    gridCell('2026-05-15')!.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    document.dispatchEvent(new MouseEvent('mouseup'));
+    await settle(h);
+
+    expect(h.host.value()).toEqual({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    expect(h.host.sessions).toEqual([
+      { value: { start: db('2026-05-12'), end: dbEnd('2026-05-15') }, changed: false },
+    ]);
+    expect(h.host.saved).toEqual([]);
+  });
+
   it('range picking: first pick fills the focused side and hands the session to the empty side', async () => {
     h.host.ranged.set(true);
     h.fixture.detectChanges();
@@ -1422,5 +1467,17 @@ describe('AngularInlineDate — the opening press', () => {
     );
     h.fixture.detectChanges();
     expect(h.panel()).toBeNull();
+  });
+});
+
+// =============================================================================
+// Tabular figures — a typed date never jitters its width digit by digit
+// =============================================================================
+
+describe('AngularInlineDate — tabular figures', () => {
+  it('the input sets tabular figures (after `font: inherit`, which would reset them)', () => {
+    const h = setupHost(DateFormHost);
+    const input = h.fixture.nativeElement.querySelector('.inline-date__input') as HTMLInputElement;
+    expect(getComputedStyle(input).fontVariantNumeric).toBe('tabular-nums');
   });
 });
