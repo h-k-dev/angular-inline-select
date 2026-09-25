@@ -126,6 +126,13 @@ export const defaultParseNumber = makeParseNumber('.');
 export const defaultFormatNumber = makeFormatNumber('.');
 
 /**
+ * The WIRE reading of a string binding: the canonical dot-decimal a store
+ * hands back (`'1250000.5'`), or a legacy comma entry. Separator-agnostic on
+ * purpose — see `numericValue`.
+ */
+const parseWireNumber = makeParseNumber('both');
+
+/**
  * Inline number: a `FormValueControl<number>` that COMPOSES the inline text
  * control — no inheritance. It contains an `<angular-inline-text>` and does
  * exactly one job at the boundary: translate between the number world
@@ -190,9 +197,10 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
   /**
    * Consumer clear affordance — forwarded verbatim to the inner control,
    * which owns the bubble (and whose context callback clears THROUGH this
-   * wrapper: the empty commit arrives here as a normal settlement). Same
-   * re-projection reason as the affixes: input for composition,
-   * `ng-template[editableClear]` content for direct use.
+   * wrapper: the empty commit arrives here as a normal settlement, `null` —
+   * never the inner control's empty string). Same re-projection reason as the
+   * affixes: input for composition, `ng-template[editableClear]` content for
+   * direct use.
    */
   clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
 
@@ -353,13 +361,25 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
    */
   saved = output<InlineNumberSaved>();
 
-  /** The numeric reading of the (possibly string-typed) model. */
+  /**
+   * The numeric reading of the (possibly string-typed) model.
+   *
+   * A string binding is read by the active codec first. Under a `locale` that
+   * codec reads the DISPLAY shape (`1.250.000,5` under de) and would reject the
+   * canonical dot-decimal string a store hands back (`'1250000.5'` — a dot in
+   * a non-group position); so a string the locale cannot read falls back to
+   * the wire reading. Without a locale the separator codec already reads the
+   * wire shape, and nothing changes.
+   */
   protected numericValue = computed<number | null>(() => {
     const value = this.value();
     if (value === null || value === undefined) return null;
     if (typeof value === 'number') return Number.isNaN(value) ? null : value;
 
-    return this.activeParse()(value) ?? null;
+    const parsed = this.activeParse()(value);
+    if (parsed !== undefined) return parsed;
+
+    return this.localeCodec() ? (parseWireNumber(value) ?? null) : null;
   });
 
   /**

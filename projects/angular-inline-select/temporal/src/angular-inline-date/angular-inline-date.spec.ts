@@ -4,6 +4,7 @@ import { By } from '@angular/platform-browser';
 import { FormField, form } from '@angular/forms/signals';
 
 import { AngularInlineDate, type InlineDateSaved } from './angular-inline-date';
+import { EditablePrefix, EditableSuffix } from 'angular-inline-select';
 import {
   EditableClear,
   EditableClearTemplate,
@@ -1553,5 +1554,43 @@ describe('AngularInlineDate — showTrigger', () => {
     await settle(h);
     expect(h.panel()).not.toBeNull();
     await blurAway(h);
+  });
+});
+
+// =============================================================================
+// Affix slots — prefix / suffix templates, outside the input, aria-hidden
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineDate, EditablePrefix, EditableSuffix],
+  template: `
+    <angular-inline-date [showTrigger]="showTrigger()">
+      <ng-template editablePrefix><span class="unit-prefix">from</span></ng-template>
+      <ng-template editableSuffix><span class="unit-suffix">CET</span></ng-template>
+    </angular-inline-date>
+  `,
+})
+class AffixHost {
+  showTrigger = signal(false);
+}
+
+describe('AngularInlineDate — affix slots', () => {
+  it('renders the prefix and suffix around the field, hidden from assistive tech', () => {
+    const fixture = TestBed.createComponent(AffixHost);
+    fixture.detectChanges();
+    const affixes = Array.from(fixture.nativeElement.querySelectorAll('.inline-date__affix')) as HTMLElement[];
+
+    expect(affixes.map((a) => a.textContent?.trim())).toEqual(['from', 'CET']);
+    expect(affixes.every((a) => a.getAttribute('aria-hidden') === 'true')).toBe(true);
+    // Never part of the draft: the affixes sit outside every input.
+    expect(affixes.some((a) => a.closest('input'))).toBe(false);
+  });
+
+  it('a suffix REPLACES the opted-in 📅 trigger', () => {
+    const fixture = TestBed.createComponent(AffixHost);
+    fixture.componentInstance.showTrigger.set(true);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.inline-date__trigger')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.unit-suffix')).not.toBeNull();
   });
 });

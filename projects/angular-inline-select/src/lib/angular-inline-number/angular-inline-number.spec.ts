@@ -552,6 +552,22 @@ describe('AngularInlineNumber — locale codec', () => {
     expect(h.display().textContent).toBe('1250000,5');
   });
 
+  it('reads a canonical dot-decimal STRING binding under a comma-decimal locale', () => {
+    // A store hands back `String(number)`; under de the locale codec would read
+    // the dot as a misplaced group mark. The wire reading must win.
+    h.host.locale.set('de');
+    h.host.value.set('1250000.5');
+    h.fixture.detectChanges();
+
+    expect(h.display().textContent).toBe('1.250.000,5');
+    expect(h.number().parseFailed()).toBe(false);
+
+    // A legacy comma entry reads too.
+    h.host.value.set('7,5');
+    h.fixture.detectChanges();
+    expect(h.display().textContent).toBe('7,5');
+  });
+
   it('applies Intl options — fixed decimals for money', () => {
     h.host.options.set({ minimumFractionDigits: 2, maximumFractionDigits: 2 });
     h.fixture.detectChanges();
@@ -651,5 +667,20 @@ describe('AngularInlineNumber — host styles', () => {
 
     expect(host.getAttributeNames().some((name) => name.startsWith('_nghost-'))).toBe(true);
     expect(getComputedStyle(host).display).toBe('inline');
+  });
+});
+
+describe('AngularInlineNumber — [(editing)] binding', () => {
+  it('mirrors the session state', async () => {
+    const h = setup(NumberFormHost);
+    const wrapper = h.fixture.debugElement.children[0].componentInstance as AngularInlineNumber;
+
+    expect(wrapper.editing()).toBe(false);
+
+    await typeText(h, '7');
+    expect(wrapper.editing()).toBe(true);
+
+    accept(h);
+    expect(wrapper.editing()).toBe(false);
   });
 });

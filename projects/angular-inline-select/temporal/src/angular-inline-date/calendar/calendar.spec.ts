@@ -64,6 +64,29 @@ describe('Calendar', () => {
     expect(navButtons()[0].getAttribute('aria-label')).toBe('Vorheriger Monat');
   });
 
+  it('dayFilter: a filtered-out day renders disabled and cannot be picked — click or Enter', () => {
+    const picked: string[] = [];
+    component.picked.subscribe((day) => picked.push(day));
+    fixture.componentRef.setInput('dayFilter', (iso: string) => iso !== '2026-09-16');
+    fixture.detectChanges();
+
+    const blocked = cell('[data-day="2026-09-16"]')!;
+    expect(blocked.getAttribute('data-disabled')).not.toBeNull();
+    expect(blocked.getAttribute('aria-disabled')).toBe('true');
+
+    blocked.click();
+    fixture.detectChanges();
+    expect(picked).toEqual([]);
+
+    // The keyboard reaches it too: arrow onto the day, then Enter.
+    key(cell('[data-day="2026-09-15"]')!, 'ArrowRight');
+    key(cell('[data-day="2026-09-16"]')!, 'Enter');
+    expect(picked).toEqual([]);
+
+    cell('[data-day="2026-09-17"]')!.click();
+    expect(picked).toEqual(['2026-09-17']);
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
     expect(headerText()).toBe('September 2026');

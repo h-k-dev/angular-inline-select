@@ -34,10 +34,10 @@ export interface DbTimeRange {
 }
 
 /**
- * The polymorphic bound value. The consumer's binding shape IS the mode
- * declaration: a string binds a single time field, an object binds the
- * start–end pair. The control echoes the shape it received and never
- * invents another one.
+ * The polymorphic bound value: a string for a single time, an object for the
+ * start–end pair (or the one-key `{ start }`). The MODE is declared by the
+ * control's `ranged` input; the shape is only what the control echoes back —
+ * it returns the shape it received and never invents another one.
  */
 export type InlineTimeValue = DbDateTime | DbTimeRange | null;
 
@@ -63,10 +63,11 @@ export interface InternalTimeRange {
  * HALF-OPEN range (`end: null`), never a mirror.
  */
 export function toInternalTimeRange(value: InlineTimeValue): InternalTimeRange {
+  // `''` (a legacy empty side, or a raw DB default) reads as EMPTY — never as an instant.
   if (value === null) return { start: null, end: null };
-  if (typeof value === 'string') return { start: value, end: null };
+  if (typeof value === 'string') return { start: value || null, end: null };
 
-  return { start: value.start ?? null, end: value.end ?? null };
+  return { start: value.start || null, end: value.end || null };
 }
 
 /**
@@ -91,7 +92,7 @@ export function echoTimeShape(internal: InternalTimeRange, shape: TimeValueShape
 export function timeValuesEqual(a: InlineTimeValue, b: InlineTimeValue): boolean {
   if (a === null || b === null || typeof a === 'string' || typeof b === 'string') return a === b;
 
-  return a.start === b.start && a.end === b.end;
+  return a.start === b.start && (a.end ?? null) === (b.end ?? null);
 }
 
 const pad = (value: number) => String(value).padStart(2, '0');

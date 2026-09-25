@@ -56,22 +56,27 @@
   reposition jump — and the zoomed grids stretch to exactly its box.
 -->
 <div class="cal__views" (focusin)="gridFocused = true" (focusout)="gridFocused = false">
+  <!--
+    The container-level mouseover only tracks an ACTIVE DRAG (anchored by
+    mousedown); every keyboard interaction lives on the focusable cells
+    (APG roving tabindex), so the a11y pairing rules do not apply here.
+  -->
   <div
     #grid
     class="cal__grid"
     role="grid"
+    tabindex="-1"
     data-view="day"
     [attr.data-inactive]="view() !== 'day' || null"
     [attr.aria-labelledby]="labelId"
+    (focus)="gridFocused = true"
     (keydown)="handleKeydown($event)"
     (mousedown)="handleGridMousedown($event)"
     (mouseover)="handleGridMouseover($event)"
   >
     <div class="cal__weekdays" role="row">
       @for (name of weekdayNames(); track $index) {
-        <span class="cal__weekday" role="columnheader" [attr.aria-label]="name.long">{{
-          name.narrow
-        }}</span>
+        <span class="cal__weekday" role="columnheader" [attr.aria-label]="name.long">{{ name.narrow }}</span>
       }
     </div>
     @for (week of weeks(); track $index) {
@@ -87,6 +92,8 @@
             [attr.aria-current]="cell.today ? 'date' : null"
             [attr.data-active]="cell.iso === active() || null"
             [attr.data-selected]="cell.iso === selectedDay() || null"
+            [attr.data-disabled]="dayDisabled(cell.iso) || null"
+            [attr.aria-disabled]="dayDisabled(cell.iso) || null"
             [attr.data-range-start]="cell.iso === paintedRange()?.start || null"
             [attr.data-range-end]="cell.iso === paintedRange()?.end || null"
             [attr.data-in-range]="inPaintedRange(cell.iso) || null"
@@ -103,11 +110,13 @@
     }
   </div>
 
+  <!-- `dayFilter` is per DAY — whole years and months always pick. -->
   @switch (view()) {
     @case ('year') {
       <div
         class="cal__periods"
         role="grid"
+        tabindex="-1"
         data-view="year"
         [attr.aria-labelledby]="labelId"
         (keydown)="handleYearKeydown($event)"
@@ -141,6 +150,7 @@
       <div
         class="cal__periods"
         role="grid"
+        tabindex="-1"
         data-view="month"
         [attr.aria-labelledby]="labelId"
         (keydown)="handleMonthKeydown($event)"

@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form, required } from '@angular/forms/signals';
 
 import { AngularInlineTime, type InlineTimeSaved } from './angular-inline-time';
+import { EditablePrefix, EditableSuffix } from 'angular-inline-select';
 import type { IntervalRounding } from '../interval-rounding';
 import { EditableClear, EditableClearTemplate } from 'angular-inline-select';
 import {
@@ -1097,5 +1098,34 @@ describe('AngularInlineTime — the error overlay', () => {
     expect(panel()?.querySelector('.custom-error')?.textContent).toBe('Custom message');
     expect(panel()?.textContent).not.toContain('A value is required');
     await blurAway(fixture);
+  });
+});
+
+// =============================================================================
+// Affix slots — prefix / suffix templates, outside the input, aria-hidden
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineTime, EditablePrefix, EditableSuffix],
+  template: `
+    <angular-inline-time>
+      <ng-template editablePrefix><span class="unit-prefix">from</span></ng-template>
+      <ng-template editableSuffix><span class="unit-suffix">CET</span></ng-template>
+    </angular-inline-time>
+  `,
+})
+class AffixHost {
+}
+
+describe('AngularInlineTime — affix slots', () => {
+  it('renders the prefix and suffix around the field, hidden from assistive tech', () => {
+    const fixture = TestBed.createComponent(AffixHost);
+    fixture.detectChanges();
+    const affixes = Array.from(fixture.nativeElement.querySelectorAll('.inline-time__affix')) as HTMLElement[];
+
+    expect(affixes.map((a) => a.textContent?.trim())).toEqual(['from', 'CET']);
+    expect(affixes.every((a) => a.getAttribute('aria-hidden') === 'true')).toBe(true);
+    // Never part of the draft: the affixes sit outside every input.
+    expect(affixes.some((a) => a.closest('input'))).toBe(false);
   });
 });

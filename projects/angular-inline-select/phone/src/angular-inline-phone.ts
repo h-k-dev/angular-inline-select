@@ -233,8 +233,11 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     });
   }
 
-  /** Country assumed for national-format input; `+CC` input overrides it. */
-  defaultCountry = input<PhoneCountry | undefined>(undefined);
+  /**
+   * Country assumed for national-format input; `+CC` input overrides it.
+   * Germany by default — pass another ISO code, or `undefined` to require `+CC`.
+   */
+  defaultCountry = input<PhoneCountry | undefined>('DE');
 
   /** How the committed value renders while idle. */
   displayFormat = input<'national' | 'international'>('international');
@@ -626,9 +629,18 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     return id === undefined ? null : this.pickerOptionDomId(id);
   });
 
+  /**
+   * Below the trigger first, above as a fallback; each side also tries an
+   * inline-END alignment so a picker near the inline-end screen edge flips
+   * instead of overflowing. Should nothing fit (narrow viewports), the
+   * template's `cdkConnectedOverlayPush` slides the picker inside the
+   * viewport margin rather than leaving it clipped.
+   */
   protected pickerPositions: ConnectedPosition[] = [
     { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
+    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 4 },
     { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
+    { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -4 },
   ];
 
   protected openPicker(event: Event) {

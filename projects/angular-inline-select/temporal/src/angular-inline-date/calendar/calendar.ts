@@ -156,6 +156,17 @@ export class Calendar {
   /** The display zone (T6) — the today marker is that zone's today. */
   zone = input<string | undefined>(undefined);
 
+  /**
+   * Days failing this predicate render DISABLED and cannot be picked — a
+   * host's business calendar (holidays, weekends; the date field's
+   * `strictMode`). `undefined` = every day picks.
+   */
+  dayFilter = input<((iso: IsoDate) => boolean) | undefined>(undefined);
+  protected dayDisabled(iso: IsoDate): boolean {
+    const filter = this.dayFilter();
+    return filter !== undefined && !filter(iso);
+  }
+
   /** Reference clock — the today marker and the empty-field fallback month. */
   now = input<() => Date>(() => new Date());
 
@@ -254,6 +265,7 @@ export class Calendar {
 
   protected handleCellClick(day: IsoDate, event: MouseEvent) {
     if (this.#suppressClick) return;
+    if (this.dayDisabled(day)) return;
 
     if (this.rangeGestures() && (event.ctrlKey || event.metaKey)) this.ctrlPicked.emit(day);
     else this.picked.emit(day);
@@ -529,6 +541,7 @@ export class Calendar {
       case 'Enter':
       case ' ':
         event.preventDefault();
+        if (this.dayDisabled(this.active())) break;
         if (this.rangeGestures() && (event.ctrlKey || event.metaKey)) {
           this.ctrlPicked.emit(this.active());
         } else {
