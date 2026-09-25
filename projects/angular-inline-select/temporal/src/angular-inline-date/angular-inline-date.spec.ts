@@ -212,6 +212,7 @@ describe('date shape-echo codec', () => {
       [formField]="field"
       locale="en"
       [now]="now"
+      [showTrigger]="true"
       (savedModelChange)="saved.push($event)"
       (saved)="sessions.push($event)"
     />
@@ -1519,5 +1520,38 @@ describe('AngularInlineDate — reset() leaves a clean session', () => {
     expect(sr.textContent?.trim()).toBe('');
     expect(h.host.value()).toBe(RAW);
     expect(h.host.sessions.filter((s) => s.changed)).toEqual([]);
+  });
+});
+
+// =============================================================================
+// showTrigger — the 📅 button is OPT-IN only, never on by default
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineDate, FormField],
+  template: `<angular-inline-date [formField]="field" locale="en" [showTrigger]="showTrigger()" />`,
+})
+class ShowTriggerHost {
+  model = signal<string | null>(null);
+  field = form(this.model);
+  showTrigger = signal(false);
+}
+
+describe('AngularInlineDate — showTrigger', () => {
+  it('renders NO 📅 trigger by default — focus alone opens the calendar', () => {
+    const h = setupHost(ShowTriggerHost);
+    expect(h.fixture.nativeElement.querySelector('.inline-date__trigger')).toBeNull();
+  });
+
+  it('[showTrigger]="true" opts the button in — and the calendar still opens on focus', async () => {
+    const h = setupHost(ShowTriggerHost);
+    h.host.showTrigger.set(true);
+    h.fixture.detectChanges();
+    expect(h.fixture.nativeElement.querySelector('.inline-date__trigger')).not.toBeNull();
+
+    focusInput(h, h.start());
+    await settle(h);
+    expect(h.panel()).not.toBeNull();
+    await blurAway(h);
   });
 });

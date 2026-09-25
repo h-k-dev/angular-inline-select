@@ -12,7 +12,10 @@
     (click)="toggleView()"
   >
     <span [id]="labelId">{{ headerLabel() }}</span>
-    <span class="cal__label-caret" aria-hidden="true">▾</span>
+    <!-- Material Symbols `arrow_drop_down` / `chevron_left` / `chevron_right`, inline: no icon font. -->
+    <svg class="cal__label-caret" viewBox="0 -960 960 960" aria-hidden="true" focusable="false">
+      <path d="M480-360 280-560h400L480-360Z" />
+    </svg>
   </button>
   <button
     type="button"
@@ -21,7 +24,9 @@
     (mousedown)="$event.preventDefault()"
     (click)="page(-1)"
   >
-    ‹
+    <svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false">
+      <path d="M560-240 320-480l240-240 56 56-184 184 184 184-56 56Z" />
+    </svg>
   </button>
   <button
     type="button"
@@ -30,7 +35,9 @@
     (mousedown)="$event.preventDefault()"
     (click)="page(1)"
   >
-    ›
+    <svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false">
+      <path d="M504-480 320-664l56-56 240 240-240 240-56-56 184-184Z" />
+    </svg>
   </button>
 </div>
 

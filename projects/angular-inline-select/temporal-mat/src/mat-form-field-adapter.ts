@@ -99,6 +99,13 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
     }
     this.#control = control;
 
+    // The form field renders the errors (`mat-error`): a control with its own
+    // error overlay keeps it closed. Duck-typed, like `overlayOrigin` below —
+    // the date's panel is its calendar, which stays.
+    if (this.#formField !== null && 'externalErrors' in this.#control) {
+      this.#control.externalErrors.set(true);
+    }
+
     // Anchor the date control's calendar to the form field's FLEX box (what
     // mat-select/-datepicker/-autocomplete use), not the bare input wrapper —
     // so the panel drops below the underline instead of at the text baseline.

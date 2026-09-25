@@ -637,7 +637,7 @@ export const DOCS: Record<string, SectionDocs> = {
         name: 'AngularInlineText',
         selector: 'angular-inline-text',
         summary:
-          'A static in-flow text that elevates into a floating editor on the first real edit. The page never reflows while typing; the value commits on Save / Enter (single-line) / Ctrl+Enter.',
+          'A static in-flow text that elevates into a floating editor on the first real edit. The page never reflows while typing; the value commits on Save / Enter (single-line) / Cmd/Ctrl+Enter.',
         models: [
           {
             name: 'value',

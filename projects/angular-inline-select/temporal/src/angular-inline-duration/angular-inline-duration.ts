@@ -271,6 +271,14 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   #saveAttempted = signal(false);
 
   /** Enter/Escape hide the panel until the next keystroke or session. */
+  /**
+   * Whether a HOSTING container renders this field's errors — the
+   * mat-form-field adapter sets it — so the error overlay stays closed and
+   * the container's own error area speaks. A `model` so the host directive on
+   * this element can `.set()` it.
+   */
+  externalErrors = model(false);
+
   #panelDismissed = signal(false);
 
   /** The parse gate: whether the current draft fails the codec. Public for consumers. */
@@ -306,9 +314,15 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
 
   protected errorSlotVisible = computed(() => this.errorsVisible() || this.parseGateVisible());
 
+  /** The message-carrying errors — the overlay's default content (mat-error's analogue). */
+  protected errorMessages = computed(() => this.errors().filter((error) => !!error.message));
+
+  /** The parse gate's own line: an unreadable draft on Enter says so. */
+  protected parseGateLabel = computed(() => this.#intl.invalidEntryLabel(this.#intl.durationLabel()));
+
   /** The panel appears only to carry an error — there is no live preview. */
   protected panelOpen = computed(
-    () => this.#open() && !this.#panelDismissed() && this.errorSlotVisible(),
+    () => this.#open() && !this.externalErrors() && !this.#panelDismissed() && this.errorSlotVisible(),
   );
 
   /** Public: whether the panel is showing (hosting containers coordinate on it). */

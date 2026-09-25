@@ -67,7 +67,8 @@
     [cdkTrapFocusAutoCapture]="false"
     (pointerdown)="markSessionTouched()"
     (keydown.escape)="handleEscape($event)"
-    (keydown.control.enter)="handleCtrlEnter()"
+    (keydown.control.enter)="handleSubmitShortcut()"
+    (keydown.meta.enter)="handleSubmitShortcut()"
     (keydown.tab)="handleTabKey($event, 1)"
     (keydown.shift.tab)="handleTabKey($event, -1)"
   >

@@ -3,7 +3,6 @@
 :host {
   display: inline;
   position: relative;
-  --_spacing: var(--mat-sys-spacing, 0.25rem);
 }
 
 .inline-time {
@@ -16,48 +15,120 @@
   @include inline-unit.unit;
 }
 
-/* The family look, on an input (see the date control for the rationale). */
+/* The family look, on an input (see angular-inline-text for the rationale). */
 .inline-time__input {
   font: inherit;
   color: inherit;
   background: transparent;
   border: 0;
-  padding: 0 0 0.1em;
-  margin: 0;
+  padding: 0;
   outline: none;
+  // ---------------------------------------------------------------------------
+  // THE LINE BOX MUST CONTAIN THE UNDERLINE.
+  //
+  // An <input> clips its text decoration at the LINE BOX (`overflow: clip`,
+  // unavoidable). The family's `0.4em` offset plus the `0.0625rem` thickness
+  // lands ~6.6px below the baseline, and a 20px line box at 14px text only has
+  // ~5px of room down there — so a FILLED field painted no underline at all,
+  // while an EMPTY one still showed its border fallback. That asymmetry was the
+  // bug: select a date and the underline disappeared.
+  //
+  // Room can only come from `line-height`. Verified: `height`, `min-height` and
+  // `padding-bottom` do NOT extend the clip, and `overflow: visible` is ignored
+  // on inputs. So the line box is set here in em — scaling with font-size, and
+  // deliberately not from `--mat-sys-body-medium-line-height`, whose 20px is
+  // exactly too short — and the extra leading is taken straight back off the
+  // layout with a matching negative bottom margin, so no row grows by it.
+  // Measured layout-neutral to within half a pixel.
+  // ---------------------------------------------------------------------------
+  line-height: 1.75;
+  margin: 0 0 -0.32em;
+
   min-width: 1ch;
   max-width: 100%;
   field-sizing: content;
   caret-color: var(--editable-text-caret-color, var(--mat-sys-primary, #428bca));
-  border-bottom: 0.0625rem dashed
-    var(--editable-text-underline-color, var(--mat-sys-primary, #428bca));
+
+  // ---------------------------------------------------------------------------
+  // THE FAMILY UNDERLINE — a `text-decoration`, on the input itself. The same
+  // five declarations as `.editable-text__display`, both v2 selects and
+  // `editable-date-v2`, so this field carries the family's dash pattern and its
+  // `0.4em` offset rather than a CSS border's much longer dashes sitting
+  // ~1.3px lower.
+  //
+  // It takes no layout, so thickening it on focus cannot move the text — which
+  // is why the old `padding-bottom: 0.1em` and its focus-time compensation are
+  // both gone.
+  //
+  // A permanently reserved TRANSPARENT bottom border rides along. Chrome paints
+  // no text decoration over placeholder-only text, so the empty state has to
+  // fall back to a border — and reserving it here, transparent, means the box
+  // height is identical whether that fallback is showing or not. Typing the
+  // first character can never jog the row by a pixel.
+  // ---------------------------------------------------------------------------
+  border-bottom: 0.0625rem dashed transparent;
+
+  text-decoration-line: var(--editable-text-underline-line, underline);
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.0625rem;
+  text-underline-offset: 0.4em;
+  text-decoration-color: var(--editable-text-underline-color, var(--mat-sys-on-surface-variant, #6b7280));
+
+  transition: text-decoration-color var(--iusta-t-fast, 0.2s) var(--iusta-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
 }
+
 .inline-time__input:focus {
-  border-bottom-style: solid;
-  border-bottom-width: 0.125rem;
-  padding-bottom: calc(0.1em - 0.0625rem);
+  text-decoration-style: solid;
+  text-decoration-thickness: 0.125rem;
+  text-decoration-color: var(--editable-text-underline-focus-indicator-color, var(--mat-sys-primary, #428bca));
 }
+
+// ---------------------------------------------------------------------------
+// EMPTY — the one state a text decoration cannot serve (see above), so the
+// reserved border takes over and the decoration stands down.
+//
+// The `opacity` dims the border AND the placeholder text together — the
+// family's empty-state contract, one amount for every editable in the list. It
+// is therefore NOT repeated on `::placeholder`: nesting the two would compound.
+//
+// `:not(:focus)`, because a focused field is not resting — someone is typing
+// into it, and dimming the thing under the caret reads as disabled.
+// ---------------------------------------------------------------------------
+.inline-time__input:placeholder-shown {
+  text-decoration-line: none;
+  border-bottom-color: var(--editable-text-underline-color, var(--mat-sys-on-surface-variant, #6b7280));
+}
+
+.inline-time__input:placeholder-shown:not(:focus) {
+  opacity: var(--editable-text-placeholder-opacity, 0.3875);
+}
+
+.inline-time__input:placeholder-shown:focus {
+  border-bottom-style: solid;
+  border-bottom-color: var(--editable-text-underline-focus-indicator-color, var(--mat-sys-primary, #428bca));
+}
+
 .inline-time__input::placeholder {
   font-style: italic;
   color: var(--editable-text-placeholder-color, var(--mat-sys-on-surface-variant, inherit));
-  opacity: var(--editable-text-placeholder-opacity, 0.3875);
 }
+
+// Disabled and invalid tint whichever of the two is currently painting.
 .inline-time__input:disabled {
   cursor: default;
-  border-bottom-color: var(--mat-sys-outline, #999);
+  text-decoration-color: var(--editable-disabled-color, var(--mat-sys-outline, #999));
+}
+
+.inline-time__input:disabled:placeholder-shown {
+  border-bottom-color: var(--editable-disabled-color, var(--mat-sys-outline, #999));
 }
 
 .inline-time--invalid .inline-time__input {
-  border-bottom-color: var(--editable-text-error-color, var(--mat-sys-error, #dc3545));
+  text-decoration-color: var(--editable-text-error-color, var(--mat-sys-error, #dc3545));
 }
 
-/* BARE CHROME — the hosting container draws the chrome (see the date control). */
-:host(.inline-field-bare) .inline-time__input {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-:host(.inline-field-bare--hide-placeholder) .inline-time__input::placeholder {
-  opacity: 0;
+.inline-time--invalid .inline-time__input:placeholder-shown {
+  border-bottom-color: var(--editable-text-error-color, var(--mat-sys-error, #dc3545));
 }
 
 .inline-time__input--reverted {
@@ -72,40 +143,42 @@
   }
 }
 
-.inline-time__affix {
-  white-space: nowrap;
-  user-select: none;
-  color: var(--editable-text-affix-color, var(--mat-sys-on-surface-variant, inherit));
-}
-
 .inline-time__separator {
   user-select: none;
   color: var(--mat-sys-on-surface-variant, #5f6368);
 }
 
-/* The badge's anchor: the input's own box. */
+/* The badge's anchor: the END input's own box. */
 .inline-time__field {
   position: relative;
   display: inline-flex;
   align-items: baseline;
 }
 
-/*
-    The +n over-count perches on the input's TOP-RIGHT corner (the
-    airline-ticket look) — absolutely positioned, so it costs no line
-    space and nothing in the row can crowd or obscure it. The inline-end
-    overhang has the room it wants: no adornment follows the field.
-  */
+.inline-time__affix {
+  white-space: nowrap;
+  user-select: none;
+  color: var(--editable-text-affix-color, var(--mat-sys-on-surface, inherit));
+}
+
+// The +n over-count perches on the input's TOP-RIGHT corner (the
+// airline-ticket look) — absolutely positioned, so it costs no line space
+// and nothing in the row can crowd or obscure it. The inline-end overhang
+// has the room it wants: no adornment follows the field.
 .time-day-badge {
   position: absolute;
-  top: calc(var(--_spacing) * -2.5);
-  right: calc(var(--_spacing) * -2.5);
-  z-index: 10;
-
-  border-radius: var(--mat-sys-corner-full, 100vw);
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: calc(1 / 0.75);
+  top: -0.75em;
+  inset-inline-end: -2.5em;
+  z-index: 1;
+  padding: 0 0.35em;
+  border-radius: var(--mat-sys-corner-small, 0.5rem);
+  // Transparent by default — the badge is ink, not a chip; a host tints it
+  // through the token.
+  background: var(--editable-time-day-badge-background, transparent);
+  color: var(--editable-time-day-badge-color, var(--mat-sys-on-tertiary-container, #174ea6));
+  font-size: 0.68em;
+  font-weight: 600;
+  line-height: 1.5;
   white-space: nowrap;
   pointer-events: none;
   user-select: none;
@@ -141,6 +214,38 @@
   white-space: nowrap;
 }
 
+/* The bare variant retires BOTH painters — the decoration and the empty-state
+   border — plus the empty-state dim, which would otherwise fade a field whose
+   chrome belongs to the hosting container. */
+:host(.inline-field-bare) .inline-time__input,
+:host(.inline-field-bare) .inline-time__input:focus {
+  border-bottom-color: transparent;
+  text-decoration-line: none;
+
+  /* No decoration to fit, so hand the metrics back to the container. */
+  line-height: var(--mat-form-field-container-text-line-height, var(--mat-sys-body-medium-line-height));
+  margin-bottom: 0;
+}
+
+:host(.inline-field-bare) .inline-time__input:placeholder-shown:not(:focus) {
+  opacity: 1;
+}
+:host(.inline-field-bare--hide-placeholder) .inline-time__input::placeholder {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inline-time__input--reverted {
+    animation: none;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// ERROR OVERLAY — only while the field is focused, only outside a hosting
+// container that renders errors itself (`externalErrors`, the mat-form-field
+// adapter): the text panel's contract — idle shows the error underline, the
+// active session says why.
+// -----------------------------------------------------------------------------
 .inline-time__panel {
   display: flex;
   flex-direction: column;
@@ -155,14 +260,9 @@
     0 2px 6px 2px rgba(0, 0, 0, 0.15)
   );
 }
+
 .inline-time__errors:not([hidden]) {
   padding: 0 8px 4px;
   font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
-  color: var(--mat-sys-error, #dc3545);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .inline-time__input--reverted {
-    animation: none;
-  }
+  color: var(--editable-text-error-color, var(--mat-sys-error, #dc3545));
 }

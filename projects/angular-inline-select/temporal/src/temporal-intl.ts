@@ -110,6 +110,14 @@ export class TemporalIntl {
     return builtinDatePlaceholderTokens(locale);
   }
 
+  /**
+   * The error overlay's parse-gate line — Enter on a draft the field cannot
+   * read. `noun` as its label reads (`timeLabel()`, `durationLabel()`).
+   */
+  invalidEntryLabel(noun: string = this.timeLabel()): string {
+    return `Not a valid ${noun.toLowerCase()}`;
+  }
+
   /** The snap-back announcement; `''` restored → the empty word. */
   revertedLabel(restored: string): string {
     return `Reverted to ${restored === '' ? this.emptyLabel() : restored}`;

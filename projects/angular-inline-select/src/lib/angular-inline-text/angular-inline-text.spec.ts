@@ -1654,6 +1654,19 @@ describe('AngularInlineText — panel keys from the action buttons', () => {
     expect(h.host.saved).toEqual([{ value: 'draft' }]);
   });
 
+  it('Cmd+Enter (macOS) saves the session exactly like Ctrl+Enter', async () => {
+    await typeText(h, 'draft');
+    const [discard] = actionButtons();
+
+    discard.focus();
+    keydown(discard, { key: 'Enter', metaKey: true });
+    await h.fixture.whenStable();
+
+    expect(h.editable().editing()).toBe(false);
+    expect(h.host.value()).toBe('draft');
+    expect(h.host.saved).toEqual([{ value: 'draft' }]);
+  });
+
   it('Tab on an action button reaches the panel (its scope handover), not swallowed', async () => {
     await typeText(h, 'draft');
     const [, save] = actionButtons();

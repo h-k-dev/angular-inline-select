@@ -1,13 +1,15 @@
 :host {
   --_spacing: var(--mat-sys-spacing, 0.25rem);
-  --_radius: var(--mat-sys-corner-small, 0.625rem);
+  --_radius: var(--mat-sys-corner-large, 0.5rem);
   --_button-size: 2rem;
+  --_icon-size: 20px;
 
   display: block;
   position: relative; // the .cal__sr containing block
   padding: var(--_spacing);
   user-select: none;
 }
+
 /* Screen-reader-only text. Pinned offsets: no phantom overflow (see .inline-date__sr). */
 .cal__sr {
   position: absolute;
@@ -19,169 +21,212 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
 .cal__header {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding-block-end: calc(var(--_spacing) * 2);
+  padding-block-end: var(--mat-sys-form-field-gap, calc(var(--_spacing) * 2));
 }
+
+// -----------------------------------------------------------------------------
+// HEADER BUTTONS — native buttons in the M3 text-button / icon-button look
+// (no Material dependency): a 2rem-tall, full-shape target, a state layer of
+// the button's own ink on hover / press, the primary focus ring. The icons are
+// the Material Symbols shapes as inline SVG, so no icon font is required.
+// -----------------------------------------------------------------------------
+.cal__label,
+.cal__nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--_button-size);
+  margin: 0;
+  padding: 0;
+
+  border: 0;
+  border-radius: var(--mat-sys-corner-full, 9999px);
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+
+  transition: background-color 120ms ease;
+
+  &:hover {
+    background: color-mix(in srgb, currentColor 8%, transparent);
+  }
+
+  &:active {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary, #4285f4);
+    outline-offset: 1px;
+  }
+
+  svg {
+    width: var(--_icon-size);
+    height: var(--_icon-size);
+    fill: currentColor;
+    flex: none;
+  }
+}
+
 /*
  * tabular-nums on every number surface: days and years sit evenly in their
  * columns, and the header ("1960 – 1979" → "1980 – 1999") stops nudging
  * as it pages. Set per element — the `font` shorthand resets it.
  */
 .cal__label {
-  display: inline-flex;
   margin-inline-end: auto; // pushes the ‹ › pair to the end
-  align-items: center;
   gap: 4px;
-  height: var(--_button-size);
   padding-inline: 8px;
 
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  border-radius: var(--mat-sys-corner-small, calc(var(--_radius) * 2));
   font: var(--mat-sys-title-small, 500 0.875rem/1.25 system-ui);
   font-variant-numeric: tabular-nums;
   color: var(--mat-sys-on-surface, #1f1f1f);
   text-transform: capitalize;
 }
-.cal__label:hover {
-  background: var(--mat-sys-surface-container-highest, #eee);
-}
+
 .cal__label-caret {
-  font-size: 0.75em;
   color: var(--mat-sys-on-surface-variant, #5f6368);
   transition: transform 120ms ease;
 }
+
 /* The caret flips while zoomed out — the same button takes you back. */
 .cal__label:not([data-view='day']) .cal__label-caret {
   transform: rotate(180deg);
 }
-.cal__nav {
-  height: var(--_button-size);
-  width: var(--_button-size);
 
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  font-size: 1.1rem;
-  line-height: 1;
-  padding: 4px 8px;
-  border-radius: var(--mat-sys-corner-small, calc(var(--_radius) * 2));
+.cal__nav {
+  width: var(--_button-size);
   color: var(--mat-sys-on-surface-variant, #5f6368);
 }
-.cal__nav:hover {
-  background: var(--mat-sys-surface-container-highest, #eee);
-}
+
 /* Views stack in one cell: the (hidden) day grid keeps the box, zoomed grids fill it. */
 .cal__views {
   display: grid;
 }
+
 .cal__views > * {
   grid-area: 1 / 1;
 }
+
 .cal__grid[data-inactive] {
   visibility: hidden;
 }
+
 .cal__periods {
   display: grid;
   grid-auto-rows: 1fr;
   gap: var(--_spacing);
   margin-block-start: var(--_spacing);
 }
+
 .cal__period-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: var(--_spacing);
 }
+
 .cal__period {
   border: 0;
   background: transparent;
-  border-radius: calc(var(--_radius) * 0.875);
+  border-radius: var(--_radius);
   cursor: pointer;
   font: var(--mat-sys-body-small, 0.8125rem/1 system-ui);
   font-variant-numeric: tabular-nums;
   color: var(--mat-sys-on-surface, #1f1f1f);
   text-transform: capitalize;
 }
+
 .cal__period:hover {
   background: var(--mat-sys-surface-container-highest, #eee);
 }
+
 .cal__period[data-today] {
   outline: 1px solid var(--mat-sys-outline, #999);
   outline-offset: -1px;
 }
+
 .cal__period[data-active] {
   outline: 2px solid var(--mat-sys-primary, #4285f4);
   outline-offset: -2px;
 }
+
 .cal__period[data-selected] {
   background: var(--mat-sys-primary, #4285f4);
   color: var(--mat-sys-on-primary, #fff);
 }
-.cal__period:focus-visible,
-.cal__label:focus-visible {
+
+.cal__period:focus-visible {
   outline: 2px solid var(--mat-sys-primary, #4285f4);
   outline-offset: 1px;
 }
+
 .cal__weekdays,
 .cal__week {
   display: grid;
   grid-template-columns: repeat(7, var(--_button-size));
   margin-block-start: var(--_spacing);
 }
+
 .cal__weekday {
   text-align: center;
   font: var(--mat-sys-label-small, 500 0.6875rem/1.6 system-ui);
   color: var(--mat-sys-on-surface-variant, #5f6368);
-  padding-block: 2px;
 }
+
 .cal__day {
   height: var(--_button-size);
   width: var(--_button-size);
 
   border: 0;
   background: transparent;
-  border-radius: calc(var(--_radius) * 0.875);
+  border-radius: var(--_radius);
   cursor: pointer;
   font: var(--mat-sys-body-small, 0.8125rem/1 system-ui);
   font-variant-numeric: tabular-nums;
   color: var(--mat-sys-on-surface, #1f1f1f);
 }
+
 .cal__day:hover {
   background: var(--mat-sys-surface-container-highest, #eee);
 }
+
 .cal__day[data-outside] {
   color: var(--mat-sys-outline, #999);
 }
+
 .cal__day[data-today] {
   outline: 1px solid var(--mat-sys-outline, #999);
   outline-offset: -1px;
 }
+
 .cal__day[data-active] {
   outline: 2px solid var(--mat-sys-primary, #4285f4);
   outline-offset: -2px;
 }
+
 .cal__day[data-selected] {
   background: var(--mat-sys-primary, #4285f4);
   color: var(--mat-sys-on-primary, #fff);
 }
+
 /* Range painting: endpoints filled, days between tinted (drag preview + committed range). */
 .cal__day[data-in-range] {
-  background: var(--mat-sys-secondary-container, #e8f0fe);
-  color: var(--mat-sys-on-secondary-container, #174ea6);
+  background: oklch(from var(--mat-sys-on-surface, #1f1f1f) l c h / 0.0875);
   border-radius: 0;
 
   &:first-child {
-    border-start-start-radius: calc(var(--_radius) * 0.875);
-    border-end-start-radius: calc(var(--_radius) * 0.875);
+    border-start-start-radius: var(--_radius);
+    border-end-start-radius: var(--_radius);
   }
 
   &:last-child {
-    border-start-end-radius: calc(var(--_radius) * 0.875);
-    border-end-end-radius: calc(var(--_radius) * 0.875);
+    border-start-end-radius: var(--_radius);
+    border-end-end-radius: var(--_radius);
   }
 }
 
@@ -190,7 +235,19 @@
   background: var(--mat-sys-primary, #4285f4);
   color: var(--mat-sys-on-primary, #fff);
 }
+
 .cal__day:focus-visible {
   outline: 2px solid var(--mat-sys-primary, #4285f4);
   outline-offset: 1px;
+}
+
+/* A day the host's `dayFilter` rules out: visible, struck, not pickable. */
+.cal__day[data-disabled] {
+  color: var(--mat-sys-outline, #999);
+  text-decoration: line-through;
+  cursor: default;
+}
+
+.cal__day[data-disabled]:hover {
+  background: transparent;
 }

@@ -20,7 +20,7 @@ import { EditableTextIntl } from './editable-text-intl';
 //
 // The contract a renderer relies on — the control keeps all of it, so no
 // customization can break it:
-// - KEYS are the panel's. Escape (revert), Ctrl+Enter (save) and Tab (scope
+// - KEYS are the panel's. Escape (revert), Cmd/Ctrl+Enter (save) and Tab (scope
 //   handover) are handled on the panel element; a renderer must let keydown
 //   bubble to it. A button that swallows keydown strands the user on it.
 // - FOCUS stays in the editor. The control wraps the slot in a container that

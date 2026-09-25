@@ -1,6 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { FormField, form } from '@angular/forms/signals';
+import { FormField, form, required } from '@angular/forms/signals';
 
 import { AngularInlineTime, type InlineTimeSaved } from './angular-inline-time';
 import type { IntervalRounding } from '../interval-rounding';
@@ -1017,5 +1017,85 @@ describe('AngularInlineTime — the rounding grid', () => {
   it('the native picker keeps its own granularity (`step`, default 60 s)', () => {
     const native = r.fixture.nativeElement.querySelector('.inline-time__native') as HTMLInputElement;
     expect(native.getAttribute('step')).toBe('60');
+  });
+});
+
+// =============================================================================
+// The error overlay — only while focused, only outside a hosting container
+// that renders errors itself (`externalErrors`)
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineTime, FormField],
+  template: `<angular-inline-time [formField]="field" />`,
+})
+class OverlayHost {
+  model = signal<string | null>(null);
+  field = form(this.model, (path) => required(path, { message: 'A value is required' }));
+}
+
+@Component({
+  imports: [AngularInlineTime, FormField],
+  template: `<angular-inline-time [formField]="field"><span editable-error class="custom-error">Custom message</span></angular-inline-time>`,
+})
+class OverlaySlotHost {
+  model = signal<string | null>(null);
+  field = form(this.model, (path) => required(path, { message: 'A value is required' }));
+}
+
+describe('AngularInlineTime — the error overlay', () => {
+  const panel = () => document.querySelector('.inline-time__panel') as HTMLElement | null;
+
+  function mount<T>(type: new () => T & { field: () => { markAsTouched(): void } }) {
+    const fixture = TestBed.createComponent(type);
+    fixture.componentInstance.field().markAsTouched();
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector('.inline-time__input') as HTMLInputElement;
+    return { fixture, input };
+  }
+
+  async function blurAway(fixture: ComponentFixture<unknown>) {
+    (document.activeElement as HTMLElement | null)?.blur();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+  }
+
+  it('stays closed while idle — the error underline is the idle signal', () => {
+    mount(OverlayHost);
+    expect(panel()).toBeNull();
+  });
+
+  it('opens while focused and speaks the schema message by default', async () => {
+    const { fixture, input } = mount(OverlayHost);
+    input.focus();
+    fixture.detectChanges();
+
+    expect(panel()?.textContent).toContain('A value is required');
+    await blurAway(fixture);
+    expect(panel()).toBeNull();
+  });
+
+  it('the parse gate says why Enter was blocked', async () => {
+    const { fixture, input } = mount(OverlayHost);
+    input.focus();
+    fixture.detectChanges();
+    input.value = 'zz';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+
+    expect(panel()?.textContent).toContain('Not a valid time');
+    await blurAway(fixture);
+  });
+
+  it('a projected [editable-error] takes the slot over the default messages', async () => {
+    const { fixture, input } = mount(OverlaySlotHost);
+    input.focus();
+    fixture.detectChanges();
+
+    expect(panel()?.querySelector('.custom-error')?.textContent).toBe('Custom message');
+    expect(panel()?.textContent).not.toContain('A value is required');
+    await blurAway(fixture);
   });
 });

@@ -34,7 +34,7 @@ export interface DemoRow {
 const INITIAL_PROJECT_NAME = 'Aurora';
 const INITIAL_SUMMARY =
   'Click any highlighted text on this page and start typing. ' +
-  'Save with Ctrl+Enter or the Save button, discard with Escape — ' +
+  'Save with Cmd/Ctrl+Enter or the Save button, discard with Escape — ' +
   'the overlay only appears once you actually change something.';
 
 /**

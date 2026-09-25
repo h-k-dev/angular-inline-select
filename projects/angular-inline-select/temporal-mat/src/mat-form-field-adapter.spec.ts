@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form, required } from '@angular/forms/signals';
 import { MatFormFieldControl, MatFormFieldModule } from '@angular/material/form-field';
 
-import { AngularInlineDate, AngularInlineTime } from 'angular-inline-select/temporal';
+import { AngularInlineDate, AngularInlineDuration, AngularInlineTime } from 'angular-inline-select/temporal';
 import { composeDbEntry } from 'angular-inline-select/temporal';
 import { InlineMatFormField } from './mat-form-field-adapter';
 
@@ -102,10 +102,9 @@ describe('InlineMatFormField (the temporal-mat adapter)', () => {
     subscription.unsubscribe();
   });
 
-  it('a chrome click focuses when idle, then TOGGLES the panel — never close-and-reopen', async () => {
-    // The panel is error-only now (there is no live preview), so put the
-    // field in an error state — required, emptied, touched — to give the
-    // panel something to show once the session opens.
+  it('a chrome click focuses; the form field speaks the errors — the overlay never opens', async () => {
+    // An error state — required, emptied, touched — that WOULD open the
+    // standalone error overlay once the session opens.
     h.host.model.set(null);
     h.host.field().markAsTouched();
     h.fixture.detectChanges();
@@ -118,17 +117,20 @@ describe('InlineMatFormField (the temporal-mat adapter)', () => {
       h.fixture.detectChanges();
     };
 
-    // Idle: the click focuses (the session opens on focusin, the error panel follows).
     chromeClick();
     expect(document.activeElement).toBe(h.input());
     h.fixture.detectChanges();
-    expect(document.querySelector('.inline-time__panel')).not.toBeNull();
 
-    // Focused: the chrome click TOGGLES — close, then reopen.
-    chromeClick();
+    // The adapter told the control a container renders its errors.
+    const control = h.fixture.debugElement.query((el) => el.name === 'angular-inline-time')!
+      .componentInstance as AngularInlineTime;
+    expect(control.externalErrors()).toBe(true);
     expect(document.querySelector('.inline-time__panel')).toBeNull();
-    chromeClick();
-    expect(document.querySelector('.inline-time__panel')).not.toBeNull();
+    expect(h.adapter.errorState).toBe(true); // …mat-error has the floor
+
+    chromeClick(); // focused: no close-and-reopen flicker, nothing to toggle
+    expect(document.querySelector('.inline-time__panel')).toBeNull();
+    expect(document.activeElement).toBe(h.input());
 
     h.input().blur();
     await new Promise((resolve) => setTimeout(resolve));
@@ -245,5 +247,45 @@ describe('InlineMatFormField — floatLabel="always"', () => {
     expect(adapter.labelIsFloating).toBe(true); // …but the form field floats it anyway
     expect(controlHost.classList).toContain('inline-field-bare');
     expect(controlHost.classList).not.toContain('inline-field-bare--hide-placeholder');
+  });
+});
+
+// =============================================================================
+// Inside a mat-form-field the FORM FIELD speaks the errors — a control's own
+// error overlay (time, duration) stays closed (`externalErrors`)
+// =============================================================================
+
+@Component({
+  imports: [MatFormFieldModule, AngularInlineDuration, InlineMatFormField, FormField],
+  template: `
+    <mat-form-field>
+      <mat-label>Length</mat-label>
+      <angular-inline-duration inlineMatFormField [formField]="field" />
+    </mat-form-field>
+  `,
+})
+class MatDurationHost {
+  model = signal<number | null>(null);
+  field = form(this.model, (path) => required(path, { message: 'A value is required' }));
+}
+
+describe('InlineMatFormField — externalErrors', () => {
+  it('a hosted duration never opens its error overlay, even focused and invalid', async () => {
+    const fixture = TestBed.createComponent(MatDurationHost);
+    fixture.componentInstance.field().markAsTouched();
+    fixture.detectChanges();
+
+    const control = fixture.debugElement.query((el) => el.name === 'angular-inline-duration')!
+      .componentInstance as AngularInlineDuration;
+    expect(control.externalErrors()).toBe(true);
+
+    const input = fixture.nativeElement.querySelector('.inline-duration__input') as HTMLInputElement;
+    input.focus();
+    fixture.detectChanges();
+    expect(document.querySelector('.inline-duration__panel')).toBeNull();
+
+    input.blur();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
   });
 });

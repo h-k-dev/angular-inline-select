@@ -162,7 +162,7 @@ function panelPositions(paddingX: number): ConnectedPosition[] {
  * - The in-flow display element never changes size — focus and Tab are free.
  * - The first real edit (keystroke/paste/IME) elevates the field: editing
  *   happens in an overlay panel at a fixed readable measure over a scrim.
- * - `value` updates only on commit (Save / Ctrl+Enter / Enter for
+ * - `value` updates only on commit (Save / Cmd+Enter or Ctrl+Enter / Enter for
  *   single-line); Escape, Discard and scrim clicks revert the draft.
  */
 @Component({
@@ -1233,7 +1233,7 @@ export class AngularInlineText implements FormValueControl<string> {
     this.accept();
   }
 
-  protected handleCtrlEnter() {
+  protected handleSubmitShortcut() {
     this.accept();
   }
 

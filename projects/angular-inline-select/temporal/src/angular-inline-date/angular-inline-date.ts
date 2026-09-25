@@ -294,6 +294,13 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   showCalendar = input(true);
 
   /**
+   * The 📅 trigger — OPT-IN only, never on by default: focus already opens the
+   * calendar, and the button costs the field width. `true` adds it (while
+   * `showCalendar` is on) for a host that wants a pointer affordance.
+   */
+  showTrigger = input(false);
+
+  /**
    * Generic overlay-anchor override — a container seam, NOT a mat one. When
    * unset (the default) the panel anchors to the bare `.inline-date` wrapper.
    * A host that draws its own chrome (the mat adapter passes the form field's

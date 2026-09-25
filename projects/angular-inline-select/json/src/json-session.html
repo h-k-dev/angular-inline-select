@@ -1,4 +1,4 @@
-<div class="editable-json__session" (keydown.control.enter)="save()">
+<div class="editable-json__session" (keydown.control.enter)="save()" (keydown.meta.enter)="save()">
   <div class="editable-panel__line">
     @if (data.prefixTemplate(); as prefix) {
       <span class="editable-text__affix editable-text__affix--prefix" aria-hidden="true">

@@ -89,7 +89,15 @@
 >
   <div #panel class="inline-duration__panel" (focusout)="handleFocusOut()">
     <div class="inline-duration__errors" [hidden]="!errorSlotVisible()">
-      <ng-content select="[editable-error]" />
+      @if (parseGateVisible()) {
+        <div class="inline-duration__error">{{ parseGateLabel() }}</div>
+      }
+      <!-- Consumer content takes the slot; otherwise the schema's own messages. -->
+      <ng-content select="[editable-error]">
+        @for (error of errorMessages(); track error.kind) {
+          <div class="inline-duration__error">{{ error.message }}</div>
+        }
+      </ng-content>
     </div>
   </div>
 </ng-template>

@@ -135,7 +135,7 @@
     <span class="inline-date__affix" aria-hidden="true">
       <ng-container [ngTemplateOutlet]="tpl" />
     </span>
-  } @else if (showCalendar()) {
+  } @else if (showCalendar() && showTrigger()) {
     <!--
       tabindex="-1", the ARIA combobox convention for auxiliary popup buttons:
       the calendar already opens on the input's own focus and ArrowDown hands
