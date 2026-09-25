@@ -7,6 +7,8 @@ export * from './lib/angular-inline-text/editable-error';
 export * from './lib/angular-inline-text/editable-affix';
 export * from './lib/angular-inline-text/editable-hint';
 export * from './lib/angular-inline-text/editable-menu';
+export * from './lib/angular-inline-text/editable-panel-actions';
+export * from './lib/angular-inline-text/editable-text-intl';
 export * from './lib/bubble-menu/bubble-menu';
 export * from './lib/bubble-menu/editable-clear';
 export * from './lib/bubble-menu/editable-actions';

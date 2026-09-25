@@ -1,2 +1,3 @@
-// The panel action buttons (Save/Discard) and the bubble's projected clear
-// button share the global `.editable-action*` chrome in styles/_editable.scss.
+// The panel actions render through the actions SLOT (editable-panel-actions.ts);
+// the stock buttons and the bubble's projected clear button share the global
+// `.editable-action*` chrome in styles/_editable.scss.

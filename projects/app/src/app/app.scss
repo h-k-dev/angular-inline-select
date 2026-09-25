@@ -33,7 +33,7 @@
 
   // Reads as plain heading text — no dashed affordance. Keyboard focus (solid
   // underline) and any error state still surface, by design of the token.
-  --editable-text-underline: none;
+  --editable-text-underline-line: none;
 }
 
 .spacer {

@@ -38,6 +38,7 @@
     [attr.data-placeholder]="placeholder()"
     [attr.inputmode]="inputMode() ?? null"
     spellcheck="false"
+    (focus)="handleDisplayFocus()"
     (beforeinput)="interceptBeforeInput($event)"
     (paste)="interceptPaste($event)"
     (cut)="interceptCut($event)"
@@ -59,6 +60,7 @@
   (backdropClick)="handleScrimClick()"
 >
   <div
+    tabindex="0"
     class="editable-panel"
     [animate.enter]="'editable-panel-enter'"
     cdkTrapFocus
@@ -77,6 +79,7 @@
       }
       <span
         #editor
+        tabindex="0"
         [attr.role]="menuOpen() ? 'combobox' : 'textbox'"
         class="editable-text__editor"
         [attr.contenteditable]="editableMode()"
@@ -157,30 +160,24 @@
       }
 
       @if (isDirty() && !errorsVisible()) {
-        <div class="editable-panel__message editable-panel__message--hint">Unsaved changes</div>
+        <div class="editable-panel__message editable-panel__message--hint">
+          {{ intl.unsavedChangesLabel() }}
+        </div>
       }
 
-      <div class="editable-panel__actions">
-        <button
-          type="button"
-          class="editable-action editable-action-reset"
-          (mousedown)="$event.preventDefault(); $event.stopPropagation()"
-          (click)="cancel()"
-          aria-label="Discard"
-        >
-          Discard
-        </button>
-
-        <!-- Stays clickable while invalid: a save attempt reveals the errors (mat submit semantics) -->
-        <button
-          type="button"
-          class="editable-action editable-action-save"
-          (mousedown)="$event.preventDefault(); $event.stopPropagation()"
-          (click)="accept()"
-          aria-label="Save"
-        >
-          Save
-        </button>
+      <!--
+        The actions SLOT — the stock buttons, an app-wide renderer
+        (provideEditablePanelActions) or a per-field [editablePanelActions]
+        template. The container owns focus safety: its mousedown is prevented,
+        so pressing any action keeps the caret (and the session) in the
+        editor. Keys bubble on to the panel's own handlers.
+      -->
+      <div class="editable-panel__actions" (mousedown)="$event.preventDefault(); $event.stopPropagation()">
+        @if (panelActionsTpl(); as tpl) {
+          <ng-container *ngTemplateOutlet="tpl; context: panelActionsTemplateContext" />
+        } @else {
+          <ng-container *ngComponentOutlet="panelActionsComponent; injector: panelActionsInjector" />
+        }
       </div>
     </div>
   </div>

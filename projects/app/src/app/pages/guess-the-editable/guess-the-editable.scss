@@ -8,14 +8,14 @@
   // must pass as ordinary prose. Two tokens cover every family — the line
   // token (text / number / phone / json) and the color token (the temporal
   // controls' dashed border, which has no line-toggle token of its own).
-  --editable-text-underline: none;
+  --editable-text-underline-line: none;
   --editable-text-underline-color: transparent;
 }
 
 // Ctrl held: flip both tokens back on so every hidden field lights up and
 // you can check your guesses.
 :host(.guess--reveal) {
-  --editable-text-underline: underline;
+  --editable-text-underline-line: underline;
   --editable-text-underline-color: var(--mat-sys-primary);
 }
 

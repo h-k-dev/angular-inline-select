@@ -55,11 +55,14 @@
 
   // Per-line dashed underline that stops where the text stops — identical to
   // the text field, same opt-out token, same focus/error re-assertions.
-  text-decoration-line: var(--editable-text-underline, underline);
+  text-decoration-line: var(--editable-text-underline-line, underline);
   text-decoration-style: dashed;
   text-decoration-thickness: 0.0625rem;
   text-underline-offset: 0.4em;
-  text-decoration-color: var(--editable-text-underline-color, var(--mat-sys-primary, #428bca));
+  text-decoration-color: var(
+    --editable-text-underline-color,
+    var(--mat-sys-on-surface-variant, #6b7280)
+  );
 
   transition: opacity 0.15s var(--editable-ease-standard, cubic-bezier(0.4, 0, 0.2, 1));
 
@@ -67,6 +70,10 @@
     text-decoration-line: underline;
     text-decoration-style: solid;
     text-decoration-thickness: 0.125rem;
+    text-decoration-color: var(
+      --editable-text-underline-focus-indicator-color,
+      var(--mat-sys-primary, #428bca)
+    );
   }
 
   &[aria-disabled='true'] {

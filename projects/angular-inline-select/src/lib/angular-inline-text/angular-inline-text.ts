@@ -2,6 +2,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  Injector,
   TemplateRef,
   inject,
 
@@ -19,7 +20,7 @@ import {
   untracked,
   linkedSignal,
 } from '@angular/core';
-import { NgTemplateOutlet } from '@angular/common';
+import { NgComponentOutlet, NgTemplateOutlet } from '@angular/common';
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 // CDK
@@ -53,6 +54,14 @@ import {
   EditableActionsTemplate,
   type EditableActionsContext,
 } from '../bubble-menu/editable-actions';
+import {
+  EDITABLE_PANEL_ACTIONS,
+  EDITABLE_PANEL_ACTIONS_CONTEXT,
+  EditablePanelActionsTemplate,
+  type EditablePanelActionsContext,
+  type EditablePanelActionsTemplateContext,
+} from './editable-panel-actions';
+import { EditableTextIntl } from './editable-text-intl';
 
 interface ValueNormalizationDetails {
   value: string;
@@ -160,6 +169,7 @@ function panelPositions(paddingX: number): ConnectedPosition[] {
   selector: 'angular-inline-text',
   imports: [
     NgTemplateOutlet,
+    NgComponentOutlet,
 
     // CDK
     OverlayModule,
@@ -713,6 +723,23 @@ export class AngularInlineText implements FormValueControl<string> {
     }
   }
 
+  /**
+   * Keyboard/programmatic focus (Tab, `focus()`, `cdkInitialFocus`) lands on
+   * the display without a selection — and without one the browser paints no
+   * caret at all on the inline (multi-line) display, so the field looks
+   * focused but dead. Mouse focus is different: mousedown places the caret
+   * before `focus` fires, and that click position must win — so a caret is
+   * placed (at the end) only when the selection isn't already inside.
+   */
+  protected handleDisplayFocus() {
+    if (this.disabled() || this.readonly() || this.editing()) return;
+
+    const el = this.display().nativeElement;
+    if (getSelectionOffsets(el) !== null) return; // click already placed the caret
+
+    setCaretOffset(el, (this.value() ?? '').length);
+  }
+
   /** Applies the character filter, or passes the text through untouched. */
   #filter(text: string, caret: number) {
     const allow = this.#charFilter();
@@ -1228,6 +1255,49 @@ export class AngularInlineText implements FormValueControl<string> {
   });
 
   // ---------------------------------------------------------------------------
+  // Panel actions (the Save / Discard slot — see editable-panel-actions.ts)
+  // ---------------------------------------------------------------------------
+
+  /** The panel's localizable chrome: the stock actions and the dirty hint. */
+  protected readonly intl = inject(EditableTextIntl);
+
+  /**
+   * Per-field panel actions — wins over the DI renderer. Same dual channel as
+   * the other slots: input for composition, `ng-template[editablePanelActions]`
+   * content for direct use. App-wide, prefer `provideEditablePanelActions`.
+   */
+  panelActionsTemplate = input<TemplateRef<EditablePanelActionsTemplateContext> | undefined>(
+    undefined,
+  );
+
+  private contentPanelActions = contentChild(EditablePanelActionsTemplate);
+
+  protected panelActionsTpl = computed(
+    () => this.panelActionsTemplate() ?? this.contentPanelActions()?.templateRef,
+  );
+
+  /** The renderer every panel uses (`provideEditablePanelActions`; stock buttons by default). */
+  protected readonly panelActionsComponent = inject(EDITABLE_PANEL_ACTIONS);
+
+  /** A STABLE context: the verbs are bound fields, the state live signals. */
+  protected readonly panelActionsContext: EditablePanelActionsContext = {
+    accept: () => this.accept(),
+    cancel: () => this.cancel(),
+    dirty: this.isDirty,
+    invalid: this.isInvalid,
+  };
+
+  protected readonly panelActionsTemplateContext: EditablePanelActionsTemplateContext = {
+    $implicit: this.panelActionsContext,
+  };
+
+  /** The component slot's injector: the context, under this control's own. */
+  protected readonly panelActionsInjector = Injector.create({
+    providers: [{ provide: EDITABLE_PANEL_ACTIONS_CONTEXT, useValue: this.panelActionsContext }],
+    parent: inject(Injector),
+  });
+
+  // ---------------------------------------------------------------------------
   // Clear affordance (the floating bubble lives in BubbleMenu)
   // ---------------------------------------------------------------------------
 
@@ -1285,8 +1355,8 @@ export class AngularInlineText implements FormValueControl<string> {
   protected readonly clearLabel = 'Clear value';
 
   /**
-   * The `editableClear` context. A STABLE object (the callback is a bound
-   * field, the label a constant): stamping it never re-creates the consumer's
+   * The `editableClear` context. A STABLE object (the callbacks are bound
+   * fields, the label a constant): stamping it never re-creates the consumer's
    * button, so a clear confirmed asynchronously calls into a live control.
    */
   protected readonly clearContext: EditableClearContext = {
@@ -1298,10 +1368,10 @@ export class AngularInlineText implements FormValueControl<string> {
   };
 
   /**
-   * Whether the clear bubble may show — every term EXCEPT hover (the bubble
-   * owns that): never for empty/required/locked fields or while editing.
-   * `required()` keeps the bubble hidden — a guaranteed-doomed clear stays
-   * unavailable.
+   * Whether the clear bubble may show — every term EXCEPT hover (BubbleMenu
+   * owns that, listening on the origin it anchors to): never for
+   * empty/required/locked fields or while editing. `required()` keeps the
+   * bubble hidden — a guaranteed-doomed clear stays unavailable.
    */
   /**
    * The clear affordance's opt-out. `false` never offers the hover-bubble

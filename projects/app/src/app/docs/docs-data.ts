@@ -186,15 +186,20 @@ const TEXT_SURFACE_TOKENS: TokenGroup = {
     'var(--editable-text-<token>, var(--mat-sys-<token>, <fallback>)).',
   tokens: [
     {
-      token: '--editable-text-underline',
+      token: '--editable-text-underline-line',
       fallback: 'underline',
       description:
         'The resting dashed underline’s text-decoration-line. Set to `none` to hide the inline-editable affordance; keyboard focus (solid underline) and the idle error underline re-assert themselves and stay visible.',
     },
     {
       token: '--editable-text-underline-color',
+      fallback: 'var(--mat-sys-on-surface-variant, #6b7280)',
+      description: 'Color of the resting dashed affordance underline.',
+    },
+    {
+      token: '--editable-text-underline-focus-indicator-color',
       fallback: 'var(--mat-sys-primary, #428bca)',
-      description: 'Color of the dashed affordance underline (and the solid focus underline).',
+      description: 'Color of the solid focus underline — separate from the resting color, so hiding the resting line never hides focus.',
     },
     {
       token: '--editable-text-color',
@@ -421,6 +426,11 @@ const CHROME_TOKENS: TokenGroup = {
         'Transparent pad around the floating bubble — the visual gap and the forgiving hit halo.',
     },
     {
+      token: '--editable-bubble-animation-duration',
+      fallback: '0.15s',
+      description: 'Duration of the floating bubble’s enter animation (reduced motion turns it off).',
+    },
+    {
       token: '--editable-text-action-background',
       fallback: 'var(--mat-sys-surface-container-highest, #eee)',
       description:
@@ -524,15 +534,20 @@ const JSON_SURFACE_TOKENS: TokenGroup = {
     'The idle preview looks and themes EXACTLY like the inline-text display — same per-line dashed underline, same token names, same focus/error re-assertions — so a theme written for the text field carries over unchanged. The elevated CodeMirror editor reuses the editor/caret/panel tokens.',
   tokens: [
     {
-      token: '--editable-text-underline',
+      token: '--editable-text-underline-line',
       fallback: 'underline',
       description:
         'The resting dashed underline’s text-decoration-line. Set to `none` to hide the affordance; keyboard focus and the idle error state re-assert their underlines.',
     },
     {
       token: '--editable-text-underline-color',
+      fallback: 'var(--mat-sys-on-surface-variant, #6b7280)',
+      description: 'Color of the resting dashed affordance underline.',
+    },
+    {
+      token: '--editable-text-underline-focus-indicator-color',
       fallback: 'var(--mat-sys-primary, #428bca)',
-      description: 'Color of the dashed affordance underline (and the solid focus underline).',
+      description: 'Color of the solid focus underline — separate from the resting color, so hiding the resting line never hides focus.',
     },
     {
       token: '--editable-text-color',

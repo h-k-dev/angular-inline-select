@@ -206,7 +206,8 @@
 
   border: 0 solid;
 
-  animation: editable-bubble-enter 0.15s var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
+  animation: editable-bubble-enter var(--editable-bubble-animation-duration, 0.15s)
+    var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
 }
 
 // The bubble's two SLOTS — the consumer's primary actions first, clear last.

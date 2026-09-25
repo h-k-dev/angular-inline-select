@@ -147,6 +147,18 @@
     .editable-text.editable-text--editing & {
       background-color: transparent;
     }
+
+    // The tint of line N+1 overlaps the bottom of line N (the padding is
+    // taller than the line gap), and fragments paint line by line: background
+    // first, then that line's ink. So every tint lands ON TOP of the previous
+    // line's underline, which sits in exactly that band — it survived only
+    // where a line ran past the one below it. Invisible with the default 5%
+    // tint, plain with a near-opaque one. A positioned inline paints after
+    // every in-flow fragment of the field, so the ink and its decoration go
+    // over all the tints at once. Moves nothing, sizes nothing.
+    > .editable-text__display {
+      position: relative;
+    }
   }
 
   // Locked fields: the box is still the unit (hover shows nothing to do), the
@@ -169,7 +181,7 @@
   white-space: nowrap;
   user-select: none;
 
-  color: var(--editable-text-affix-color, var(--mat-sys-on-surface-variant, inherit));
+  color: var(--editable-text-affix-color, var(--mat-sys-on-surface, inherit));
 
   &--prefix {
     margin-inline-end: 0.25ch;
@@ -203,26 +215,34 @@
   font-family: inherit;
   font-size: inherit;
   color: inherit;
+  caret-color: var(--editable-text-caret-color, var(--mat-sys-primary, #428bca));
 
   // Per-line dashed underline that stops where the text stops (multiline-safe).
-  // `--editable-text-underline: none` opts out of the resting affordance —
+  // `--editable-text-underline-line: none` opts out of the resting affordance —
   // focus-visible and the idle error state re-assert their underlines below,
   // so hiding the idle line never hides the a11y/error signals.
-  text-decoration-line: var(--editable-text-underline, underline);
+  text-decoration-line: var(--editable-text-underline-line, underline);
   text-decoration-style: dashed;
   text-decoration-thickness: 0.0625rem;
   text-underline-offset: 0.4em;
-  text-decoration-color: var(--editable-text-underline-color, var(--mat-sys-primary, #428bca));
+  text-decoration-color: var(
+    --editable-text-underline-color,
+    var(--mat-sys-on-surface-variant, #6b7280)
+  );
 
   transition: opacity 0.15s var(--editable-ease-standard, cubic-bezier(0.4, 0, 0.2, 1));
 
   // Pristine focus affordance: solid underline, nothing moves. Explicit
   // `underline` — keyboard focus stays visible even when the consumer hides
-  // the resting affordance via `--editable-text-underline: none`.
+  // the resting affordance via `--editable-text-underline-line: none`.
   &:focus-visible {
     text-decoration-line: underline;
     text-decoration-style: solid;
     text-decoration-thickness: 0.125rem;
+    text-decoration-color: var(
+      --editable-text-underline-focus-indicator-color,
+      var(--mat-sys-primary, #428bca)
+    );
   }
 
   &[contenteditable='false'] {
@@ -235,10 +255,22 @@
   // empty field has nothing to wrap, so promoting it to inline-block costs
   // nothing and gives the caret a box to render in — same reason the
   // no-wrap variant (always inline-block) never had this problem.
+  //
+  // It also fades its WHOLE affordance — the placeholder text and the dashed
+  // underline together, by the same amount as every other editable in a
+  // field list. Hence the opacity on the display element rather than on the
+  // `::before` alone: the underline is a `text-decoration` on THIS element, so
+  // dimming only the pseudo left the line at full strength and made a
+  // half-filled field list read as two different inks. The elevated editor
+  // (`.editable-text__editor`) keeps its opacity on the pseudo instead — it
+  // carries no underline, and dimming the editing surface would take the
+  // caret with it.
   &:empty {
     display: inline-block;
     min-width: 1px; // caret-able even with an empty placeholder
     min-height: 1em;
+
+    opacity: var(--editable-text-placeholder-opacity, 0.3875);
   }
 
   // Placeholder for empty content (no ::placeholder on contenteditable)
@@ -246,7 +278,6 @@
     content: attr(data-placeholder);
     font-style: italic;
     color: var(--editable-text-placeholder-color, var(--mat-sys-on-surface-variant, inherit));
-    opacity: var(--editable-text-placeholder-opacity, 0.3875);
   }
 
   &--filled {
@@ -257,7 +288,7 @@
   // and the field says errors show (touched / save attempt). Color only —
   // the dashed style stays, so the field still reads as inline-editable.
   // Explicit `underline` — an error never renders invisibly, even when the
-  // resting affordance is hidden via `--editable-text-underline: none`.
+  // resting affordance is hidden via `--editable-text-underline-line: none`.
   .editable-text--invalid & {
     text-decoration-line: underline;
     text-decoration-color: var(--editable-text-error-color, var(--mat-sys-error, #dc3545));

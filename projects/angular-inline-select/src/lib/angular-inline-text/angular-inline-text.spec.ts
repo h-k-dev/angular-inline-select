@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form, type ValidationError } from '@angular/forms/signals';
 
@@ -12,6 +12,12 @@ import { EditableSuffix } from './editable-affix';
 import { EditableClear, EditableClearTemplate } from '../bubble-menu/editable-clear';
 import { EditableAction, EditableActionsTemplate } from '../bubble-menu/editable-actions';
 import { detectSlashToken } from './editable-menu';
+import {
+  EDITABLE_PANEL_ACTIONS_CONTEXT,
+  EditablePanelActionsTemplate,
+  provideEditablePanelActions,
+} from './editable-panel-actions';
+import { EditableTextIntl } from './editable-text-intl';
 import {
   replayEdit,
   filterChars,
@@ -1660,5 +1666,162 @@ describe('AngularInlineText — panel keys from the action buttons', () => {
     keydown(save, { key: 'Tab' });
     keydown(save, { key: 'Tab', shiftKey: true });
     expect(heard).toEqual(['Tab', 'Tab']);
+  });
+});
+
+// =============================================================================
+// The panel-actions SLOT — stock buttons, an app-wide renderer, a per-field
+// template. Whatever renders, the control keeps the contract: keys reach the
+// panel, a press never steals focus from the editor, the verbs work.
+// =============================================================================
+
+@Component({
+  selector: 'custom-panel-actions',
+  template: `
+    <button type="button" class="custom-cancel" (click)="context.cancel()">No</button>
+    <button type="button" class="custom-accept" [attr.data-dirty]="context.dirty()" (click)="context.accept()">
+      Yes
+    </button>
+  `,
+})
+class CustomPanelActions {
+  protected readonly context = inject(EDITABLE_PANEL_ACTIONS_CONTEXT);
+}
+
+@Component({
+  imports: [AngularInlineText, EditablePanelActionsTemplate],
+  template: `
+    <angular-inline-text [(value)]="value" (savedModelChange)="saved.push($event)">
+      <ng-template editablePanelActions let-actions>
+        <button type="button" class="per-field-apply" (click)="actions.accept()">Apply</button>
+      </ng-template>
+    </angular-inline-text>
+  `,
+})
+class PanelActionsTemplateHost {
+  value = signal('initial');
+  saved: { value: string }[] = [];
+}
+
+describe('AngularInlineText — the panel-actions slot', () => {
+  const actions = () => document.querySelector('.editable-panel .editable-panel__actions') as HTMLElement | null;
+
+  function keydown(target: Element, init: KeyboardEventInit) {
+    const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+    target.dispatchEvent(event);
+    return event;
+  }
+
+  it('renders the stock buttons by default, labelled through EditableTextIntl', async () => {
+    const h = setup(ValueBindingHost);
+    await typeText(h, 'draft');
+
+    const buttons = Array.from(actions()!.querySelectorAll('button'));
+    expect(buttons.map((b) => b.textContent?.trim())).toEqual(['Discard', 'Save']);
+    expect(document.querySelector('.editable-panel__message--hint')?.textContent?.trim()).toBe('Unsaved changes');
+
+    const intl = TestBed.inject(EditableTextIntl);
+    intl.saveLabel.set('Speichern');
+    intl.unsavedChangesLabel.set('Ungespeicherte Änderungen');
+    h.fixture.detectChanges();
+
+    expect(buttons[1].textContent?.trim()).toBe('Speichern');
+    expect(document.querySelector('.editable-panel__message--hint')?.textContent?.trim()).toBe(
+      'Ungespeicherte Änderungen',
+    );
+  });
+
+  describe('an app-wide renderer (provideEditablePanelActions)', () => {
+    let h: Harness<ValueBindingHost>;
+
+    beforeEach(() => {
+      TestBed.configureTestingModule({ providers: [provideEditablePanelActions(CustomPanelActions)] });
+      h = setup(ValueBindingHost);
+    });
+
+    it('replaces the stock buttons and receives the session context', async () => {
+      await typeText(h, 'draft');
+
+      expect(actions()!.querySelector('.editable-action-save')).toBeNull();
+      const accept = actions()!.querySelector('.custom-accept') as HTMLButtonElement;
+      expect(accept.getAttribute('data-dirty')).toBe('true');
+
+      accept.click();
+      h.fixture.detectChanges();
+      await h.fixture.whenStable();
+
+      expect(h.editable().editing()).toBe(false);
+      expect(h.host.value()).toBe('draft');
+      expect(h.host.saved).toEqual([{ value: 'draft' }]);
+    });
+
+    it("its keys stay the panel's — Escape from its button reverts", async () => {
+      await typeText(h, 'draft');
+      const accept = actions()!.querySelector('.custom-accept') as HTMLButtonElement;
+
+      accept.focus();
+      keydown(accept, { key: 'Escape' });
+      h.fixture.detectChanges();
+      await h.fixture.whenStable();
+
+      expect(h.editable().editing()).toBe(false);
+      expect(h.host.value()).toBe('initial');
+    });
+
+    it('a press never steals focus from the editor — the slot container prevents mousedown', async () => {
+      await typeText(h, 'draft');
+      const cancel = actions()!.querySelector('.custom-cancel') as HTMLButtonElement;
+
+      const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      cancel.dispatchEvent(press);
+      expect(press.defaultPrevented).toBe(true);
+    });
+  });
+
+  it('a per-field [editablePanelActions] template wins over the DI renderer', async () => {
+    TestBed.configureTestingModule({ providers: [provideEditablePanelActions(CustomPanelActions)] });
+    const h = setup(PanelActionsTemplateHost);
+    await typeText(h, 'draft');
+
+    expect(actions()!.querySelector('.custom-accept')).toBeNull();
+    (actions()!.querySelector('.per-field-apply') as HTMLButtonElement).click();
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+
+    expect(h.host.value()).toBe('draft');
+    expect(h.host.saved).toEqual([{ value: 'draft' }]);
+  });
+});
+
+// =============================================================================
+// Keyboard focus paints a caret — the display is a live text box, not a label
+// =============================================================================
+
+describe('AngularInlineText — keyboard focus places a caret', () => {
+  // The `focus` event is dispatched rather than calling `focus()`: jsdom's
+  // `focus()` on a contenteditable collapses the selection to offset 0 before
+  // the event runs (a real browser does not), which would mask both cases.
+  function focusEvent(el: HTMLElement) {
+    el.dispatchEvent(new FocusEvent('focus'));
+  }
+
+  it('keyboard / programmatic focus (no selection inside) puts the caret at the end of the text', () => {
+    const h = setup(ValueBindingHost);
+    const display = h.display();
+
+    document.getSelection()?.removeAllRanges();
+    focusEvent(display);
+
+    expect(getSelectionOffsets(display)).toEqual({ start: 'initial'.length, end: 'initial'.length });
+  });
+
+  it('a focus that already carries a caret (a click) keeps it where it landed', () => {
+    const h = setup(ValueBindingHost);
+    const display = h.display();
+
+    setCaretOffset(display, 2);
+    focusEvent(display);
+
+    expect(getSelectionOffsets(display)).toEqual({ start: 2, end: 2 });
   });
 });

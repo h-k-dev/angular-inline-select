@@ -22,7 +22,7 @@ import { AngularInlineJson } from 'angular-inline-select/json';
 /**
  * "Guess the Editable" — a benchmark, not a demo.
  *
- * The host sets `--editable-text-underline: none` (and the temporal border
+ * The host sets `--editable-text-underline-line: none` (and the temporal border
  * variant), so every scattered control hides its resting affordance and must
  * pass as plain prose. Holding Ctrl flips the tokens back on — the reveal —
  * so any control that ALREADY stood out (a stray baseline, a prefix chrome,
