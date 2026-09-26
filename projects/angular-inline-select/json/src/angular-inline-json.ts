@@ -31,11 +31,11 @@ import {
   type EditableClearContext,
   EditableDialog,
   EditableDialogRef,
-  EditableErrorTemplate,
   EditablePrefix,
   EditableSuffix,
 } from 'angular-inline-select';
 
+import { EditableErrorTemplate } from './editable-error-template';
 import { printEditableJson } from './json-doc';
 import { canonicalJson, parseJsonDraft } from './json-codec';
 import {

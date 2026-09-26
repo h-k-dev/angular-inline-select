@@ -280,7 +280,7 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
    * (`1,000.25` under `en`, `1.000,25` under `de`), and `decimalSeparator`
    * is superseded. The model stays a dot-decimal `number` regardless; the
    * locale never crosses the contract boundary. Unset — the default —
-   * nothing changes. The rules live in `utils/locale-number`
+   * nothing changes. The rules live in `locale-number`
    * (`parseLocaleNumber`/`formatLocaleNumber`), reusable outside the control.
    */
   locale = input<string | string[] | undefined>(undefined);

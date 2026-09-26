@@ -1,3 +1,8 @@
+// =============================================================================
+// INLINE EDITABLES — global styles. Panel/scrim/bubble/menu render in the CDK
+// overlay container, outside component encapsulation, hence global.
+// =============================================================================
+
 // -----------------------------------------------------------------------------
 // SCRIM: subtle backdrop while elevated (CDK applies the fade transition)
 // -----------------------------------------------------------------------------

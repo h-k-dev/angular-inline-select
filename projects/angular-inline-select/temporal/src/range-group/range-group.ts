@@ -177,8 +177,9 @@ export interface TemporalRangeGroup {
  * `induceFromTimeRange`:
  *
  * - Committing a start or end induces the duration (`end − start`); an end
- *   instant at or before the start rolls forward by whole days until it
- *   follows the start — the overnight case lands IN the value.
+ *   instant at or before the start rolls forward by whole LOCAL days until
+ *   it follows the start (`rollDbEntryForward`, DST-safe) — the overnight
+ *   case lands IN the value.
  * - Committing a duration MOVES the end (`end = start + duration`).
  * - Committing the day shifts BOTH times onto it, preserving wall-clock
  *   times and the end's day over-count.
@@ -206,7 +207,7 @@ export function createTemporalRangeGroup(
   const lengthCtl = signal<AngularInlineDuration | null>(null);
 
   /**
-   * `duration` shape memory (the date control's `#lastShape` pattern):
+   * `duration` shape memory (the controls' `makeShapeMemory` pattern):
    * a non-null bound value declares whether the key participates; `null`
    * remembers; cold start includes it (the `DomainResult['model']` shape).
    */
@@ -502,7 +503,7 @@ export function createTemporalRangeGroup(
    * The END-DAY settled (the maximal five-field form): the end instant
    * moves onto the typed day preserving its wall-clock time — deliberately
    * WITHOUT rolling forward. An end before the start is a legitimate ERROR
-   * state now (the ordering error on the end leaves), and the duration is
+   * state (the ordering error on the end leaves), and the duration is
    * underivable (`null` — never a stale one).
    */
   function endDayCommitted() {

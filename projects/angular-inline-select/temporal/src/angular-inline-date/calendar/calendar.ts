@@ -117,6 +117,7 @@ function firstDayOfWeek(locale: string | string[] | undefined): number {
  * grids keep the same keyboard model (arrows, PageUp/PageDown a page,
  * Home/End the page bounds, Enter picks) and Escape zooms back to days
  * instead of leaving the calendar. Typing in the field snaps back to days.
+ *
  * Localization is pure `Intl` (weekday names, month label, first day of
  * week) — zero bundled translations, the phone lesson; iusta's Luxon
  * adapter stays at ITS boundary.
@@ -163,6 +164,7 @@ export class Calendar {
    * `strictMode`). `undefined` = every day picks.
    */
   dayFilter = input<((iso: IsoDate) => boolean) | undefined>(undefined);
+
   protected dayDisabled(iso: IsoDate): boolean {
     const filter = this.dayFilter();
     return filter !== undefined && !filter(iso);

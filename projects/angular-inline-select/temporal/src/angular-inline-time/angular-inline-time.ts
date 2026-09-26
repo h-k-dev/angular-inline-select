@@ -50,7 +50,6 @@ import {
   type TimeDraft,
   type TimeSavedDetails,
   type TimeValueShape,
-  type InternalTimeRange,
 } from './time-codec';
 import { INLINE_TIME_DAY_OFFSET } from './day-offset';
 import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
@@ -278,6 +277,9 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   /** Locale for the idle display (`Intl`); browser default when omitted. */
   locale = input<string | string[] | undefined>(undefined);
 
+  /** The locale every parse speaks — the `locale` input, else the browser's. */
+  protected effectiveLocale = computed(() => this.locale());
+
   /**
    * T6 — the DISPLAY ZONE (IANA id): which zone's wall clock the field
    * speaks. Falls back to the app-wide `INLINE_TEMPORAL_ZONE` provider,
@@ -466,7 +468,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
       ...core,
       baselineValue: null,
       anchorDay: '',
-      parsed: computed(() => parseTimeDraft(core.draft(), this.locale())),
+      parsed: computed(() => parseTimeDraft(core.draft(), this.effectiveLocale())),
       explicit: computed(() => parseDbEntryDraft(core.draft(), this.effectiveZone())),
     };
   }
@@ -534,7 +536,6 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     return start === null && end === null;
   });
 
-  /** Enter/Escape hide the panel until the next keystroke or session. */
   /**
    * Whether a HOSTING container renders this field's errors — the
    * mat-form-field adapter sets it — so the error overlay stays closed and
@@ -543,6 +544,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
    */
   externalErrors = model(false);
 
+  /** Enter/Escape hide the panel until the next keystroke or session. */
   #panelDismissed = signal(false);
 
   /** The parse-gate reveal: Enter was attempted on an unreadable draft. */
@@ -801,7 +803,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
    * the start rolls forward by whole LOCAL days (a typed end is wall-clock
    * intent; overnight lands as +1, DST never drifts the reading). An
    * EXPLICIT end (a pasted full instant) is taken as-is — the decomposition
-   * law: never re-anchor, never roll.
+   * law: never re-anchor, never roll, never snap.
    */
   #reconcile(key: SideKey, instant: DbDateTime | null, explicit: boolean) {
     const current = this.internalRange();
@@ -1022,7 +1024,6 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     side.draft.set(raw); // the setter marks the side dirty
     this.#settle(key);
   }
-
 
   // -- Clear affordance (idle hover bubble; per-side for a range) --------------
 

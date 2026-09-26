@@ -1,27 +1,24 @@
 import { DateTime } from 'luxon';
 
 /**
- * The DB-entry core — the sandbox mirror of iusta's `core/datetime`
- * (`toDBEntry(dt) = dt.toUTC().toISO()`), built ON LUXON (decided: iusta's
- * datetime house engine is Luxon end to end, and T6's server-side timezone
- * story needs a real tz engine). It dictates the ONE model format every
- * temporal control speaks:
+ * The DB-entry core — STRING-level operations over the house wire format
+ * (`toDBEntry(dt) = dt.toUTC().toISO()`), built ON LUXON (the house datetime
+ * engine end to end; a configurable display zone needs a real tz engine).
+ * It fixes the ONE model format every temporal control speaks:
  *
  *   value / savedModelChange  =  UTC ISO datetime string ('…Z') | null
  *   display                   =  localized wall-clock strings, in the
  *                                DISPLAY ZONE
  *   duration                  =  seconds
  *
- * T6 — THE ZONE IS CONFIGURATION, THE VALUE IS NOT: every "local" helper
- * takes an optional trailing IANA `zone`. Omitted, the machine zone reads
- * (the pre-T6 behavior, byte-identical); given, days and wall-clocks are
- * that zone's (iusta's `ServerSideDatetimeConfiguration` analogue — see
- * `INLINE_TEMPORAL_ZONE`). Instant math (shift/diff) is zone-free.
+ * THE ZONE IS CONFIGURATION, THE VALUE IS NOT: every "local" helper takes
+ * an optional trailing IANA `zone`. Omitted, the machine zone reads; given,
+ * days and wall-clocks are that zone's (see `INLINE_TEMPORAL_ZONE`). Instant
+ * math (shift/diff) is zone-free.
  *
  * Luxon itself is CONTAINED here (and consumed via the
- * `toDateTime`/`toDBEntry` bridge) — values stay plain strings, and the
- * engine ships only with the temporal entry point, exactly like
- * libphonenumber ships only with `/phone`.
+ * `toDateTime`/`toDBEntry` bridge) — values stay plain strings, and controls
+ * convert at the value boundary through these functions only.
  */
 
 /** `'2026-07-20T19:00:00.000Z'` — `datetime.toUTC().toISO()`, SQL-friendly. */
@@ -99,8 +96,8 @@ export function dayEndToDbEntry(day: string, zone?: ZoneId): DbDateTime {
  * preserved time).
  */
 export function composeDbEntry(day: string, time: string, zone?: ZoneId): DbDateTime {
-  // `'HH:mm:ss'` composes with its seconds (iusta's HOUR_MINUTE_SECOND
-  // format); bare `'HH:mm'` stays second-less.
+  // `'HH:mm:ss'` composes with its seconds (the HOUR_MINUTE_SECOND format);
+  // bare `'HH:mm'` stays second-less.
   const [hour, minute, second = 0] = time.split(':').map(Number);
   return toDBEntry(dayIn(day, zone).set({ hour, minute, second, millisecond: 0 }));
 }

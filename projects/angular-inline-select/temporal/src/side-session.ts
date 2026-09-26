@@ -147,7 +147,8 @@ export function makeShapeMemory<V, S>(options: {
    */
   fits?: (shape: S, ranged: boolean) => boolean;
 }): { shape: Signal<S>; twoFields: Signal<boolean> } {
-  const fits = options.fits ?? ((shape: S, ranged: boolean) => (shape !== options.singleShape) === ranged);
+  const fits =
+    options.fits ?? ((shape: S, ranged: boolean) => (shape !== options.singleShape) === ranged);
   const last = linkedSignal<V, S | null>({
     source: options.value,
     computation: (value, prev) => options.infer(value) ?? prev?.value ?? null,
@@ -208,9 +209,9 @@ export function makeClearBubbleVisibility(options: {
 /**
  * The `editableClear` template contexts — one per bubble a temporal control
  * can stamp (`single`, `start`, `end`). The control keeps owning WHAT a clear
- * does; this only packages the handover: a side-bound callback, the side, and
- * the localized label (also what the STOCK button speaks, so the two can
- * never drift).
+ * does; this only packages the handover: a side-bound callback, the side, the
+ * localized label (also what the STOCK button speaks, so the two can never
+ * drift), and focus restoration for the side that was cleared.
  *
  * The callbacks are bound ONCE, outside the computed: a consumer's clear can
  * resolve long after the stamp (a confirmation dialog), and a re-created

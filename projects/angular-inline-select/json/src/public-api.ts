@@ -10,6 +10,7 @@ export * from './json-doc';
 export * from './json-codec';
 export * from './json-preview';
 export * from './angular-inline-json';
+export * from './editable-error-template';
 // Type-only: the session COMPONENT stays behind `await import(…)` so its
 // CodeMirror payload loads on first open, never eagerly.
 export type { JsonSessionData } from './json-session';

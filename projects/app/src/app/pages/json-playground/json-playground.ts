@@ -14,7 +14,7 @@ import { MatTableModule } from '@angular/material/table';
 
 // Components
 import { AngularInlineJson } from '../../../../../angular-inline-select/json/src/angular-inline-json';
-import { EditableErrorTemplate } from '../../../../../angular-inline-select/src/lib/angular-inline-text/editable-error';
+import { EditableErrorTemplate } from '../../../../../angular-inline-select/json/src/editable-error-template';
 
 interface ServiceRow {
   position: number;
@@ -78,7 +78,10 @@ export class JsonPlayground {
   });
 
   protected metadataMissing = computed(() =>
-    this.metadataForm.metadata().errors().some((error) => error.kind === 'required'),
+    this.metadataForm
+      .metadata()
+      .errors()
+      .some((error) => error.kind === 'required'),
   );
 
   // ---------------------------------------------------------------------------
@@ -87,11 +90,31 @@ export class JsonPlayground {
   protected serviceColumns = ['position', 'name', 'config'];
 
   protected serviceRows: ServiceRow[] = [
-    { position: 1, name: 'auth', config: '{"provider":"oauth2","scopes":["read","write"],"ttl":3600}' },
-    { position: 2, name: 'cache', config: '{"driver":"redis","host":"10.0.0.5","port":6379,"ttl":300}' },
-    { position: 3, name: 'mailer', config: '{"transport":"smtp","host":"smtp.example.com","secure":true}' },
-    { position: 4, name: 'search', config: '{"engine":"elastic","shards":5,"replicas":1,"analyzer":"standard"}' },
-    { position: 5, name: 'billing', config: '{"currency":"EUR","proration":true,"retries":[60,300,3600]}' },
+    {
+      position: 1,
+      name: 'auth',
+      config: '{"provider":"oauth2","scopes":["read","write"],"ttl":3600}',
+    },
+    {
+      position: 2,
+      name: 'cache',
+      config: '{"driver":"redis","host":"10.0.0.5","port":6379,"ttl":300}',
+    },
+    {
+      position: 3,
+      name: 'mailer',
+      config: '{"transport":"smtp","host":"smtp.example.com","secure":true}',
+    },
+    {
+      position: 4,
+      name: 'search',
+      config: '{"engine":"elastic","shards":5,"replicas":1,"analyzer":"standard"}',
+    },
+    {
+      position: 5,
+      name: 'billing',
+      config: '{"currency":"EUR","proration":true,"retries":[60,300,3600]}',
+    },
     { position: 6, name: 'flags', config: '{}' },
   ];
 
@@ -108,6 +131,8 @@ export class JsonPlayground {
   protected emittedEvents = signal<string[]>([]);
 
   protected logEmit(name: string, payload: unknown) {
-    this.emittedEvents.update((events) => [`${name} → ${JSON.stringify(payload)}`, ...events].slice(0, 8));
+    this.emittedEvents.update((events) =>
+      [`${name} → ${JSON.stringify(payload)}`, ...events].slice(0, 8),
+    );
   }
 }

@@ -104,8 +104,7 @@ export interface EditableClearContext {
 
 /**
  * REPLACES the stock clear button inside the hover bubble — the consumer's
- * own affordance, on every inline variant (text, number, phone, json, date,
- * time, duration).
+ * own affordance, on every inline control.
  *
  * The control keeps everything it already owned: WHEN the bubble may appear
  * (not required, not disabled/readonly, not empty, not editing), where it
@@ -131,9 +130,11 @@ export interface EditableClearContext {
  *
  * ```ts
  * async confirm(ctx: EditableClearContext) {
- *   const ref = this.dialog.open(ConfirmClearDialog);   // MatDialog, or any other
+ *   // MatDialog: `restoreFocus: false` — it restores focus AFTER afterClosed,
+ *   // which would undo the focus() below and drop the keyboard on the body.
+ *   const ref = this.dialog.open(ConfirmClearDialog, { restoreFocus: false });
  *   if (await firstValueFrom(ref.afterClosed())) ctx.clear();
- *   ctx.focus();                                        // see the focus note below
+ *   ctx.focus();
  * }
  * ```
  *
@@ -152,8 +153,8 @@ export interface EditableClearContext {
  *   dialog settles — it needs no reference to the control, which is what lets
  *   ONE button component serve every field on a page.
  *
- * Composition channel: wrapping controls (number, phone) forward this as the
- * `clearTemplate` INPUT, since content queries don't pierce re-projection —
+ * Composition channel: wrapping controls forward this as the `clearTemplate`
+ * INPUT, since content queries don't pierce re-projection —
  * the same dual channel as the affixes.
  */
 @Directive({

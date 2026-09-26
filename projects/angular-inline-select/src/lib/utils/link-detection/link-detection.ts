@@ -1,7 +1,7 @@
 /**
  * THE LINK DETECTION behind an "open" action on a text value — the seed of
- * the link control's codec (ROADMAP → "Next up — angular-inline-link"); iusta's
- * text-v2 uses it for its stock open-in-new-tab button.
+ * the link control's codec. The consumer that knows a field's kind offers the
+ * action; the editable only hands over the value.
  *
  * Two roads to a link, both ending in a real `URL`:
  * 1. An absolute http(s) URL — what the legacy `m-editable-text` accepted.

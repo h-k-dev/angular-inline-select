@@ -41,7 +41,7 @@ import {
 } from '../../../../../../angular-inline-select/src/lib/angular-inline-text/editable-affix';
 import { EditableHint } from '../../../../../../angular-inline-select/src/lib/angular-inline-text/editable-hint';
 import { EditableMenu } from '../../../../../../angular-inline-select/src/lib/angular-inline-text/editable-menu';
-import { EditableErrorTemplate } from '../../../../../../angular-inline-select/src/lib/angular-inline-text/editable-error';
+import { EditableErrorTemplate } from '../../../../../../angular-inline-select/json/src/editable-error-template';
 import { AngularInlineJson } from '../../../../../../angular-inline-select/json/src/angular-inline-json';
 
 // The page's own clear affordance — one button for every field in the grid.

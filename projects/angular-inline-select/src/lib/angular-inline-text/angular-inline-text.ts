@@ -1010,9 +1010,9 @@ export class AngularInlineText implements FormValueControl<string> {
   #scopeDestroyRef = inject(DestroyRef);
 
   /**
-   * Registration is the composition boundary: wrapping controls (number,
-   * phone) contain this control, so THEIR chrome (a flag trigger) sits inside
-   * this host and collapses into the one field stop for free.
+   * Registration is the composition boundary: wrapping controls contain this
+   * control, so THEIR chrome (a phone field's flag trigger) sits inside this
+   * host and collapses into the one field stop for free.
    */
   #registerWithScope = afterNextRender(() => {
     const scope = this.#scope;
@@ -1303,8 +1303,8 @@ export class AngularInlineText implements FormValueControl<string> {
 
   /**
    * Consumer clear affordance — REPLACES the stock button inside the bubble.
-   * Same dual channel as the other slots: input for composition (number and
-   * phone forward theirs here), `ng-template[editableClear]` content for
+   * Same dual channel as the other slots: input for composition (wrapping
+   * controls forward theirs here), `ng-template[editableClear]` content for
    * direct use. See {@link EditableClearTemplate} for the confirm-before-
    * clear recipe the context callback exists for.
    */
@@ -1316,7 +1316,7 @@ export class AngularInlineText implements FormValueControl<string> {
 
   /**
    * The PRIMARY-ACTIONS slot — consumer buttons that act ON the value, stamped
-   * before clear. Same dual channel: input for composition (number and phone
+   * before clear. Same dual channel: input for composition (wrapping controls
    * forward theirs here with their own payload), `ng-template[editableActions]`
    * content for direct use. See {@link EditableActionsTemplate}.
    */

@@ -9,8 +9,7 @@
     "test": "ng test"
   },
   "private": true,
-  "packageManager": "npm@11.13.0",
-  "dependencies": {
+  "packageManager": "npm@11.13.0",  "dependencies": {
     "@angular/aria": "^22.2.0",
     "@angular/cdk": "^22.2.0",
     "@angular/common": "^22.2.0",
