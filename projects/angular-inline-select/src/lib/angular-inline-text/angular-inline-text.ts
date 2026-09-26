@@ -1,32 +1,36 @@
+// Angular
 import {
   Component,
   DestroyRef,
   ElementRef,
+  inject,
   Injector,
   TemplateRef,
-  inject,
 
   // Signals
-  computed,
-  output,
-  model,
-  viewChild,
-  contentChild,
-  input,
-  effect,
   afterNextRender,
   afterRenderEffect,
+  computed,
+  contentChild,
+  effect,
+  input,
+  linkedSignal,
+  model,
+  output,
   signal,
   untracked,
-  linkedSignal,
+  viewChild,
 } from '@angular/core';
 import { NgComponentOutlet, NgTemplateOutlet } from '@angular/common';
+
+// Forms
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 // CDK
 import { CdkConnectedOverlayConfig, ConnectedPosition, OverlayModule } from '@angular/cdk/overlay';
 import { A11yModule, _IdGenerator } from '@angular/cdk/a11y';
 
+// Editables
 import {
   getSelectionOffsets,
   setCaretOffset,
@@ -168,6 +172,7 @@ function panelPositions(paddingX: number): ConnectedPosition[] {
 @Component({
   selector: 'angular-inline-text',
   imports: [
+    // Angular
     NgTemplateOutlet,
     NgComponentOutlet,
 
@@ -175,17 +180,25 @@ function panelPositions(paddingX: number): ConnectedPosition[] {
     OverlayModule,
     A11yModule,
 
+    // Components
     BubbleMenu,
     EditableClearButton,
   ],
   templateUrl: './angular-inline-text.html',
   styleUrl: './angular-inline-text.scss',
   host: {
+    // Attributes
     class: 'editable-text',
+
+    // Classes
     '[class.editable-text--editing]': 'editing()',
     '[class.editable-text--invalid]': 'errorsVisible()',
     '[class.editable-text--scoped]': 'hasHoverScope()',
+
+    // Styles
     '[style.display]': 'hidden() ? "none" : null',
+
+    // Listeners
     '(focus)': 'focus()',
   },
 })

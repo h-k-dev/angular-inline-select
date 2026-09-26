@@ -1,24 +1,28 @@
+// Angular
 import {
-  DestroyRef,
   Component,
+  DestroyRef,
   ElementRef,
+  inject,
   Injector,
+  type TemplateRef,
 
   // Signals
   afterNextRender,
   computed,
   contentChild,
-  inject,
   input,
   linkedSignal,
   model,
   output,
   signal,
   type Signal,
-  type TemplateRef,
   viewChild,
 } from '@angular/core';
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
+
+// Forms
+import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 // CDK
 import {
@@ -28,10 +32,7 @@ import {
   Overlay,
 } from '@angular/cdk/overlay';
 
-// Form
-import { FormValueControl, type ValidationError } from '@angular/forms/signals';
-
-// Core
+// Editables
 import {
   EDITABLE_SCOPE,
   EditablePrefix,
@@ -65,9 +66,6 @@ import {
 import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 import { INLINE_TEMPORAL_MAT_CONTROL } from '../mat-control';
 import { focusInputNearPoint, isUnitSpacePress } from '../inline-unit';
-import { toDateTime, todayIn } from '../datetime/db-entry';
-import { isIsoDate, type IsoDate } from '../datetime/iso-date';
-import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
 import { INLINE_TEMPORAL_LOCALE } from '../locale';
 import { INLINE_DAY_AVAILABILITY } from '../day-availability';
 import { INLINE_FILTER_DIALECT, type DayColumn, type FilterClause } from '../filter/filter-dialect';
@@ -95,6 +93,11 @@ import {
 } from '../side-session';
 import { TemporalIntl } from '../temporal-intl';
 import { Calendar } from './calendar/calendar';
+
+// Datetime
+import { toDateTime, todayIn } from '../datetime/db-entry';
+import { isIsoDate, type IsoDate } from '../datetime/iso-date';
+import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
 
 /**
  * The `resolved` verdict, per side: `true` when that side's BOUND entry is
@@ -191,6 +194,7 @@ let nextPanelId = 0;
 @Component({
   selector: 'angular-inline-date',
   imports: [
+    // Angular
     NgTemplateOutlet,
 
     // CDK
@@ -205,8 +209,12 @@ let nextPanelId = 0;
   templateUrl: './angular-inline-date.html',
   styleUrl: './angular-inline-date.scss',
   // The form-field adapter's one way in (`inlineMatFormField`, /temporal-mat).
-  providers: [{ provide: INLINE_TEMPORAL_MAT_CONTROL, useExisting: AngularInlineDate }],
+  providers: [
+    // Tokens
+    { provide: INLINE_TEMPORAL_MAT_CONTROL, useExisting: AngularInlineDate },
+  ],
   host: {
+    // Styles
     '[style.display]': 'hidden() ? "none" : null',
   },
 })

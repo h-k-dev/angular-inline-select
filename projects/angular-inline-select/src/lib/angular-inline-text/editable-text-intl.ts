@@ -1,4 +1,10 @@
-import { Injectable, signal } from '@angular/core';
+// Angular
+import {
+  Injectable,
+
+  // Signals
+  signal,
+} from '@angular/core';
 
 /**
  * The editables' localizable CHROME — the fixed UI strings spoken around the

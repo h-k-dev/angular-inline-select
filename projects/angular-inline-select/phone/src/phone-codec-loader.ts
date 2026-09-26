@@ -1,16 +1,20 @@
+// Angular
 import {
+  type EnvironmentProviders,
   ErrorHandler,
+  inject,
   InjectionToken,
   Injector,
-  Service,
-  inject,
   makeEnvironmentProviders,
   onIdle,
   runInInjectionContext,
+  Service,
+
+  // Signals
   signal,
-  type EnvironmentProviders,
 } from '@angular/core';
 
+// Editables
 import type { PhoneCodec } from './phone-codec';
 
 /**

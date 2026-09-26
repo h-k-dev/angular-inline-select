@@ -1,5 +1,15 @@
-import { InjectionToken, type Signal } from '@angular/core';
+// Angular
+import {
+  InjectionToken,
+
+  // Signals
+  type Signal,
+} from '@angular/core';
+
+// Forms
 import type { ValidationError } from '@angular/forms/signals';
+
+// Editables
 import type { BubbleMenuSide } from 'angular-inline-select';
 
 /**

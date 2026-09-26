@@ -1,4 +1,5 @@
-import { Directive, TemplateRef, inject } from '@angular/core';
+// Angular
+import { Directive, inject, TemplateRef } from '@angular/core';
 
 /**
  * TEMPLATE variant of `EditableError` — for controls whose session UI renders

@@ -1,3 +1,4 @@
+// Editables
 import type { JsonValue } from './json-doc';
 
 export interface JsonParseResult {

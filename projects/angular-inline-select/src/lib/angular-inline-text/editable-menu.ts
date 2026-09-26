@@ -1,4 +1,12 @@
-import { Directive, TemplateRef, Signal, inject } from '@angular/core';
+// Angular
+import {
+  Directive,
+  inject,
+  TemplateRef,
+
+  // Signals
+  Signal,
+} from '@angular/core';
 
 /** Template context for {@link EditableMenu}. */
 export interface EditableMenuContext {

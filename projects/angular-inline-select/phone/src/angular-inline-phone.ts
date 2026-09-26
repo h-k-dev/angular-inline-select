@@ -1,25 +1,33 @@
+// Angular
 import {
   Component,
+  ElementRef,
+  inject,
+  Injector,
   TemplateRef,
+
+  // Signals
+  afterNextRender,
+  computed,
+  contentChild,
+  effect,
   input,
+  linkedSignal,
   model,
   output,
-  computed,
   signal,
-  linkedSignal,
   viewChild,
-  contentChild,
-  afterNextRender,
-  effect,
-  ElementRef,
-  Injector,
-  inject,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import { _IdGenerator } from '@angular/cdk/a11y';
-import { OverlayModule, type ConnectedPosition } from '@angular/cdk/overlay';
+
+// Forms
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
+// CDK
+import { _IdGenerator } from '@angular/cdk/a11y';
+import { OverlayModule, type ConnectedPosition } from '@angular/cdk/overlay';
+
+// Editables
 import {
   AngularInlineText,
   EditableClearTemplate,
@@ -30,7 +38,6 @@ import {
   type EditableActionsContext,
   type InlineTextSaved,
 } from 'angular-inline-select';
-
 import {
   countryFlagEmoji,
   type PhoneCodec,
@@ -80,7 +87,16 @@ export interface InlinePhoneSaved {
  */
 @Component({
   selector: 'angular-inline-phone',
-  imports: [AngularInlineText, OverlayModule, NgTemplateOutlet],
+  imports: [
+    // Angular
+    NgTemplateOutlet,
+
+    // CDK
+    OverlayModule,
+
+    // Components
+    AngularInlineText,
+  ],
   templateUrl: './angular-inline-phone.html',
   styles: `
     :host {
@@ -179,7 +195,10 @@ export interface InlinePhoneSaved {
     }
   `,
   host: {
+    // Styles
     '[style.display]': 'hidden() ? "none" : null',
+
+    // Listeners
     '(mouseenter)': 'loadCodec()',
     '(focusin)': 'loadCodec()',
   },

@@ -1,11 +1,5 @@
-import {
-  Component,
-  Injectable,
-  InjectionToken,
-  Injector,
-  Type,
-  inject,
-} from '@angular/core';
+// Angular
+import { Component, inject, Injectable, InjectionToken, Injector, Type } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
 
 // CDK
@@ -71,7 +65,13 @@ export class EditableDialogRef<R = unknown> {
  */
 @Component({
   selector: 'editable-dialog-container',
-  imports: [NgComponentOutlet, A11yModule],
+  imports: [
+    // Angular
+    NgComponentOutlet,
+
+    // CDK
+    A11yModule,
+  ],
   // The host box disappears: the CARD is the pane's direct flex item, so its
   // percentage width resolves against the pane — with a host box in between,
   // the unknown element shrink-wraps and 100% collapses to content width.

@@ -1,3 +1,4 @@
+// 3rd Party
 import {
   parsePhoneNumberFromString,
   validatePhoneNumberLength,
@@ -10,6 +11,7 @@ import {
   type CountryCode,
 } from 'libphonenumber-js/core';
 
+// Editables
 import type {
   PhoneCodec,
   PhoneCountry,

@@ -1,14 +1,18 @@
+// Angular
 import {
   Component,
   Directive,
-  InjectionToken,
-  TemplateRef,
   inject,
+  InjectionToken,
   type Provider,
-  type Signal,
+  TemplateRef,
   type Type,
+
+  // Signals
+  type Signal,
 } from '@angular/core';
 
+// Editables
 import { EditableTextIntl } from './editable-text-intl';
 
 // =============================================================================
@@ -63,7 +67,10 @@ export const EDITABLE_PANEL_ACTIONS_CONTEXT = new InjectionToken<EditablePanelAc
       {{ intl.saveLabel() }}
     </button>
   `,
-  host: { style: 'display: contents' },
+  host: {
+    // Attributes
+    style: 'display: contents',
+  },
 })
 export class EditablePanelActionsDefault {
   protected readonly context = inject(EDITABLE_PANEL_ACTIONS_CONTEXT);

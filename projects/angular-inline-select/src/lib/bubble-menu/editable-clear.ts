@@ -1,5 +1,15 @@
-import { Component, Directive, TemplateRef, inject, output } from '@angular/core';
+// Angular
+import {
+  Component,
+  Directive,
+  inject,
+  TemplateRef,
 
+  // Signals
+  output,
+} from '@angular/core';
+
+// Editables
 import type { BubbleMenuSide } from './bubble-menu';
 import { EditableTextIntl } from '../angular-inline-text/editable-text-intl';
 
@@ -24,7 +34,10 @@ import { EditableTextIntl } from '../angular-inline-text/editable-text-intl';
 @Directive({
   selector: 'button[editableClear]',
   host: {
+    // Attributes
     type: 'button',
+
+    // Listeners
     '(mousedown)': 'onMousedown($event)',
     '(click)': 'onClick($event)',
   },
@@ -58,8 +71,14 @@ export class EditableClear {
  */
 @Component({
   selector: 'button[editableClearButton]',
-  hostDirectives: [{ directive: EditableClear, outputs: ['clear'] }],
-  host: { class: 'editable-action editable-action-clear' },
+  hostDirectives: [
+    // Directives
+    { directive: EditableClear, outputs: ['clear'] },
+  ],
+  host: {
+    // Attributes
+    class: 'editable-action editable-action-clear',
+  },
   template: '{{ intl.clearButtonLabel() }}',
 })
 export class EditableClearButton {

@@ -1,5 +1,14 @@
-import { InjectionToken, signal, type Provider, type Signal } from '@angular/core';
+// Angular
+import {
+  InjectionToken,
+  type Provider,
 
+  // Signals
+  signal,
+  type Signal,
+} from '@angular/core';
+
+// Datetime
 import type { ZoneId } from './db-entry';
 
 /**

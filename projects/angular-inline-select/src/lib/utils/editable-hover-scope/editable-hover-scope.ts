@@ -1,9 +1,12 @@
+// Angular
 import {
+  booleanAttribute,
   Directive,
   ElementRef,
-  booleanAttribute,
-  computed,
   inject,
+
+  // Signals
+  computed,
   input,
   signal,
 } from '@angular/core';
@@ -88,8 +91,13 @@ const INTERACTIVE_SELECTOR =
 @Directive({
   selector: '[editableHoverScope]',
   host: {
+    // Attributes
     class: 'editable-hover-scope',
+
+    // Classes
     '[class.editable-hover-scope--active]': 'active()',
+
+    // Listeners
     '(mouseenter)': 'hovered.set(true)',
     '(mouseleave)': 'hovered.set(false)',
     '(mousedown)': 'handleMouseDown($event)',

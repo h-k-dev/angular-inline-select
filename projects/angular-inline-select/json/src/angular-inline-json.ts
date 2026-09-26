@@ -1,27 +1,31 @@
+// Angular
 import {
   Component,
   DestroyRef,
   ElementRef,
-  TemplateRef,
   inject,
+  TemplateRef,
 
   // Signals
-  computed,
-  output,
-  model,
-  viewChild,
-  contentChild,
-  input,
-  effect,
   afterNextRender,
   afterRenderEffect,
+  computed,
+  contentChild,
+  effect,
+  input,
+  linkedSignal,
+  model,
+  output,
   signal,
   untracked,
-  linkedSignal,
+  viewChild,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
+
+// Forms
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
+// Editables
 // Shared chrome — generic (dialog service/actions/affixes/clear bubble), not text-specific.
 import {
   BubbleMenu,
@@ -34,7 +38,6 @@ import {
   EditablePrefix,
   EditableSuffix,
 } from 'angular-inline-select';
-
 import { EditableErrorTemplate } from './editable-error-template';
 import { printEditableJson } from './json-doc';
 import { canonicalJson, parseJsonDraft } from './json-codec';
@@ -73,14 +76,28 @@ export interface InlineJsonSaved {
  */
 @Component({
   selector: 'angular-inline-json',
-  imports: [NgTemplateOutlet, BubbleMenu, EditableClearButton],
+  imports: [
+    // Angular
+    NgTemplateOutlet,
+
+    // Components
+    BubbleMenu,
+    EditableClearButton,
+  ],
   templateUrl: './angular-inline-json.html',
   styleUrl: './angular-inline-json.scss',
   host: {
+    // Attributes
     class: 'editable-json',
+
+    // Classes
     '[class.editable-json--editing]': 'editing()',
     '[class.editable-json--invalid]': 'errorsVisible()',
+
+    // Styles
     '[style.display]': 'hidden() ? "none" : null',
+
+    // Listeners
     '(focus)': 'focus()',
   },
 })

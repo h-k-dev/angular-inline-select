@@ -1,5 +1,7 @@
-import { Directive, TemplateRef, inject } from '@angular/core';
+// Angular
+import { Directive, inject, TemplateRef } from '@angular/core';
 
+// Editables
 import type { BubbleMenuSide } from './bubble-menu';
 
 /**
@@ -77,6 +79,7 @@ export class EditableActionsTemplate<T = unknown> {
 @Directive({
   selector: '[editableAction]',
   host: {
+    // Listeners
     '(mousedown)': 'onMousedown($event)',
   },
 })

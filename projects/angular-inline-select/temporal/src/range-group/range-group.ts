@@ -1,21 +1,27 @@
+// Angular
 import {
   Directive,
+  inject,
   InjectionToken,
   Injector,
+
+  // Signals
   computed,
   effect,
-  inject,
   input,
   linkedSignal,
   model,
   output,
   signal,
-  untracked,
   type Signal,
+  untracked,
   type WritableSignal,
 } from '@angular/core';
+
+// Forms
 import { FormField, type ValidationError } from '@angular/forms/signals';
 
+// Editables
 import { AngularInlineDate } from '../angular-inline-date/angular-inline-date';
 import { AngularInlineTime } from '../angular-inline-time/angular-inline-time';
 import { INLINE_TIME_DAY_OFFSET } from '../angular-inline-time/day-offset';
@@ -25,6 +31,8 @@ import {
   INLINE_TEMPORAL_LEAF_STATE,
   type TemporalLeafState,
 } from '../leaf-state';
+
+// Datetime
 import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
 import {
   addLocalDays,
@@ -905,6 +913,7 @@ function wireRole<TControl>(
 @Directive({
   selector: 'angular-inline-date[rangeDay]',
   providers: [
+    // Tokens
     provideRoleCore(),
     provideLeafState(false),
     { provide: INLINE_TEMPORAL_BUBBLE_SIDE, useValue: 'start' },
@@ -940,6 +949,7 @@ export class RangeDay {
 @Directive({
   selector: 'angular-inline-time[rangeStart]',
   providers: [
+    // Tokens
     provideRoleCore(),
     provideLeafState(false),
     { provide: INLINE_TEMPORAL_BUBBLE_SIDE, useValue: 'start' },
@@ -976,6 +986,7 @@ export class RangeStart {
 @Directive({
   selector: 'angular-inline-time[rangeEnd]',
   providers: [
+    // Tokens
     provideRoleCore(),
     provideLeafState(true),
     {
@@ -1023,7 +1034,11 @@ export class RangeEnd {
  */
 @Directive({
   selector: 'angular-inline-time[rangeTimes]',
-  providers: [provideRoleCore(), provideLeafState(true)],
+  providers: [
+    // Tokens
+    provideRoleCore(),
+    provideLeafState(true),
+  ],
 })
 export class RangeTimes {
   rangeTimes = input<TemporalRangeGroup | ''>('');
@@ -1058,7 +1073,11 @@ export class RangeTimes {
  */
 @Directive({
   selector: 'angular-inline-date[rangeEndDay]',
-  providers: [provideRoleCore(), provideLeafState(true)],
+  providers: [
+    // Tokens
+    provideRoleCore(),
+    provideLeafState(true),
+  ],
 })
 export class RangeEndDay {
   rangeEndDay = input<TemporalRangeGroup | ''>('');
@@ -1088,7 +1107,11 @@ export class RangeEndDay {
  */
 @Directive({
   selector: 'angular-inline-duration[rangeLength]',
-  providers: [provideRoleCore(), provideLeafState(false)],
+  providers: [
+    // Tokens
+    provideRoleCore(),
+    provideLeafState(false),
+  ],
 })
 export class RangeLength {
   rangeLength = input<TemporalRangeGroup | ''>('');

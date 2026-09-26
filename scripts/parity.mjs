@@ -46,22 +46,22 @@ const PAIRS = [
   [
     'text.ts',
     `${SB}/src/lib/angular-inline-text/angular-inline-text.ts`,
-    `${E}/editable-inline/editable-inline.ts`,
+    `${E}/editable-text-v2/editable-text-v2.ts`,
   ],
   [
     'text.html',
     `${SB}/src/lib/angular-inline-text/angular-inline-text.html`,
-    `${E}/editable-inline/editable-inline.html`,
+    `${E}/editable-text-v2/editable-text-v2.html`,
   ],
   [
     'text.scss',
     `${SB}/src/lib/angular-inline-text/angular-inline-text.scss`,
-    `${E}/editable-inline/editable-inline.scss`,
+    `${E}/editable-text-v2/editable-text-v2.scss`,
   ],
   [
     'text.spec',
     `${SB}/src/lib/angular-inline-text/angular-inline-text.spec.ts`,
-    `${E}/editable-inline/editable-inline.spec.ts`,
+    `${E}/editable-text-v2/editable-text-v2.spec.ts`,
   ],
   ['text/caret', `${SB}/src/lib/angular-inline-text/caret.ts`, `${E}/editable-inline/caret.ts`],
   [
@@ -97,7 +97,7 @@ const PAIRS = [
   [
     'text/paint.spec',
     `${SB}/src/lib/styles/editable-text-paint.spec.ts`,
-    `${E}/editable-inline/editable-inline-paint.spec.ts`,
+    `${E}/editable-text-v2/editable-text-v2-paint.spec.ts`,
   ],
   [
     'bubble.ts',
@@ -451,14 +451,14 @@ const PAIRS = [
 // the row says so.
 const MAT_HOST = [
   /^import \{ InlineMatFormField \} from '[^']+';\n/m,
-  /^[ \t]*\/\/ iusta: every temporal field hosts itself[^\n]*\n[ \t]*hostDirectives: \[InlineMatFormField\],\n/m,
+  /^[ \t]*\/\/ iusta: every temporal field hosts itself[^\n]*\n[ \t]*hostDirectives: \[(?:\s*\/\/ Adapters)?\s*InlineMatFormField,?\s*\],\n/m,
 ];
 const DECLARED_EXTRAS = { 'date.ts': MAT_HOST, 'time.ts': MAT_HOST, 'duration.ts': MAT_HOST };
 
 // Sandbox → app names, applied to both sides. Longest first so prefixes never win early.
 const RENAMES = [
   // file names (templateUrl / styleUrl / spec reads)
-  [/\bangular-inline-text\.(html|scss|ts)\b/g, 'editable-inline.$1'],
+  [/\bangular-inline-text\.(html|scss|ts)\b/g, 'editable-text-v2.$1'],
   [/\bangular-inline-number\.(html|scss|ts)\b/g, 'editable-number-v2.$1'],
   [/\bangular-inline-phone\.(html|scss|ts)\b/g, 'editable-telephone-number.$1'],
   [/\bangular-inline-date\.(html|scss|ts)\b/g, 'editable-date-v2.$1'],
@@ -467,7 +467,7 @@ const RENAMES = [
   [/(['/])calendar\.(html|scss|ts)\b/g, '$1inline-calendar.$2'],
   [/\bmat-form-field-adapter\b/g, 'inline-mat-form-field'],
   // selectors / element names
-  [/\bangular-inline-text\b/g, 'm-editable-inline'],
+  [/\bangular-inline-text\b/g, 'm-editable-text-v2'],
   [/\bangular-inline-number\b/g, 'm-editable-number-v2'],
   [/\bangular-inline-phone\b/g, 'm-editable-telephone-number'],
   [/\bangular-inline-date\b/g, 'm-editable-date-v2'],
@@ -475,7 +475,7 @@ const RENAMES = [
   [/\bangular-inline-time\b/g, 'm-editable-time'],
   [/\btemporal-calendar\b/g, 'm-inline-calendar'],
   // classes
-  [/\bAngularInlineText\b/g, 'EditableInline'],
+  [/\bAngularInlineText\b/g, 'EditableTextV2'],
   [/\bAngularInlineNumber\b/g, 'EditableNumberV2'],
   [/\bAngularInlinePhone\b/g, 'EditableTelephoneNumber'],
   [/\bAngularInlineDate\b/g, 'EditableDateV2'],

@@ -1,19 +1,22 @@
+// Angular
 import {
   DestroyRef,
+  inject,
   Injector,
+
+  // Signals
   afterNextRender,
   computed,
   effect,
-  inject,
   linkedSignal,
   signal,
-  untracked,
   type Signal,
+  untracked,
   type WritableSignal,
 } from '@angular/core';
 
+// Editables
 import type { EditableClearContext, EditableActionsContext } from 'angular-inline-select';
-
 import { TemporalIntl } from './temporal-intl';
 
 /**

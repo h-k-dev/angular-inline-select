@@ -1,4 +1,16 @@
-import { Directive, ElementRef, InjectionToken, inject, input, type Signal } from '@angular/core';
+// Angular
+import {
+  Directive,
+  ElementRef,
+  inject,
+  InjectionToken,
+
+  // Signals
+  input,
+  type Signal,
+} from '@angular/core';
+
+// CDK
 import { InteractivityChecker, LiveAnnouncer } from '@angular/cdk/a11y';
 
 /**
@@ -127,7 +139,10 @@ const CANDIDATE_SELECTOR =
  */
 @Directive({
   selector: '[editableScope]',
-  providers: [{ provide: EDITABLE_SCOPE, useExisting: EditableScope }],
+  providers: [
+    // Tokens
+    { provide: EDITABLE_SCOPE, useExisting: EditableScope },
+  ],
 })
 export class EditableScope implements EditableScopeContract {
   #host = inject<ElementRef<HTMLElement>>(ElementRef);

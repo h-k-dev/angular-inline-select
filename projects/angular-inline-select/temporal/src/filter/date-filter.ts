@@ -1,15 +1,21 @@
-import { Injectable, inject } from '@angular/core';
+// Angular
+import { inject, Injectable } from '@angular/core';
+
+// 3rd Party
 import { DateTime } from 'luxon';
 
-import { todayIn, type ZoneId } from '../datetime/db-entry';
-import { addDays, isIsoDate, type IsoDate } from '../datetime/iso-date';
-import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
+// Editables
 import {
   INLINE_FILTER_DIALECT,
   type DayColumn,
   type FilterClause,
   type InlineFilterDialect,
 } from './filter-dialect';
+
+// Datetime
+import { todayIn, type ZoneId } from '../datetime/db-entry';
+import { addDays, isIsoDate, type IsoDate } from '../datetime/iso-date';
+import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
 
 /**
  * Calendar days, END INCLUDED — what a person picks ("29 Sep – 5 Oct"

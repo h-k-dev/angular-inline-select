@@ -1,20 +1,24 @@
+// Angular
 import {
   Component,
   DestroyRef,
   ElementRef,
-  Signal,
-  TemplateRef,
-  afterNextRender,
   inject,
+  TemplateRef,
+
+  // Signals
+  afterNextRender,
+  Signal,
   signal,
   viewChild,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 
-import { EDITABLE_DIALOG_DATA } from 'angular-inline-select';
-
+// 3rd Party
 import { EditorView } from '@codemirror/view';
 
+// Editables
+import { EDITABLE_DIALOG_DATA } from 'angular-inline-select';
 import { canFormatJson, createJsonEditorState, formatJsonDoc } from './json-editor';
 
 /**
@@ -58,7 +62,10 @@ export interface JsonSessionData {
  */
 @Component({
   selector: 'angular-inline-json-session',
-  imports: [NgTemplateOutlet],
+  imports: [
+    // Angular
+    NgTemplateOutlet,
+  ],
   templateUrl: './json-session.html',
   // The host box disappears (like the dialog container's): the editor line
   // and footer participate DIRECTLY in the dialog card's column flex — a

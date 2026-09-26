@@ -1,4 +1,12 @@
-import { InjectionToken, type ElementRef, type Signal, type WritableSignal } from '@angular/core';
+// Angular
+import {
+  type ElementRef,
+  InjectionToken,
+
+  // Signals
+  type Signal,
+  type WritableSignal,
+} from '@angular/core';
 
 /**
  * The signal surface a form-field adapter (the `inlineMatFormField`

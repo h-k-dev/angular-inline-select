@@ -1,13 +1,14 @@
+// Angular
 import {
   Component,
   DestroyRef,
   ElementRef,
-  Injector,
-  afterNextRender,
-  computed,
   inject,
+  Injector,
 
   // Signals
+  afterNextRender,
+  computed,
   input,
   linkedSignal,
   output,
@@ -15,12 +16,16 @@ import {
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 
+// 3rd Party
 import { DateTime } from 'luxon';
 
+// Editables
 import { toIsoDate, formatIsoDate } from '../date-codec';
+import { TemporalIntl } from '../../temporal-intl';
+
+// Datetime
 import type { IsoDate } from '../../datetime/iso-date';
 import { todayIn } from '../../datetime/db-entry';
-import { TemporalIntl } from '../../temporal-intl';
 
 interface CalendarDay {
   iso: IsoDate;

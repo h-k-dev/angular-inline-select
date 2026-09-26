@@ -1,16 +1,22 @@
+// Angular
 import {
   Component,
   TemplateRef,
+
+  // Signals
+  computed,
+  contentChild,
   input,
+  linkedSignal,
   model,
   output,
-  computed,
-  linkedSignal,
   viewChild,
-  contentChild,
 } from '@angular/core';
+
+// Forms
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
+// Editables
 import {
   AngularInlineText,
   type InlineTextSaved,
@@ -149,10 +155,14 @@ const parseWireNumber = makeParseNumber('both');
  */
 @Component({
   selector: 'angular-inline-number',
-  imports: [AngularInlineText],
+  imports: [
+    // Components
+    AngularInlineText,
+  ],
   templateUrl: './angular-inline-number.html',
   styles: ':host { display: inline; }',
   host: {
+    // Styles
     '[style.display]': 'hidden() ? "none" : null',
   },
 })

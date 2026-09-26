@@ -1,28 +1,36 @@
+// Angular
 import {
-  afterNextRender,
-  DestroyRef,
   Component,
+  DestroyRef,
   ElementRef,
+  inject,
+  type TemplateRef,
+
+  // Signals
+  afterNextRender,
   computed,
   contentChild,
-  inject,
   input,
   linkedSignal,
   model,
   output,
   signal,
-  viewChild,
   type Signal,
-  type TemplateRef,
+  viewChild,
 } from '@angular/core';
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
+
+// Forms
+import { FormValueControl, type ValidationError } from '@angular/forms/signals';
+
+// CDK
 import {
   CdkConnectedOverlay,
   CdkOverlayOrigin,
   type ConnectedPosition,
 } from '@angular/cdk/overlay';
-import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
+// Editables
 import {
   EDITABLE_SCOPE,
   EditablePrefix,
@@ -69,6 +77,10 @@ import {
   ACTIONS_GUARDS,
 } from '../side-session';
 import { TemporalIntl } from '../temporal-intl';
+import { INLINE_TEMPORAL_LOCALE } from '../locale';
+import { roundToInterval, type IntervalRounding } from '../interval-rounding';
+
+// Datetime
 import {
   addLocalDays,
   composeDbEntry,
@@ -84,8 +96,6 @@ import {
   type DbDateTime,
 } from '../datetime/db-entry';
 import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
-import { INLINE_TEMPORAL_LOCALE } from '../locale';
-import { roundToInterval, type IntervalRounding } from '../interval-rounding';
 
 /** The `editableActions` payload of the time control: the committed instant (UTC ISO DB entry) of that side. */
 export interface InlineTimeActions {
@@ -183,17 +193,26 @@ interface TimeSide extends SideCore<DbDateTime> {
 @Component({
   selector: 'angular-inline-time',
   imports: [
+    // Angular
+    NgTemplateOutlet,
+
+    // CDK
     CdkConnectedOverlay,
     CdkOverlayOrigin,
-    NgTemplateOutlet,
+
+    // Components
     BubbleMenu,
     EditableClearButton,
   ],
   templateUrl: './angular-inline-time.html',
   styleUrl: './angular-inline-time.scss',
   // The form-field adapter's one way in (`inlineMatFormField`, /temporal-mat).
-  providers: [{ provide: INLINE_TEMPORAL_MAT_CONTROL, useExisting: AngularInlineTime }],
+  providers: [
+    // Tokens
+    { provide: INLINE_TEMPORAL_MAT_CONTROL, useExisting: AngularInlineTime },
+  ],
   host: {
+    // Styles
     '[style.display]': 'hidden() ? "none" : null',
   },
 })

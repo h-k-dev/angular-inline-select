@@ -1,5 +1,5 @@
+// Angular
 import {
-  viewChild,
   Component,
   DestroyRef,
   ElementRef,
@@ -9,9 +9,10 @@ import {
   // Signals
   computed,
   effect,
-  untracked,
   input,
   signal,
+  untracked,
+  viewChild,
 } from '@angular/core';
 
 // CDK
@@ -112,7 +113,10 @@ function endOffsetPositions(offset: { x: number; y: number }): ConnectedPosition
  */
 @Component({
   selector: 'bubble-menu',
-  imports: [OverlayModule],
+  imports: [
+    // CDK
+    OverlayModule,
+  ],
   templateUrl: './bubble-menu.html',
   styleUrl: './bubble-menu.scss',
 })

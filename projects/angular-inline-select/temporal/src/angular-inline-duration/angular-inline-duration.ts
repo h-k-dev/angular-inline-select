@@ -1,12 +1,16 @@
+// Angular
 import {
-  afterNextRender,
   Component,
   DestroyRef,
   ElementRef,
+  inject,
+  type TemplateRef,
+
+  // Signals
+  afterNextRender,
   computed,
   contentChild,
   effect,
-  inject,
   input,
   linkedSignal,
   model,
@@ -14,16 +18,20 @@ import {
   signal,
   untracked,
   viewChild,
-  type TemplateRef,
 } from '@angular/core';
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
+
+// Forms
+import { FormValueControl, type ValidationError } from '@angular/forms/signals';
+
+// CDK
 import {
   CdkConnectedOverlay,
   CdkOverlayOrigin,
   type ConnectedPosition,
 } from '@angular/cdk/overlay';
-import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
+// Editables
 import {
   EDITABLE_SCOPE,
   EditablePrefix,
@@ -88,17 +96,26 @@ export interface InlineDurationSaved {
 @Component({
   selector: 'angular-inline-duration',
   imports: [
+    // Angular
+    NgTemplateOutlet,
+
+    // CDK
     CdkConnectedOverlay,
     CdkOverlayOrigin,
-    NgTemplateOutlet,
+
+    // Components
     BubbleMenu,
     EditableClearButton,
   ],
   templateUrl: './angular-inline-duration.html',
   styleUrl: './angular-inline-duration.scss',
   // The form-field adapter's one way in (`inlineMatFormField`, /temporal-mat).
-  providers: [{ provide: INLINE_TEMPORAL_MAT_CONTROL, useExisting: AngularInlineDuration }],
+  providers: [
+    // Tokens
+    { provide: INLINE_TEMPORAL_MAT_CONTROL, useExisting: AngularInlineDuration },
+  ],
   host: {
+    // Styles
     '[style.display]': 'hidden() ? "none" : null',
   },
 })

@@ -1,4 +1,10 @@
-import { InjectionToken, type Signal } from '@angular/core';
+// Angular
+import {
+  InjectionToken,
+
+  // Signals
+  type Signal,
+} from '@angular/core';
 
 /**
  * Day-overflow feed for the time control's `+n` badge (the airline
@@ -10,6 +16,4 @@ import { InjectionToken, type Signal } from '@angular/core';
  * group's composed datetimes), never part of the draft or the `'HH:mm'`
  * value.
  */
-export const INLINE_TIME_DAY_OFFSET = new InjectionToken<Signal<number>>(
-  'INLINE_TIME_DAY_OFFSET',
-);
+export const INLINE_TIME_DAY_OFFSET = new InjectionToken<Signal<number>>('INLINE_TIME_DAY_OFFSET');

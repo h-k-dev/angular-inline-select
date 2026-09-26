@@ -1,4 +1,5 @@
-import { Directive, TemplateRef, inject } from '@angular/core';
+// Angular
+import { Directive, inject, TemplateRef } from '@angular/core';
 
 /**
  * Suffix template for an inline field — the matSuffix analogue.

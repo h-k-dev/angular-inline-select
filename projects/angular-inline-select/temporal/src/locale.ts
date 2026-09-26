@@ -1,4 +1,12 @@
-import { InjectionToken, signal, type Provider, type Signal } from '@angular/core';
+// Angular
+import {
+  InjectionToken,
+  type Provider,
+
+  // Signals
+  signal,
+  type Signal,
+} from '@angular/core';
 
 /** A BCP 47 locale (or a preference list); `undefined` = the browser's. */
 export type TemporalLocale = string | string[] | undefined;

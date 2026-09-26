@@ -1,3 +1,4 @@
+// 3rd Party
 import { EditorState, RangeSetBuilder, type Extension } from '@codemirror/state';
 import {
   Decoration,
@@ -20,6 +21,7 @@ import { tags } from '@lezer/highlight';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { linter, lintGutter, lintKeymap, type Diagnostic } from '@codemirror/lint';
 
+// Editables
 import { parseJsonDraft } from './json-codec';
 import { printEditableJson } from './json-doc';
 
@@ -126,7 +128,12 @@ const jsonLinter = linter((view) => {
   const parsed = parseJsonDraft(text);
   if (parsed.error === undefined) return [];
 
-  const diagnostic: Diagnostic = { from: 0, to: text.length, severity: 'error', message: parsed.error };
+  const diagnostic: Diagnostic = {
+    from: 0,
+    to: text.length,
+    severity: 'error',
+    message: parsed.error,
+  };
   return [diagnostic];
 });
 
@@ -158,7 +165,7 @@ function buildIndentGuides(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
 
   for (const { from, to } of view.visibleRanges) {
-    for (let pos = from; pos <= to; ) {
+    for (let pos = from; pos <= to;) {
       const line = view.state.doc.lineAt(pos);
       const text = line.text;
 

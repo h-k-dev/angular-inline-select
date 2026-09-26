@@ -1,5 +1,12 @@
-import { Injectable, signal } from '@angular/core';
+// Angular
+import {
+  Injectable,
 
+  // Signals
+  signal,
+} from '@angular/core';
+
+// Editables
 import {
   datePlaceholderTokens as builtinDatePlaceholderTokens,
   type DatePlaceholderTokens,

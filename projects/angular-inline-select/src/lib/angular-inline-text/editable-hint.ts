@@ -1,4 +1,5 @@
-import { Directive, TemplateRef, inject } from '@angular/core';
+// Angular
+import { Directive, inject, TemplateRef } from '@angular/core';
 
 /**
  * Hint template for the elevated panel's footer — rendered while the session

@@ -1,5 +1,12 @@
-import { InjectionToken, type Signal } from '@angular/core';
+// Angular
+import {
+  InjectionToken,
 
+  // Signals
+  type Signal,
+} from '@angular/core';
+
+// Datetime
 import type { IsoDate } from './datetime/iso-date';
 
 /**

@@ -1,19 +1,29 @@
+// Angular
 import {
   DestroyRef,
   Directive,
   ElementRef,
+  inject,
   Injector,
+  type OnDestroy,
+
+  // Signals
   afterNextRender,
   computed,
   effect,
-  inject,
   untracked,
-  type OnDestroy,
 } from '@angular/core';
-import { Subject } from 'rxjs';
+
+// CDK
 import { _IdGenerator } from '@angular/cdk/a11y';
+
+// Material
 import { MAT_FORM_FIELD, MatFormFieldControl } from '@angular/material/form-field';
 
+// 3rd Party
+import { Subject } from 'rxjs';
+
+// Editables
 import { INLINE_TEMPORAL_MAT_CONTROL } from 'angular-inline-select/temporal';
 
 /**
@@ -40,14 +50,20 @@ import { INLINE_TEMPORAL_MAT_CONTROL } from 'angular-inline-select/temporal';
  */
 @Directive({
   selector: '[inlineMatFormField]',
-  providers: [{ provide: MatFormFieldControl, useExisting: InlineMatFormField }],
+  providers: [
+    // Tokens
+    { provide: MatFormFieldControl, useExisting: InlineMatFormField },
+  ],
   host: {
+    // Attributes
+    '[attr.id]': 'inMatFormField ? id : null',
+
+    // Classes
     // BARE CHROME only where a container actually draws the chrome — as a
     // host directive it is MOUNTED EVERYWHERE, so outside a mat-form-field
     // the control must keep its own dashed underline.
     '[class.inline-field-bare]': 'inMatFormField',
     '[class.inline-field-bare--hide-placeholder]': 'inMatFormField && !labelIsFloating',
-    '[attr.id]': 'inMatFormField ? id : null',
   },
 })
 export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestroy {
