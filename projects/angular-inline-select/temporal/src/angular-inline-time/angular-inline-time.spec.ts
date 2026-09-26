@@ -583,8 +583,8 @@ describe('AngularInlineTime two-field range', () => {
     r.fixture.detectChanges();
 
     expect(r.inputs().length).toBe(2);
-    expect(r.start().placeholder).toBe('time'); // fully empty: both hint the placeholder
-    expect(r.end()!.placeholder).toBe('time');
+    expect(r.start().placeholder).toBe('HH:MM'); // fully empty: both hint the format's shape
+    expect(r.end()!.placeholder).toBe('HH:MM');
 
     typeInto(r, r.start(), '22');
     pressOn(r, r.start(), 'Enter');
@@ -1127,5 +1127,66 @@ describe('AngularInlineTime — affix slots', () => {
     expect(affixes.every((a) => a.getAttribute('aria-hidden') === 'true')).toBe(true);
     // Never part of the draft: the affixes sit outside every input.
     expect(affixes.some((a) => a.closest('input'))).toBe(false);
+  });
+});
+
+// =============================================================================
+// Ruling 3 (2026-09-26): the placeholder is the format's shape, the display is
+// the RAW wall clock, and an idle OS-picker change is a full settlement
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineTime],
+  template: `<angular-inline-time [(value)]="value" [format]="format()" locale="en-US" />`,
+})
+class RawDisplayHost {
+  value = signal<InlineTimeValue>(null);
+  format = signal<'HH:mm' | 'HH:mm:ss'>('HH:mm');
+}
+
+describe('AngularInlineTime — format shape and raw display', () => {
+  it('shows the format as the placeholder: HH:MM, then HH:MM:SS', () => {
+    const fixture = TestBed.createComponent(RawDisplayHost);
+    fixture.detectChanges();
+    const input = () => fixture.nativeElement.querySelector('.inline-time__input') as HTMLInputElement;
+
+    expect(input().placeholder).toBe('HH:MM');
+
+    fixture.componentInstance.format.set('HH:mm:ss');
+    fixture.detectChanges();
+    expect(input().placeholder).toBe('HH:MM:SS');
+  });
+
+  it('renders the raw 24-hour wall clock even in a 12-hour locale', () => {
+    const fixture = TestBed.createComponent(RawDisplayHost);
+    fixture.componentInstance.value.set(at('21:05'));
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement.querySelector('.inline-time__input') as HTMLInputElement).value).toBe('21:05');
+  });
+});
+
+describe('AngularInlineTime — idle OS-picker settlement', () => {
+  it('an idle pick marks the field touched, like any commit', () => {
+    const h = setup();
+    expect(h.host.field().touched()).toBe(false);
+
+    h.native().value = '14:45';
+    h.native().dispatchEvent(new Event('change', { bubbles: true }));
+    h.fixture.detectChanges();
+
+    expect(h.host.model()).toBe(at('14:45'));
+    expect(h.host.field().touched()).toBe(true);
+  });
+
+  it('a CLEARED picker clears the side', () => {
+    const h = setup();
+
+    h.native().value = '';
+    h.native().dispatchEvent(new Event('change', { bubbles: true }));
+    h.fixture.detectChanges();
+
+    expect(h.host.model()).toBeNull();
+    expect(h.host.sessions.at(-1)).toMatchObject({ value: null, changed: true });
   });
 });

@@ -3,7 +3,11 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormField, form, required } from '@angular/forms/signals';
 import { MatFormFieldControl, MatFormFieldModule } from '@angular/material/form-field';
 
-import { AngularInlineDate, AngularInlineDuration, AngularInlineTime } from 'angular-inline-select/temporal';
+import {
+  AngularInlineDate,
+  AngularInlineDuration,
+  AngularInlineTime,
+} from 'angular-inline-select/temporal';
 import { composeDbEntry } from 'angular-inline-select/temporal';
 import { InlineMatFormField } from './mat-form-field-adapter';
 
@@ -185,8 +189,7 @@ describe('InlineMatFormField calendar anchoring', () => {
     const fixture = TestBed.createComponent(MatDateHost);
     fixture.detectChanges();
 
-    const control = fixture.debugElement
-      .query((el) => el.name === 'angular-inline-date')!
+    const control = fixture.debugElement.query((el) => el.name === 'angular-inline-date')!
       .componentInstance as AngularInlineDate;
     const origin = control.overlayOrigin();
     // getConnectedOverlayOrigin() returns the text-field wrapper — the box
@@ -205,8 +208,7 @@ describe('InlineMatFormField calendar anchoring', () => {
     const fixture = TestBed.createComponent(BareDateHost);
     fixture.detectChanges();
 
-    const control = fixture.debugElement
-      .query((el) => el.name === 'angular-inline-date')!
+    const control = fixture.debugElement.query((el) => el.name === 'angular-inline-date')!
       .componentInstance as AngularInlineDate;
     expect(control.overlayOrigin()).toBeNull();
   });
@@ -279,7 +281,9 @@ describe('InlineMatFormField — externalErrors', () => {
       .componentInstance as AngularInlineDuration;
     expect(control.externalErrors()).toBe(true);
 
-    const input = fixture.nativeElement.querySelector('.inline-duration__input') as HTMLInputElement;
+    const input = fixture.nativeElement.querySelector(
+      '.inline-duration__input',
+    ) as HTMLInputElement;
     input.focus();
     fixture.detectChanges();
     expect(document.querySelector('.inline-duration__panel')).toBeNull();
@@ -287,5 +291,40 @@ describe('InlineMatFormField — externalErrors', () => {
     input.blur();
     await new Promise((resolve) => setTimeout(resolve));
     fixture.detectChanges();
+  });
+});
+
+// =============================================================================
+// Found through INLINE_TEMPORAL_MAT_CONTROL, so it mounts as an attribute or
+// as a host directive of the control — and is inert outside a mat-form-field
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineDuration, InlineMatFormField],
+  template: `<angular-inline-duration inlineMatFormField [(value)]="value" />`,
+})
+class StandaloneAdapterHost {
+  value = signal<number | null>(3600);
+}
+
+describe('InlineMatFormField — outside a mat-form-field', () => {
+  it('is inert: the control keeps its own chrome, no id, no bare class', () => {
+    const fixture = TestBed.createComponent(StandaloneAdapterHost);
+    fixture.detectChanges();
+    const host = fixture.nativeElement.querySelector('angular-inline-duration') as HTMLElement;
+
+    expect(host.classList.contains('inline-field-bare')).toBe(false);
+    expect(host.hasAttribute('id')).toBe(false);
+  });
+
+  it('finds its control through the token every temporal control provides', () => {
+    const fixture = TestBed.createComponent(StandaloneAdapterHost);
+    fixture.detectChanges();
+    const adapter = fixture.debugElement
+      .query((el) => el.name === 'angular-inline-duration')!
+      .injector.get(InlineMatFormField);
+
+    expect(adapter.empty).toBe(false);
+    expect(adapter.placeholder).toBe('HH:MM');
   });
 });

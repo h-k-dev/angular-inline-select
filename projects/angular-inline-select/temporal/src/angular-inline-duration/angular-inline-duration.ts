@@ -42,11 +42,14 @@ import {
   parseDuration,
   formatDuration,
   timeDetailsFromSeconds,
-  type DurationFormat,
+  durationCodecFormat,
+  durationPlaceholder,
+  type DurationDisplayFormat,
   type DurationSavedDetails,
 } from './duration-codec';
 import { TemporalIntl } from '../temporal-intl';
 import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
+import { INLINE_TEMPORAL_MAT_CONTROL } from '../mat-control';
 import { focusInputNearPoint, isUnitSpacePress } from '../inline-unit';
 import { roundToInterval, type IntervalRounding } from '../interval-rounding';
 
@@ -75,7 +78,7 @@ export interface InlineDurationSaved {
  * baseline, Tab/blur commits a readable draft and SNAPS an unreadable one
  * back — never traps, never persists a draft error.
  *
- * - Drafts accept colon notation (positional by `durationFormat`), unit
+ * - Drafts accept colon notation (positional by `format`), unit
  *   tokens (`'1h 30m'`, `'45m'`, `'1.5h'`), or a bare number (minutes under
  *   hour formats, seconds under `mm:ss`).
  * - Commits round-trip the codec (`'90'` under `h:mm` settles as `'01:30'`)
@@ -93,6 +96,8 @@ export interface InlineDurationSaved {
   ],
   templateUrl: './angular-inline-duration.html',
   styleUrl: './angular-inline-duration.scss',
+  // The form-field adapter's one way in (`inlineMatFormField`, /temporal-mat).
+  providers: [{ provide: INLINE_TEMPORAL_MAT_CONTROL, useExisting: AngularInlineDuration }],
   host: {
     '[style.display]': 'hidden() ? "none" : null',
   },
@@ -120,14 +125,15 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   invalid = input(false);
   hidden = input(false);
 
-  placeholder = input('0:00');
+  /** Overrides the per-format placeholder (`'HH:MM'` …). */
+  placeholder = input<string | undefined>(undefined);
 
   /**
    * The UNIFORM adapter surface (every temporal control exposes it): the
    * resolved placeholder text, so hosting containers never branch on the
    * concrete control.
    */
-  readonly placeholderText = computed(() => this.placeholder());
+  readonly placeholderText = computed(() => this.placeholder() ?? durationPlaceholder(this.format()));
 
   /** Accessible name for the field. */
   ariaLabel = input<string | undefined>(undefined);
@@ -145,15 +151,21 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
     () => this.clearBubbleSide() ?? this.#bubbleSideDefault ?? 'end',
   );
 
-  /** How colon notation reads and how committed values render. */
-  durationFormat = input<DurationFormat>('h:mm');
+  /**
+   * How colon notation reads and how committed values render, in the house
+   * tokens: `'HH:mm'` (hours:minutes), `'HH:mm:ss'`, or `'mm:ss'`.
+   */
+  format = input<DurationDisplayFormat>('HH:mm');
+
+  /** The codec's positional reading of {@link format}. */
+  #codecFormat = computed(() => durationCodecFormat(this.format()));
 
   /**
    * The rounding grid in seconds — committed lengths land on a multiple
    * (1 = off). A required-but-shorter length settles AS the step: a required
    * duration never commits as nothing.
    */
-  intervalStep = input<number>(1);
+  intervalStep = input(1);
 
   /** How a committed length lands on the `intervalStep` grid (default: up). */
   intervalRounding = input<IntervalRounding>('ceil');
@@ -189,7 +201,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   );
 
   /** Form Value Contract: touch — emitted whenever a session settles. */
-  touch = output<void>();
+  touch = output();
 
   /**
    * THE consumer commit event — the family DNA: fires once per changed
@@ -211,7 +223,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   editing = model(false);
 
   protected display = computed(() =>
-    this.isEmpty() ? '' : formatDuration(this.value(), this.durationFormat()),
+    this.isEmpty() ? '' : formatDuration(this.value(), this.#codecFormat()),
   );
 
   // -- The session (one field, the date control's side pattern) ------------------
@@ -235,7 +247,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
       this.#dirty = true;
       // The live channel: readable drafts flow into the model in the same
       // synchronous push (unsnapped — rounding is settlement's job).
-      const parsed = parseDuration(value, this.durationFormat());
+      const parsed = parseDuration(value, this.#codecFormat());
       if (parsed === undefined) return;
 
       const next = parsed ?? this.emptyValue();
@@ -283,7 +295,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
 
   /** The parse gate: whether the current draft fails the codec. Public for consumers. */
   readonly parseFailed = computed(
-    () => parseDuration(this.draft(), this.durationFormat()) === undefined,
+    () => parseDuration(this.draft(), this.#codecFormat()) === undefined,
   );
 
   #selfTouched = signal(false);
@@ -318,11 +330,14 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   protected errorMessages = computed(() => this.errors().filter((error) => !!error.message));
 
   /** The parse gate's own line: an unreadable draft on Enter says so. */
-  protected parseGateLabel = computed(() => this.#intl.invalidEntryLabel(this.#intl.durationLabel()));
+  protected parseGateLabel = computed(() =>
+    this.#intl.invalidEntryLabel(this.#intl.durationLabel()),
+  );
 
   /** The panel appears only to carry an error — there is no live preview. */
   protected panelOpen = computed(
-    () => this.#open() && !this.externalErrors() && !this.#panelDismissed() && this.errorSlotVisible(),
+    () =>
+      this.#open() && !this.externalErrors() && !this.#panelDismissed() && this.errorSlotVisible(),
   );
 
   /** Public: whether the panel is showing (hosting containers coordinate on it). */
@@ -394,7 +409,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   }
 
   protected sizeOf(): number {
-    return Math.max(1, (this.draft() || this.placeholder()).length);
+    return Math.max(1, (this.draft() || this.placeholderText()).length);
   }
 
   protected ariaInvalid(): boolean {
@@ -530,7 +545,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
     } else if (options.revert) {
       value = this.#baselineValue;
     } else {
-      const parsed = parseDuration(this.draft(), this.durationFormat());
+      const parsed = parseDuration(this.draft(), this.#codecFormat());
       if (parsed === undefined) {
         // Snap-back: an unreadable draft reverts to the session baseline.
         snappedBack = true;
@@ -570,7 +585,9 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
 
   #announceRevert(value: number | null) {
     const restored =
-      value === null || value === this.emptyValue() ? '' : formatDuration(value, this.durationFormat());
+      value === null || value === this.emptyValue()
+        ? ''
+        : formatDuration(value, this.#codecFormat());
     this.revertNotice.set(this.#intl.revertedLabel(restored));
     this.revertFlash.set(true);
 
@@ -597,7 +614,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
         // only — blur keeps the native snap-back regardless of policy).
         if (
           scope.onBlocked() === 'stay' &&
-          parseDuration(this.draft(), this.durationFormat()) === undefined
+          parseDuration(this.draft(), this.#codecFormat()) === undefined
         ) {
           event.preventDefault();
           this.#saveAttempted.set(true);
@@ -614,7 +631,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
       }
       case 'Enter': {
         event.preventDefault();
-        if (parseDuration(this.draft(), this.durationFormat()) === undefined) {
+        if (parseDuration(this.draft(), this.#codecFormat()) === undefined) {
           // The parse gate: the user ASKED for a commit — block and say why.
           this.#saveAttempted.set(true);
           return;

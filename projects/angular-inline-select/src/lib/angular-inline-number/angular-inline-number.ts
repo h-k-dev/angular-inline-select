@@ -346,7 +346,7 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
   );
 
   /** Form Value Contract: touch — forwarded from the inner control. */
-  touch = output<void>();
+  touch = output();
 
   /**
    * THE consumer commit event — fires once per changed settlement with the
@@ -371,7 +371,7 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
    * the wire reading. Without a locale the separator codec already reads the
    * wire shape, and nothing changes.
    */
-  protected numericValue = computed<number | null>(() => {
+  protected numericValue = computed(() => {
     const value = this.value();
     if (value === null || value === undefined) return null;
     if (typeof value === 'number') return Number.isNaN(value) ? null : value;

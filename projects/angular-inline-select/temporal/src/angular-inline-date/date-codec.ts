@@ -7,8 +7,8 @@
 
 import { DateTime } from 'luxon';
 
-/** `'yyyy-MM-dd'`. */
-export type IsoDate = string;
+import type { IsoDate } from '../datetime/iso-date';
+
 
 /** The object shapes of `InlineDateValue`: `{ start }` is the single-day range `[start, start]`. */
 export interface IsoDateRange {

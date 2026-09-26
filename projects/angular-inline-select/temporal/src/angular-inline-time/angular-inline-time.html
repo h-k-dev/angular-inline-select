@@ -38,7 +38,7 @@
       [attr.aria-required]="required() || null"
       [attr.size]="sizeOf('start')"
       [value]="startDraft()"
-      [placeholder]="placeholder()"
+      [placeholder]="placeholderText()"
       [disabled]="effectiveDisabled()"
       [readonly]="effectiveReadonly()"
       (input)="handleInput('start', startInput.value)"

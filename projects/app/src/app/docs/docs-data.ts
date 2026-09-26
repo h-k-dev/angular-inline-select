@@ -1042,9 +1042,9 @@ export const DOCS: Record<string, SectionDocs> = {
           ...FORM_CONTRACT_INPUTS,
           {
             name: 'placeholder',
-            type: 'string',
-            default: "'time'",
-            description: 'Placeholder for the (start) time.',
+            type: 'string | undefined',
+            default: 'undefined',
+            description: "Placeholder override. Unset, the format's own shape: 'HH:MM' (or 'HH:MM:SS').",
           },
           {
             name: 'endPlaceholder',
@@ -1151,9 +1151,9 @@ export const DOCS: Record<string, SectionDocs> = {
           ...FORM_CONTRACT_INPUTS,
           {
             name: 'placeholder',
-            type: 'string',
-            default: "'0:00'",
-            description: 'Placeholder shown while empty.',
+            type: 'string | undefined',
+            default: 'undefined',
+            description: "Placeholder override. Unset, the format's own shape: 'HH:MM', 'HH:MM:SS' or 'MM:SS'.",
           },
           ARIA_LABEL_INPUT,
           {
@@ -1164,10 +1164,11 @@ export const DOCS: Record<string, SectionDocs> = {
               "Which edge the clear bubble grows from. Unset, the leaf role decides ('start' for inline-start leaves), else 'end'.",
           },
           {
-            name: 'durationFormat',
-            type: 'DurationFormat',
-            default: "'h:mm'",
-            description: 'How colon notation reads and how committed values render.',
+            name: 'format',
+            type: "'HH:mm' | 'HH:mm:ss' | 'mm:ss'",
+            default: "'HH:mm'",
+            description:
+              "How colon notation reads and how committed values render. The empty field's placeholder is the format's own shape ('HH:MM' …).",
           },
           {
             name: 'intervalStep',

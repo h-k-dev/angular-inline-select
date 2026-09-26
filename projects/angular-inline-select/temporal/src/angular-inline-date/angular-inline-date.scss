@@ -75,15 +75,22 @@
   text-decoration-style: dashed;
   text-decoration-thickness: 0.0625rem;
   text-underline-offset: 0.4em;
-  text-decoration-color: var(--editable-text-underline-color, var(--mat-sys-on-surface-variant, #6b7280));
+  text-decoration-color: var(
+    --editable-text-underline-color,
+    var(--mat-sys-on-surface-variant, #6b7280)
+  );
 
-  transition: text-decoration-color var(--iusta-t-fast, 0.2s) var(--iusta-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
+  transition: text-decoration-color var(--iusta-t-fast, 0.2s)
+    var(--iusta-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
 }
 
 .inline-date__input:focus {
   text-decoration-style: solid;
   text-decoration-thickness: 0.125rem;
-  text-decoration-color: var(--editable-text-underline-focus-indicator-color, var(--mat-sys-primary, #428bca));
+  text-decoration-color: var(
+    --editable-text-underline-focus-indicator-color,
+    var(--mat-sys-primary, #428bca)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -102,7 +109,10 @@
 // ---------------------------------------------------------------------------
 .inline-date__input:placeholder-shown {
   text-decoration-line: none;
-  border-bottom-color: var(--editable-text-underline-color, var(--mat-sys-on-surface-variant, #6b7280));
+  border-bottom-color: var(
+    --editable-text-underline-color,
+    var(--mat-sys-on-surface-variant, #6b7280)
+  );
 }
 
 .inline-date__input:placeholder-shown:not(:focus) {
@@ -111,7 +121,10 @@
 
 .inline-date__input:placeholder-shown:focus {
   border-bottom-style: solid;
-  border-bottom-color: var(--editable-text-underline-focus-indicator-color, var(--mat-sys-primary, #428bca));
+  border-bottom-color: var(
+    --editable-text-underline-focus-indicator-color,
+    var(--mat-sys-primary, #428bca)
+  );
 }
 
 .inline-date__input::placeholder {
@@ -231,13 +244,26 @@
   background: var(--editable-panel-container-color, var(--mat-sys-surface-container, #fff));
   color: var(--mat-sys-on-surface, inherit);
   border-radius: var(--mat-sys-corner-medium, 0.75rem);
-  box-shadow: var(--mat-sys-level2, 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15));
+  box-shadow: var(
+    --mat-sys-level2,
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 2px 6px 2px rgba(0, 0, 0, 0.15)
+  );
 }
 .inline-date__preview {
   padding: 2px 8px 0;
   font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
   color: var(--mat-sys-on-surface-variant, #5f6368);
   font-variant-numeric: tabular-nums;
+}
+.inline-date__notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 2px 8px 4px;
+  font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
+  color: var(--mat-sys-error, #dc3545);
 }
 .inline-date__quick-picks {
   display: flex;
@@ -268,8 +294,14 @@
 :host(.inline-field-bare) .inline-date__input {
   font-family: var(--mat-form-field-container-text-font, var(--mat-sys-body-medium-font));
   font-size: var(--mat-form-field-container-text-size, var(--mat-sys-body-medium-size));
-  line-height: var(--mat-form-field-container-text-line-height, var(--mat-sys-body-medium-line-height));
-  letter-spacing: var(--mat-form-field-container-text-tracking, var(--mat-sys-body-medium-tracking));
+  line-height: var(
+    --mat-form-field-container-text-line-height,
+    var(--mat-sys-body-medium-line-height)
+  );
+  letter-spacing: var(
+    --mat-form-field-container-text-tracking,
+    var(--mat-sys-body-medium-tracking)
+  );
 
   /* No decoration to fit here (both painters are retired below), so the extra
      leading and its compensating margin hand back to the container. */

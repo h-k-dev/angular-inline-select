@@ -7,7 +7,7 @@
   class="inline-date editable-unit"
   cdkOverlayOrigin
   #origin="cdkOverlayOrigin"
-  #dateField
+  #field
   [class.inline-date--invalid]="errorsVisible()"
   [class.inline-date--scoped]="hasHoverScope()"
   (mousedown)="handleUnitMouseDown($event)"
@@ -30,8 +30,8 @@
     spellcheck="false"
     role="combobox"
     aria-haspopup="grid"
-    [attr.aria-expanded]="overlayOpen()"
-    [attr.aria-controls]="overlayOpen() ? panelId : null"
+    [attr.aria-expanded]="isOpen()"
+    [attr.aria-controls]="isOpen() ? panelId : null"
     [attr.aria-label]="ariaLabelOf('start')"
     [attr.aria-invalid]="ariaInvalidOf('start') || null"
     [attr.aria-required]="required() || null"
@@ -60,8 +60,8 @@
       spellcheck="false"
       role="combobox"
       aria-haspopup="grid"
-      [attr.aria-expanded]="overlayOpen()"
-      [attr.aria-controls]="overlayOpen() ? panelId : null"
+      [attr.aria-expanded]="isOpen()"
+      [attr.aria-controls]="isOpen() ? panelId : null"
       [attr.aria-label]="ariaLabelOf('end')"
       [attr.aria-invalid]="ariaInvalidOf('end') || null"
       [attr.aria-required]="required() || null"
@@ -147,8 +147,8 @@
       class="inline-date__trigger"
       tabindex="-1"
       [attr.aria-label]="intl.openCalendarLabel()"
-      [attr.aria-expanded]="overlayOpen()"
-      [attr.aria-controls]="overlayOpen() ? panelId : null"
+      [attr.aria-expanded]="isOpen()"
+      [attr.aria-controls]="isOpen() ? panelId : null"
       (mousedown)="$event.preventDefault()"
       (click)="toggleCalendar($event)"
     >
@@ -163,7 +163,7 @@
 <!-- Single field: one bubble anchored to the whole field, clearing the value. -->
 @if (!twoFields()) {
   <bubble-menu
-    [origin]="dateField"
+    [origin]="field"
     [side]="effectiveClearBubbleSide()"
     [canShow]="clearCanShowSingle() || actionsCanShowSingle()"
     [armed]="scopeHover()"
@@ -190,14 +190,15 @@
 }
 
 <!--
-  The panel: preview line + calendar grid + quick-picks + the error slot.
-  Opens on focus WITHOUT stealing it (the grid mirrors the draft); focus
-  inside the panel belongs to the focused side's session.
+  The panel: preview line + unavailable-day notice + calendar grid +
+  quick-picks + the error slot. Opens on focus WITHOUT stealing it (the grid
+  mirrors the draft); focus inside the panel belongs to the focused side's
+  session. The day filter disables unavailable cells.
 -->
 <ng-template
   cdkConnectedOverlay
   [cdkConnectedOverlayOrigin]="overlayOrigin() ?? origin"
-  [cdkConnectedOverlayOpen]="overlayOpen()"
+  [cdkConnectedOverlayOpen]="isOpen()"
   [cdkConnectedOverlayPositions]="overlayPositions"
   [cdkConnectedOverlayViewportMargin]="8"
   [cdkConnectedOverlayPush]="true"
@@ -218,6 +219,23 @@
       <div class="inline-date__preview">{{ reading }}</div>
     }
 
+    <!-- An unavailable day (dayFilter): what and why, plus the one-click fix. -->
+    @if (unavailableNotice(); as notice) {
+      <div class="inline-date__notice" role="status">
+        <span class="inline-date__notice-text">{{ notice.label }}</span>
+        @if (notice.suggestion; as suggestion) {
+          <button
+            type="button"
+            class="inline-date__quick-pick"
+            (mousedown)="$event.preventDefault()"
+            (click)="pickDate(suggestion)"
+          >
+            {{ notice.suggestionLabel }}
+          </button>
+        }
+      </div>
+    }
+
     @if (showCalendar()) {
       <temporal-calendar
         [activeDay]="pendingDay()"
@@ -225,7 +243,8 @@
         [rangeGestures]="twoFields()"
         [rangeStart]="internalRange().start"
         [rangeEnd]="internalRange().end"
-        [locale]="locale()"
+        [dayFilter]="filterDay()"
+        [locale]="effectiveLocale()"
         [zone]="effectiveZone()"
         [now]="now()"
         (picked)="pickDate($event)"

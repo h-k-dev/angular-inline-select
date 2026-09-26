@@ -40,7 +40,8 @@ import {
 import {
   parseTime,
   parseTimeDraft,
-  formatWallClock,
+  timePlaceholder,
+  type TimeDisplayFormat,
   inferTimeShape,
   toInternalTimeRange,
   echoTimeShape,
@@ -53,6 +54,7 @@ import {
 } from './time-codec';
 import { INLINE_TIME_DAY_OFFSET } from './day-offset';
 import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
+import { INLINE_TEMPORAL_MAT_CONTROL } from '../mat-control';
 import { focusInputNearPoint, isUnitSpacePress } from '../inline-unit';
 import {
   makeSideSessionChrome,
@@ -189,6 +191,8 @@ interface TimeSide extends SideCore<DbDateTime> {
   ],
   templateUrl: './angular-inline-time.html',
   styleUrl: './angular-inline-time.scss',
+  // The form-field adapter's one way in (`inlineMatFormField`, /temporal-mat).
+  providers: [{ provide: INLINE_TEMPORAL_MAT_CONTROL, useExisting: AngularInlineTime }],
   host: {
     '[style.display]': 'hidden() ? "none" : null',
   },
@@ -212,16 +216,15 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   ranged = input(false);
 
   /** Reference clock — anchors the day of a time typed into an EMPTY field. */
-  now = input<() => Date>(() => new Date());
+  now = input(() => new Date());
 
   /**
-   * Wall-clock format: `'HH:mm:ss'` displays, parses and composes SECONDS —
-   * rendered as the RAW format string (24 h, meridiem-free), because the
-   * format's own display must parse back and the codec keeps seconds and
-   * day-periods apart. The default `'HH:mm'` keeps the Intl-localized
-   * display.
+   * Wall-clock format: `'HH:mm'`, or `'HH:mm:ss'` to display, parse and
+   * compose SECONDS. Both render as the RAW format string (24 h,
+   * meridiem-free), because the display must parse back and the codec keeps
+   * seconds and day-periods apart.
    */
-  format = input<'HH:mm' | 'HH:mm:ss'>('HH:mm');
+  format = input<TimeDisplayFormat>('HH:mm');
 
   /** Form Value Contract. */
   errors = input<readonly ValidationError.WithOptionalFieldTree[]>([]);
@@ -232,7 +235,8 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   invalid = input(false);
   hidden = input(false);
 
-  placeholder = input('time');
+  /** Overrides the per-format placeholder (`'HH:MM'` …). */
+  placeholder = input<string | undefined>(undefined);
   /**
    * End-field placeholder override. Unset, a FULLY EMPTY range shows the
    * placeholder on both sides; once a start exists the end side switches
@@ -243,7 +247,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   protected effectiveEndPlaceholder = computed(() => {
     const explicit = this.endPlaceholder();
     if (explicit !== undefined) return explicit;
-    return this.internalRange().start === null ? this.placeholder() : '…';
+    return this.internalRange().start === null ? this.placeholderText() : '…';
   });
 
   /**
@@ -251,7 +255,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
    * resolved placeholder text, so hosting containers never branch on the
    * concrete control.
    */
-  readonly placeholderText = computed(() => this.placeholder());
+  readonly placeholderText = computed(() => this.placeholder() ?? timePlaceholder(this.format()));
 
   /** Accessible base name; ranged fields append " start" / " end". */
   ariaLabel = input<string | undefined>(undefined);
@@ -292,7 +296,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
    * The rounding grid for a RANGE's length, in seconds (1 = off): the settled
    * duration lands on a multiple and the END SNAPS to `start + duration`.
    */
-  intervalStep = input<number>(1);
+  intervalStep = input(1);
 
   /** How the range's length lands on the `intervalStep` grid (default: up). */
   intervalRounding = input<IntervalRounding>('ceil');
@@ -373,7 +377,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   );
 
   /** Form Value Contract: touch — emitted whenever a session settles. */
-  touch = output<void>();
+  touch = output();
 
   /**
    * THE consumer commit event — the family DNA: fires once per changed
@@ -421,7 +425,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
    * path updates the side it owns and the echo + dedupe live in exactly one
    * place — no positional (start, end) pairs threaded through call sites.
    */
-  readonly internalRange = linkedSignal<InlineTimeValue, InternalTimeRange>({
+  readonly internalRange = linkedSignal({
     source: this.value,
     computation: (value) => toInternalTimeRange(value),
     set: (range) => {
@@ -430,18 +434,10 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     },
   });
 
-  /**
-   * A side's wall-clock display. The default format is Intl-localized;
-   * `'HH:mm:ss'` renders the RAW format string (meridiem-free — the
-   * format's own display must parse back).
-   */
+  /** A side's wall-clock display — the RAW `format()` string (it parses back). */
   #wallClockOf(instant: DbDateTime | null): string {
-    if (this.format() === 'HH:mm:ss') {
-      const dateTime = toDateTime(instant, this.effectiveZone());
-      return dateTime === null ? '' : dateTime.toFormat(this.format());
-    }
-
-    return formatWallClock(localTimeOf(instant, this.effectiveZone()), this.locale());
+    const dateTime = toDateTime(instant, this.effectiveZone());
+    return dateTime === null ? '' : dateTime.toFormat(this.format());
   }
 
   // -- The two sides -----------------------------------------------------------
@@ -565,7 +561,11 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
 
   /** The panel appears only to carry an error — there is no live preview. */
   protected panelOpen = computed(
-    () => this.editing() && !this.externalErrors() && !this.#panelDismissed() && this.errorSlotVisible(),
+    () =>
+      this.editing() &&
+      !this.externalErrors() &&
+      !this.#panelDismissed() &&
+      this.errorSlotVisible(),
   );
 
   /** Public: whether the panel is showing (hosting containers coordinate on it). */
@@ -614,7 +614,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   // -- Sizing (no layout shift: content-sized, placeholder-floored) -------------
 
   protected sizeOf(key: SideKey): number {
-    const placeholder = key === 'end' ? this.effectiveEndPlaceholder() : this.placeholder();
+    const placeholder = key === 'end' ? this.effectiveEndPlaceholder() : this.placeholderText();
     return sideSize(this.#side(key).draft(), placeholder);
   }
 
@@ -999,12 +999,12 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
 
   /**
    * A pick from the OS picker: replaces the focused side's draft while a
-   * session is open, commits immediately while idle (the flag-picker
-   * convention).
+   * session is open; idle, it commits through a full settlement — the same
+   * touch, `saved` and model cadence as a typed commit. A CLEARED picker
+   * (`''`) is a real gesture and clears the side.
    */
   protected handleNativePick(raw: string) {
-    const time = parseTime(raw);
-    if (time === undefined) return;
+    if (parseTime(raw) === undefined) return;
 
     // The pick belongs to the side the picker was OPENED for — focus may
     // have strayed since (the change fires on close/scrub, not on gesture).
@@ -1017,22 +1017,12 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
       return;
     }
 
-    // Idle: one whole commit — anchor like an idle session would.
-    const instant =
-      time === null ? null : composeDbEntry(this.#anchorDay(), time, this.effectiveZone());
-    const before = this.value();
-    this.#reconcile(key, instant, false);
-    if (!timeValuesEqual(this.value(), before)) {
-      this.#emitSavedModel();
-      this.saved.emit({
-        value: this.value(),
-        changed: true,
-        dayOverflow: 0,
-        explicitDay: false,
-        side: key,
-      });
-    }
+    // Idle: one whole settlement, anchored like an idle session would be.
+    this.#openSession(key);
+    side.draft.set(raw); // the setter marks the side dirty
+    this.#settle(key);
   }
+
 
   // -- Clear affordance (idle hover bubble; per-side for a range) --------------
 

@@ -14,24 +14,12 @@ import { Subject } from 'rxjs';
 import { _IdGenerator } from '@angular/cdk/a11y';
 import { MAT_FORM_FIELD, MatFormFieldControl } from '@angular/material/form-field';
 
-import {
-  AngularInlineDate,
-  AngularInlineTime,
-  AngularInlineDuration,
-} from 'angular-inline-select/temporal';
+import { INLINE_TEMPORAL_MAT_CONTROL } from 'angular-inline-select/temporal';
 
 /**
- * The signal surface the adapter leans on — nothing beyond what the
- * temporal controls ALREADY expose as `FormValueControl`s plus their public
- * presentational verdicts. Structural on purpose: the controls implement no
- * adapter interface, import nothing from this entry point, and stay
- * entirely mat-ignorant (the deliberate inversion of iusta's adapter, where
- * the control itself injects the form field and branches on it).
- */
-type InlineTemporalControl = AngularInlineDate | AngularInlineTime | AngularInlineDuration;
-
-/**
- * Hosts an inline temporal control inside `<mat-form-field>`:
+ * Hosts an inline temporal control inside `<mat-form-field>`. It finds the
+ * control through `INLINE_TEMPORAL_MAT_CONTROL` (which every temporal
+ * control provides on itself), so it mounts either as an attribute —
  *
  * ```html
  * <mat-form-field>
@@ -40,27 +28,37 @@ type InlineTemporalControl = AngularInlineDate | AngularInlineTime | AngularInli
  * </mat-form-field>
  * ```
  *
- * ALL Material knowledge lives here — the directive provides
- * `MatFormFieldControl`, derives every member from the control's public
- * signals, and bridges them into the `stateChanges` Subject Material still
+ * — or as a HOST DIRECTIVE of the control, so consumer templates change
+ * nothing. Outside a mat-form-field it is inert.
+ *
+ * Provides `MatFormFieldControl`, derives every member from the control's
+ * public signals (label float = focused || !empty, `errorState` = the
+ * field's own verdict, `ngControl` = null — signal forms), and bridges one
+ * equality-guarded snapshot into the `stateChanges` Subject Material still
  * wants. The control's own chrome rests via the generic BARE-CHROME host
- * classes (a container seam, not a mat one — dense table cells can use the
- * same classes).
+ * classes.
  */
 @Directive({
-  selector:
-    'angular-inline-date[inlineMatFormField], angular-inline-time[inlineMatFormField], angular-inline-duration[inlineMatFormField]',
+  selector: '[inlineMatFormField]',
   providers: [{ provide: MatFormFieldControl, useExisting: InlineMatFormField }],
   host: {
-    class: 'inline-field-bare',
-    '[class.inline-field-bare--hide-placeholder]': '!labelIsFloating',
-    '[attr.id]': 'id',
+    // BARE CHROME only where a container actually draws the chrome — as a
+    // host directive it is MOUNTED EVERYWHERE, so outside a mat-form-field
+    // the control must keep its own dashed underline.
+    '[class.inline-field-bare]': 'inMatFormField',
+    '[class.inline-field-bare--hide-placeholder]': 'inMatFormField && !labelIsFloating',
+    '[attr.id]': 'inMatFormField ? id : null',
   },
 })
 export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestroy {
-  readonly #control: InlineTemporalControl;
+  readonly #control = inject(INLINE_TEMPORAL_MAT_CONTROL, { self: true });
   readonly #element = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /** The hosting mat-form-field, if any — the adapter is inert everywhere else. */
   readonly #formField = inject(MAT_FORM_FIELD, { optional: true });
+
+  /** Whether a mat-form-field actually hosts us — inert everywhere else. */
+  protected readonly inMatFormField = this.#formField !== null;
 
   /** Signals → the Subject Material still wants (it runs its own CD off this). */
   readonly stateChanges = new Subject<void>();
@@ -70,7 +68,7 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
   /** Signal forms, not Reactive Forms — Material reads `errorState` instead. */
   readonly ngControl = null;
 
-  /** `mat-form-field-type-inline-temporal` lands on the form-field root. */
+  /** `mat-mdc-form-field-type-inline-temporal` lands on the form-field root. */
   readonly controlType = 'inline-temporal';
 
   /** The host is a wrapper, not a native input — no `label[for]` wiring. */
@@ -82,53 +80,36 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
    * Panel state SNAPSHOTTED at the chrome mousedown: by the time the
    * click's `onContainerClick` runs, the CDK outside-click dispatcher
    * (document capture) has ALREADY dismissed an open panel — reading live
-   * state there would re-open it, the exact close-reopen flicker this
-   * adapter exists to prevent.
+   * state there would re-open it (the close-reopen flicker).
    */
   #panelWasOpen = false;
 
+  #placeholder(): string {
+    return this.#control.placeholderText();
+  }
+
   constructor() {
-    const control =
-      inject(AngularInlineDate, { optional: true, self: true }) ??
-      inject(AngularInlineTime, { optional: true, self: true }) ??
-      inject(AngularInlineDuration, { optional: true, self: true });
-    if (control === null) {
-      throw new Error(
-        'inlineMatFormField must sit on an angular-inline-date/-time/-duration element.',
-      );
-    }
-    this.#control = control;
-
-    // The form field renders the errors (`mat-error`): a control with its own
-    // error overlay keeps it closed. Duck-typed, like `overlayOrigin` below —
-    // the date's panel is its calendar, which stays.
-    if (this.#formField !== null && 'externalErrors' in this.#control) {
-      this.#control.externalErrors.set(true);
-    }
-
-    // Anchor the date control's calendar to the form field's FLEX box (what
-    // mat-select/-datepicker/-autocomplete use), not the bare input wrapper —
-    // so the panel drops below the underline instead of at the text baseline.
-    // The control never learns what mat is; it only receives a CDK-generic
-    // ElementRef through its `overlayOrigin` seam. `getConnectedOverlayOrigin`
-    // reads a ViewChild, so defer to afterNextRender below.
-    const formField = this.#formField;
-
     // Container CHROME must not steal focus: a mousedown on the box's
     // padding/label/outline would blur the input, settle the session and
-    // close the panel — and the click's `onContainerClick` would then
-    // refocus and REOPEN it (the close-reopen flicker). Preventing the
-    // chrome mousedown keeps the session alive, so the click below can be
-    // an honest TOGGLE. The control's own surfaces (inside our host) keep
-    // their native behavior.
+    // close the panel. Preventing it keeps the session alive, so the click
+    // below can be an honest TOGGLE. The control's own surfaces (inside
+    // our host) keep their native behavior.
+    // The form field renders the errors (`mat-error`): a control with its own
+    // error overlay keeps it closed.
+    if (this.#formField !== null) this.#control.externalErrors?.set(true);
+
     const injector = inject(Injector);
     const destroyRef = inject(DestroyRef);
     afterNextRender(
       () => {
-        // Duck-typed: only panel-floating controls (the date's calendar)
-        // carry the seam; the adapter never branches on the concrete class.
-        if (formField !== null && 'overlayOrigin' in this.#control) {
-          this.#control.overlayOrigin.set(formField.getConnectedOverlayOrigin());
+        // Anchor a panel-floating control's overlay (the date editable's
+        // calendar) to the form field's text-field box (what mat-select/
+        // -datepicker use) — so the panel drops below the underline instead
+        // of at the input's text baseline. The control never learns what mat
+        // is; it only receives a CDK-generic ElementRef through its OPTIONAL
+        // `overlayOrigin` contract seam.
+        if (this.#formField !== null) {
+          this.#control.overlayOrigin?.set(this.#formField.getConnectedOverlayOrigin());
         }
 
         const host = this.#element.nativeElement;
@@ -147,8 +128,7 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
     );
 
     // One equality-guarded snapshot of everything Material renders from;
-    // any change pokes stateChanges exactly once (the iusta bridge idea,
-    // minus the control coupling).
+    // any change pokes stateChanges exactly once.
     const snapshot = computed(() => ({
       value: this.#control.value(),
       focused: this.#control.editing(),
@@ -158,6 +138,7 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
       errorState: this.#control.errorsVisible(),
       placeholder: this.#placeholder(),
     }));
+
     effect(() => {
       snapshot();
       untracked(() => this.stateChanges.next());
@@ -168,13 +149,8 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
     return this.#control.value();
   }
 
-  /** Every control resolves its own default — read the uniform verdict, never the input. */
-  #placeholder(): string {
-    return this.#control.placeholderText();
-  }
-
   get placeholder(): string {
-    return this.#placeholder();
+    return this.#control.placeholderText();
   }
 
   get focused(): boolean {
@@ -229,10 +205,10 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
   }
 
   /**
-   * The container click is the 📅-icon gesture writ large: unfocused it
-   * opens (focus starts the session, the panel follows), focused it
-   * TOGGLES the panel. Clicks landing on the control's own surfaces are
-   * ignored here — the control already handled them.
+   * The container click is the trigger-icon gesture writ large: unfocused
+   * it opens (focus starts the session), focused it TOGGLES the panel.
+   * Clicks landing on the control's own surfaces are ignored here — the
+   * control already handled them.
    */
   onContainerClick(event: MouseEvent): void {
     if (this.#element.nativeElement.contains(event.target as Node)) return;

@@ -239,7 +239,7 @@ export class AngularInlineText implements FormValueControl<string> {
    * Form Value Contract: touch — emitted on the closing edge of an edit
    * session (our blur analogue), on a failed save attempt, and on clear.
    */
-  touch = output<void>();
+  touch = output();
 
   /**
    * Emitted when a draft is discarded (Escape, Discard button, scrim click,
@@ -585,7 +585,7 @@ export class AngularInlineText implements FormValueControl<string> {
    * branch while a session is open.
    */
   #selfTouched = signal(false);
-  #sessionTouched = linkedSignal<boolean, boolean>({
+  #sessionTouched = linkedSignal({
     source: () => this.editing(),
     computation: () => false,
   });

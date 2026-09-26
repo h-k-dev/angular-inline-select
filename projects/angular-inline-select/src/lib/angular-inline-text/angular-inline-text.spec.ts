@@ -176,7 +176,7 @@ class ConfirmClearHost {
 })
 class DraftTextHost {
   /** The display is a grouped rendering; the editor works on the digits. */
-  value = signal<string>('1.250.000,50');
+  value = signal('1.250.000,50');
   toDraft = (committed: string) => committed.replace(/\./g, '');
   sessions: InlineTextSaved[] = [];
 }
@@ -1616,7 +1616,11 @@ describe('AngularInlineText — panel keys from the action buttons', () => {
   });
 
   function actionButtons(): HTMLButtonElement[] {
-    return Array.from(document.querySelectorAll<HTMLButtonElement>('.editable-panel .editable-panel__actions button'));
+    return Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        '.editable-panel .editable-panel__actions button',
+      ),
+    );
   }
 
   function keydown(target: Element, init: KeyboardEventInit) {
@@ -1692,7 +1696,12 @@ describe('AngularInlineText — panel keys from the action buttons', () => {
   selector: 'custom-panel-actions',
   template: `
     <button type="button" class="custom-cancel" (click)="context.cancel()">No</button>
-    <button type="button" class="custom-accept" [attr.data-dirty]="context.dirty()" (click)="context.accept()">
+    <button
+      type="button"
+      class="custom-accept"
+      [attr.data-dirty]="context.dirty()"
+      (click)="context.accept()"
+    >
       Yes
     </button>
   `,
@@ -1717,7 +1726,8 @@ class PanelActionsTemplateHost {
 }
 
 describe('AngularInlineText — the panel-actions slot', () => {
-  const actions = () => document.querySelector('.editable-panel .editable-panel__actions') as HTMLElement | null;
+  const actions = () =>
+    document.querySelector('.editable-panel .editable-panel__actions') as HTMLElement | null;
 
   function keydown(target: Element, init: KeyboardEventInit) {
     const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
@@ -1731,7 +1741,9 @@ describe('AngularInlineText — the panel-actions slot', () => {
 
     const buttons = Array.from(actions()!.querySelectorAll('button'));
     expect(buttons.map((b) => b.textContent?.trim())).toEqual(['Discard', 'Save']);
-    expect(document.querySelector('.editable-panel__message--hint')?.textContent?.trim()).toBe('Unsaved changes');
+    expect(document.querySelector('.editable-panel__message--hint')?.textContent?.trim()).toBe(
+      'Unsaved changes',
+    );
 
     const intl = TestBed.inject(EditableTextIntl);
     intl.saveLabel.set('Speichern');
@@ -1748,7 +1760,9 @@ describe('AngularInlineText — the panel-actions slot', () => {
     let h: Harness<ValueBindingHost>;
 
     beforeEach(() => {
-      TestBed.configureTestingModule({ providers: [provideEditablePanelActions(CustomPanelActions)] });
+      TestBed.configureTestingModule({
+        providers: [provideEditablePanelActions(CustomPanelActions)],
+      });
       h = setup(ValueBindingHost);
     });
 
@@ -1792,7 +1806,9 @@ describe('AngularInlineText — the panel-actions slot', () => {
   });
 
   it('a per-field [editablePanelActions] template wins over the DI renderer', async () => {
-    TestBed.configureTestingModule({ providers: [provideEditablePanelActions(CustomPanelActions)] });
+    TestBed.configureTestingModule({
+      providers: [provideEditablePanelActions(CustomPanelActions)],
+    });
     const h = setup(PanelActionsTemplateHost);
     await typeText(h, 'draft');
 
@@ -1825,7 +1841,10 @@ describe('AngularInlineText — keyboard focus places a caret', () => {
     document.getSelection()?.removeAllRanges();
     focusEvent(display);
 
-    expect(getSelectionOffsets(display)).toEqual({ start: 'initial'.length, end: 'initial'.length });
+    expect(getSelectionOffsets(display)).toEqual({
+      start: 'initial'.length,
+      end: 'initial'.length,
+    });
   });
 
   it('a focus that already carries a caret (a click) keeps it where it landed', () => {

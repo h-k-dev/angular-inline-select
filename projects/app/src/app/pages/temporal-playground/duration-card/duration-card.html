@@ -19,7 +19,7 @@
         <td>
           <angular-inline-duration
             [formField]="durationForm.estimate"
-            [durationFormat]="durationFormat()"
+            [format]="durationFormat()"
             [intervalStep]="60"
             ariaLabel="Estimated effort"
             (savedModelChange)="logEmit('estimate.savedModelChange', $event)"
@@ -31,8 +31,8 @@
   </table>
 
   <div class="form-toggles" role="group" aria-label="Duration format">
-    <button mat-stroked-button (click)="durationFormat.set('h:mm')">h:mm</button>
-    <button mat-stroked-button (click)="durationFormat.set('h:mm:ss')">h:mm:ss</button>
+    <button mat-stroked-button (click)="durationFormat.set('HH:mm')">HH:mm</button>
+    <button mat-stroked-button (click)="durationFormat.set('HH:mm:ss')">HH:mm:ss</button>
     <button mat-stroked-button (click)="durationFormat.set('mm:ss')">mm:ss</button>
     <span class="form-toggles__hint">current: {{ durationFormat() }}</span>
   </div>

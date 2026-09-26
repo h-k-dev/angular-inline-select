@@ -342,7 +342,7 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
   });
 
   /** Form Value Contract: touch — forwarded from the inner control. */
-  touch = output<void>();
+  touch = output();
 
   /**
    * THE consumer commit event — fires once per changed settlement with the

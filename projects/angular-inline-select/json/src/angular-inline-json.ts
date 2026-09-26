@@ -129,7 +129,7 @@ export class AngularInlineJson implements FormValueControl<string> {
   invalid = input(false);
   touched = input(false);
   hidden = input(false);
-  touch = output<void>();
+  touch = output();
 
   /** Whether the field is elevated (an edit session is open). Two-way bindable. */
   editing = model(false);

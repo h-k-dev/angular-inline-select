@@ -26,17 +26,14 @@ import {
   type DateSavedDetails,
   type InlineDateValue,
 } from './date-codec';
-import { dayToDbEntry, dayEndToDbEntry, localDayOf } from '../datetime/db-entry';
+import { localDayOf } from '../datetime/db-entry';
 
-// The value contract: UTC ISO DB entries (local startOf/endOf day) behind,
-// localized calendar days in front. Expectations compose through the same
-// helpers, so specs are TZ-independent.
-const db = dayToDbEntry;
+// The value contract: CALENDAR DATES (`'2026-05-12'`) behind, localized
+// days in front — no time, no zone, so specs are TZ-independent.
 
 /** The commit payloads' start sides, back as local days (spec convenience). */
 const savedStartDays = (details: DateSavedDetails[]) =>
   details.map((d) => d.start?.toFormat('yyyy-MM-dd') ?? null);
-const dbEnd = dayEndToDbEntry;
 
 // A fixed "now" so the specs are deterministic: Tuesday, 12 May 2026.
 const NOW = new Date(2026, 4, 12);
@@ -220,7 +217,7 @@ describe('date shape-echo codec', () => {
   `,
 })
 class DateFormHost {
-  model = signal<string | null>(db('2026-05-12'));
+  model = signal<string | null>('2026-05-12');
   field = form(this.model);
   now = () => NOW;
 
@@ -419,7 +416,7 @@ describe('AngularInlineDate (input rehost)', () => {
     press(h, h.start(), 'Enter');
 
     expect(savedStartDays(h.host.saved)).toEqual(['2026-12-24']);
-    expect(h.host.sessions).toEqual([{ value: db('2026-12-24'), changed: true }]);
+    expect(h.host.sessions).toEqual([{ value: '2026-12-24', changed: true }]);
     expect(h.start().value).toBe('Dec 24, 2026');
     expect(h.panel()).toBeNull();
     // Focus stays — Enter never traps NOR moves it.
@@ -432,7 +429,7 @@ describe('AngularInlineDate (input rehost)', () => {
 
     expect(h.host.saved).toEqual([]);
     expect(h.host.sessions).toEqual([]);
-    expect(h.host.field().value()).toBe(db('2026-05-12'));
+    expect(h.host.field().value()).toBe('2026-05-12');
     expect(h.start().getAttribute('aria-invalid')).toBe('true');
   });
 
@@ -440,14 +437,14 @@ describe('AngularInlineDate (input rehost)', () => {
     // A readable intermediate wrote live; the garbage suffix must still
     // revert to the SESSION baseline, not the intermediate.
     type(h, h.start(), '24.12.2026');
-    expect(h.host.field().value()).toBe(db('2026-12-24')); // live channel
+    expect(h.host.field().value()).toBe('2026-12-24'); // live channel
     type(h, h.start(), '24.12.2026x');
     await blurAway(h);
 
-    expect(h.host.field().value()).toBe(db('2026-05-12'));
+    expect(h.host.field().value()).toBe('2026-05-12');
     expect(h.start().value).toBe('May 12, 2026');
     expect(h.host.saved).toEqual([]);
-    expect(h.host.sessions).toEqual([{ value: db('2026-05-12'), changed: false }]);
+    expect(h.host.sessions).toEqual([{ value: '2026-05-12', changed: false }]);
     expect(h.panel()).toBeNull();
   });
 
@@ -456,7 +453,7 @@ describe('AngularInlineDate (input rehost)', () => {
     await blurAway(h);
 
     expect(savedStartDays(h.host.saved)).toEqual(['2026-12-24']);
-    expect(h.host.sessions).toEqual([{ value: db('2026-12-24'), changed: true }]);
+    expect(h.host.sessions).toEqual([{ value: '2026-12-24', changed: true }]);
   });
 
   it('Escape stage 1 peels the panel and leaves the draft ALONE', () => {
@@ -468,7 +465,7 @@ describe('AngularInlineDate (input rehost)', () => {
     // The panel is gone; the draft — and the live value it wrote — stand.
     expect(h.panel()).toBeNull();
     expect(h.start().value).toBe('24.12.2026');
-    expect(h.host.field().value()).toBe(db('2026-12-24'));
+    expect(h.host.field().value()).toBe('2026-12-24');
     expect(h.host.saved).toEqual([]);
   });
 
@@ -477,7 +474,7 @@ describe('AngularInlineDate (input rehost)', () => {
     press(h, h.start(), 'Escape'); // stage 1: panel
     press(h, h.start(), 'Escape'); // stage 2: draft
 
-    expect(h.host.field().value()).toBe(db('2026-05-12'));
+    expect(h.host.field().value()).toBe('2026-05-12');
     expect(h.start().value).toBe('May 12, 2026');
     expect(h.host.saved).toEqual([]);
     expect(h.panel()).toBeNull();
@@ -501,7 +498,7 @@ describe('AngularInlineDate (input rehost)', () => {
 
     // No press spent on the error panel: the revert lands immediately.
     expect(h.start().value).toBe('May 12, 2026');
-    expect(h.host.field().value()).toBe(db('2026-05-12'));
+    expect(h.host.field().value()).toBe('2026-05-12');
     expect(h.panel()).toBeNull();
   });
 
@@ -645,21 +642,20 @@ describe('AngularInlineDate (input rehost)', () => {
   template: ` <angular-inline-date [(value)]="value" locale="en" zone="Asia/Tokyo" [now]="now" /> `,
 })
 class ZonedDateHost {
-  value = signal<InlineDateValue>(dayToDbEntry('2026-07-21', 'Asia/Tokyo'));
+  value = signal<InlineDateValue>('2026-07-21');
   now = () => NOW;
 }
 
 describe('AngularInlineDate with a display zone (T6)', () => {
-  it('speaks the ZONE calendar day at the value boundary', () => {
+  it('the zone decides TODAY, never the value — a calendar date reads the same everywhere', () => {
     const h = setupHost(ZonedDateHost);
 
-    // Tokyo's Jul 21 — whatever day the machine zone thinks this instant is.
     expect(h.start().value).toBe('Jul 21, 2026');
 
     type(h, h.start(), '24.12.2026');
     press(h, h.start(), 'Enter');
 
-    expect(h.host.value()).toBe(dayToDbEntry('2026-12-24', 'Asia/Tokyo'));
+    expect(h.host.value()).toBe('2026-12-24');
     h.start().blur();
   });
 });
@@ -669,7 +665,7 @@ describe('AngularInlineDate — the consumer restore path (the value channel)', 
 
   beforeEach(() => {
     h = setupHost(DateShapeHost);
-    h.host.value.set(db('2026-05-12'));
+    h.host.value.set('2026-05-12');
     h.fixture.detectChanges();
   });
 
@@ -685,11 +681,11 @@ describe('AngularInlineDate — the consumer restore path (the value channel)', 
     );
     await blurAway(h);
 
-    expect(h.host.value()).toBe(db('2026-12-24'));
+    expect(h.host.value()).toBe('2026-12-24');
     const settledSessions = h.host.sessions.length;
 
     // The backend says no — the consumer applies the OLD value again, later.
-    h.host.value.set(db('2026-05-12'));
+    h.host.value.set('2026-05-12');
     h.fixture.detectChanges();
 
     // Accepted through the value channel: display re-derives, and NOTHING
@@ -704,13 +700,13 @@ describe('AngularInlineDate — the consumer restore path (the value channel)', 
     type(h, h.start(), 'not a date');
     await blurAway(h);
 
-    expect(h.host.value()).toBe(db('2026-05-12'));
+    expect(h.host.value()).toBe('2026-05-12');
     expect(h.start().value).toBe('May 12, 2026');
     const settledSessions = h.host.sessions.length;
 
     // The consumer's own restore arrives later with the same old value —
     // it must not re-run anything: same value in, silence out.
-    h.host.value.set(db('2026-05-12'));
+    h.host.value.set('2026-05-12');
     h.fixture.detectChanges();
 
     expect(h.start().value).toBe('May 12, 2026');
@@ -734,12 +730,12 @@ describe('AngularInlineDate two-field range', () => {
 
   it('`ranged` declares the pair — the bound shape never decides the field count', () => {
     h.host.ranged.set(false);
-    h.host.value.set(db('2026-05-12'));
+    h.host.value.set('2026-05-12');
     h.fixture.detectChanges();
     expect(h.inputs().length).toBe(1);
 
     // An object bound to a SINGLE field stays one field.
-    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
     h.fixture.detectChanges();
     expect(h.inputs().length).toBe(1);
 
@@ -761,7 +757,7 @@ describe('AngularInlineDate two-field range', () => {
 
   it('a half-open range switches the empty end side to the … placeholder', () => {
     h.host.ranged.set(true);
-    h.host.value.set({ start: db('2026-05-12'), end: null });
+    h.host.value.set({ start: '2026-05-12', end: null });
     h.fixture.detectChanges();
 
     expect(h.end()!.placeholder).toBe('…');
@@ -784,25 +780,23 @@ describe('AngularInlineDate two-field range', () => {
     focusInput(h, h.end()!); // what Tab does
     await settle(h);
 
-    expect(h.host.value()).toEqual({ start: db('2026-05-12'), end: null });
-    expect(h.host.sessions).toEqual([
-      { value: { start: db('2026-05-12'), end: null }, changed: true },
-    ]);
+    expect(h.host.value()).toEqual({ start: '2026-05-12', end: null });
+    expect(h.host.sessions).toEqual([{ value: { start: '2026-05-12', end: null }, changed: true }]);
 
     type(h, h.end()!, '15.5.2026');
     await blurAway(h);
 
-    expect(h.host.value()).toEqual({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    expect(h.host.value()).toEqual({ start: '2026-05-12', end: '2026-05-15' });
     expect(h.host.sessions.length).toBe(2);
   });
 
   it('each side owns its clear — the other side is NEVER nuked', async () => {
-    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
     h.fixture.detectChanges();
 
     type(h, h.end()!, '');
     press(h, h.end()!, 'Enter');
-    expect(h.host.value()).toEqual({ start: db('2026-05-12'), end: null });
+    expect(h.host.value()).toEqual({ start: '2026-05-12', end: null });
 
     type(h, h.start(), '');
     press(h, h.start(), 'Enter');
@@ -810,7 +804,7 @@ describe('AngularInlineDate two-field range', () => {
   });
 
   it('a typed end BEFORE the start commits the SORTED pair (the calendar-pick law)', async () => {
-    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
     h.fixture.detectChanges();
 
     type(h, h.end()!, '2026-05-08');
@@ -818,21 +812,21 @@ describe('AngularInlineDate two-field range', () => {
 
     // Days carry no overnight reading (that is the TIME control's roll) —
     // backwards just sorts, exactly like an inverted calendar pick.
-    expect(h.host.value()).toEqual({ start: db('2026-05-08'), end: dbEnd('2026-05-12') });
+    expect(h.host.value()).toEqual({ start: '2026-05-08', end: '2026-05-12' });
     expect(h.start().value).toBe('May 8, 2026');
     expect(h.end()!.value).toBe('May 12, 2026');
     expect(h.host.sessions.at(-1)!.changed).toBe(true);
   });
 
   it('Tab-advance settles the departing side BEFORE the landing session baselines — Escape never resurrects a pre-sort pair', async () => {
-    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
     h.fixture.detectChanges();
 
     type(h, h.end()!, '2026-05-08'); // live channel: inverted, not yet sorted
     focusInput(h, h.start()); // what Tab does — the end settles NOW and sorts
     h.fixture.detectChanges();
 
-    const sorted = { start: db('2026-05-08'), end: dbEnd('2026-05-12') };
+    const sorted = { start: '2026-05-08', end: '2026-05-12' };
     expect(h.host.value()).toEqual(sorted);
 
     // The start session's baseline is the POST-sort day — Escape is a no-op.
@@ -842,23 +836,23 @@ describe('AngularInlineDate two-field range', () => {
   });
 
   it('a start edit in the one-key { start } shape moves the single-day range whole', async () => {
-    h.host.value.set({ start: db('2026-05-12') });
+    h.host.value.set({ start: '2026-05-12' });
     h.fixture.detectChanges();
 
     type(h, h.start(), '20.5.2026');
     press(h, h.start(), 'Enter');
 
-    expect(h.host.value()).toEqual({ start: db('2026-05-20') });
+    expect(h.host.value()).toEqual({ start: '2026-05-20' });
 
     // Only an END edit creates a distinct end (and grows the key).
     type(h, h.end()!, '25.5.2026');
     press(h, h.end()!, 'Enter');
 
-    expect(h.host.value()).toEqual({ start: db('2026-05-20'), end: dbEnd('2026-05-25') });
+    expect(h.host.value()).toEqual({ start: '2026-05-20', end: '2026-05-25' });
   });
 
   it('null remembers the last seen shape: a cleared one-key field stays one-key', async () => {
-    h.host.value.set({ start: db('2026-05-12') });
+    h.host.value.set({ start: '2026-05-12' });
     h.fixture.detectChanges();
 
     type(h, h.start(), '');
@@ -886,15 +880,15 @@ describe('AngularInlineDate two-field range', () => {
     document.dispatchEvent(new MouseEvent('mouseup'));
     await settle(h);
 
-    expect(h.host.value()).toEqual({ start: db('2026-05-06'), end: dbEnd('2026-05-09') });
+    expect(h.host.value()).toEqual({ start: '2026-05-06', end: '2026-05-09' });
     expect(h.host.sessions).toEqual([
-      { value: { start: db('2026-05-06'), end: dbEnd('2026-05-09') }, changed: true },
+      { value: { start: '2026-05-06', end: '2026-05-09' }, changed: true },
     ]);
     expect(h.panel()).toBeNull();
   });
 
   it('a reversed drag sorts; Ctrl+click restarts the range half-open', async () => {
-    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
     h.fixture.detectChanges();
 
     focusInput(h, h.start());
@@ -904,7 +898,7 @@ describe('AngularInlineDate two-field range', () => {
     );
     await settle(h);
 
-    expect(h.host.value()).toEqual({ start: db('2026-05-20'), end: null });
+    expect(h.host.value()).toEqual({ start: '2026-05-20', end: null });
     expect(document.activeElement).toBe(h.end()!);
     expect(h.panel()).not.toBeNull(); // stays open for the completing pick
 
@@ -916,13 +910,13 @@ describe('AngularInlineDate two-field range', () => {
     document.dispatchEvent(new MouseEvent('mouseup'));
     await settle(h);
 
-    expect(h.host.value()).toEqual({ start: db('2026-05-22'), end: dbEnd('2026-05-25') });
+    expect(h.host.value()).toEqual({ start: '2026-05-22', end: '2026-05-25' });
   });
 
   // Ctrl+click and drag are SETTLEMENTS, not side doors: touch, then exactly
   // one change-gated `saved`, and the model event only when something changed.
   it('Ctrl+click settles like any commit — touch, ONE saved, the half-open model', async () => {
-    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
     h.fixture.detectChanges();
 
     focusInput(h, h.start());
@@ -936,7 +930,7 @@ describe('AngularInlineDate two-field range', () => {
     // The start session then closes on the handover to the end side — an
     // unchanged close, so the CHANGED settlement is the Ctrl+click alone.
     expect(h.host.sessions.filter((s) => s.changed)).toEqual([
-      { value: { start: db('2026-05-20'), end: null }, changed: true },
+      { value: { start: '2026-05-20', end: null }, changed: true },
     ]);
     expect(h.host.saved.length).toBe(1);
     expect(h.host.saved[0].start?.toFormat('yyyy-MM-dd')).toBe('2026-05-20');
@@ -944,7 +938,7 @@ describe('AngularInlineDate two-field range', () => {
   });
 
   it('a drag that repaints the committed range is an UNCHANGED settlement — no model event', async () => {
-    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
     h.fixture.detectChanges();
 
     focusInput(h, h.start());
@@ -955,9 +949,9 @@ describe('AngularInlineDate two-field range', () => {
     document.dispatchEvent(new MouseEvent('mouseup'));
     await settle(h);
 
-    expect(h.host.value()).toEqual({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    expect(h.host.value()).toEqual({ start: '2026-05-12', end: '2026-05-15' });
     expect(h.host.sessions).toEqual([
-      { value: { start: db('2026-05-12'), end: dbEnd('2026-05-15') }, changed: false },
+      { value: { start: '2026-05-12', end: '2026-05-15' }, changed: false },
     ]);
     expect(h.host.saved).toEqual([]);
   });
@@ -970,14 +964,14 @@ describe('AngularInlineDate two-field range', () => {
     gridCell('2026-05-20')!.click();
     await settle(h);
 
-    expect(h.host.value()).toEqual({ start: db('2026-05-20'), end: null });
+    expect(h.host.value()).toEqual({ start: '2026-05-20', end: null });
     expect(document.activeElement).toBe(h.end()!);
     expect(h.panel()).not.toBeNull(); // the popup stays for the second pick
 
     gridCell('2026-05-12')!.click(); // BEFORE the start: the pair sorts
     await settle(h);
 
-    expect(h.host.value()).toEqual({ start: db('2026-05-12'), end: dbEnd('2026-05-20') });
+    expect(h.host.value()).toEqual({ start: '2026-05-12', end: '2026-05-20' });
     // BOTH inputs display the SORTED pair (the picked side re-baselines on
     // its swapped day — a later blur must not un-sort it).
     expect(h.start().value).toBe('May 12, 2026');
@@ -1028,7 +1022,7 @@ describe('AngularInlineDate — clear affordance', () => {
 
   it('showClear false never offers a bubble, template or not — on either side', () => {
     h.host.ranged.set(true);
-    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
     h.host.showClear.set(false);
     h.fixture.detectChanges();
 
@@ -1040,7 +1034,7 @@ describe('AngularInlineDate — clear affordance', () => {
 
   it('stamps the consumer template per side, each labelled and side-tagged', () => {
     h.host.ranged.set(true);
-    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
     h.fixture.detectChanges();
 
     hover(h.start());
@@ -1059,7 +1053,7 @@ describe('AngularInlineDate — clear affordance', () => {
 
   it('the handed-over callback is side-bound: the other side is NEVER nuked', () => {
     h.host.ranged.set(true);
-    h.host.value.set({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
     h.fixture.detectChanges();
 
     hover(h.end()!);
@@ -1067,13 +1061,13 @@ describe('AngularInlineDate — clear affordance', () => {
     h.fixture.detectChanges();
 
     // Nothing committed yet — the consumer is still deciding (dialog open).
-    expect(h.host.value()).toEqual({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+    expect(h.host.value()).toEqual({ start: '2026-05-12', end: '2026-05-15' });
     expect(h.host.sessions).toEqual([]);
 
     h.host.pending.get('end')!();
     h.fixture.detectChanges();
 
-    expect(h.host.value()).toEqual({ start: db('2026-05-12'), end: null });
+    expect(h.host.value()).toEqual({ start: '2026-05-12', end: null });
     expect(h.host.sessions.at(-1)).toMatchObject({ changed: true });
 
     // Focus returns to the side that was cleared, not to the pair's head.
@@ -1082,7 +1076,7 @@ describe('AngularInlineDate — clear affordance', () => {
   });
 
   it('a single field reports no side and clears the whole value', () => {
-    h.host.value.set(db('2026-05-12'));
+    h.host.value.set('2026-05-12');
     h.fixture.detectChanges();
 
     hover(h.fixture.nativeElement.querySelector('.inline-date'));
@@ -1093,7 +1087,7 @@ describe('AngularInlineDate — clear affordance', () => {
 
     button.dispatchEvent(new MouseEvent('click'));
     h.fixture.detectChanges();
-    expect(h.host.value()).toEqual(db('2026-05-12'));
+    expect(h.host.value()).toEqual('2026-05-12');
 
     h.host.pending.get('single')!();
     h.fixture.detectChanges();
@@ -1139,14 +1133,14 @@ describe('AngularInlineDate — unresolved injected values', () => {
   });
 
   it('valid and empty injections resolve; a range flags only its broken side', () => {
-    inject(db('2026-05-12'));
+    inject('2026-05-12');
     expect(control.resolved()).toEqual({ start: true, end: true });
 
     inject(null);
     expect(control.resolved()).toEqual({ start: true, end: true });
 
     h.host.ranged.set(true);
-    inject({ start: db('2026-05-12'), end: RAW });
+    inject({ start: '2026-05-12', end: RAW });
     expect(control.resolved()).toEqual({ start: true, end: false });
     expect(h.start().classList).not.toContain('inline-date__input--unresolved');
     expect(h.end()!.classList).toContain('inline-date__input--unresolved');
@@ -1159,9 +1153,9 @@ describe('AngularInlineDate — unresolved injected values', () => {
     type(h, h.start(), '24.12.2026');
     press(h, h.start(), 'Enter');
 
-    expect(h.host.value()).toBe(db('2026-12-24'));
+    expect(h.host.value()).toBe('2026-12-24');
     expect(control.resolved()).toEqual({ start: true, end: true });
-    expect(h.host.sessions).toEqual([{ value: db('2026-12-24'), changed: true }]);
+    expect(h.host.sessions).toEqual([{ value: '2026-12-24', changed: true }]);
     expect(h.start().classList).not.toContain('inline-date__input--unresolved');
   });
 
@@ -1169,7 +1163,7 @@ describe('AngularInlineDate — unresolved injected values', () => {
     inject(RAW);
 
     type(h, h.start(), '24.12.2026');
-    expect(h.host.value()).toBe(db('2026-12-24')); // live channel
+    expect(h.host.value()).toBe('2026-12-24'); // live channel
 
     press(h, h.start(), 'Escape'); // stage 1 peels the panel
     press(h, h.start(), 'Escape'); // stage 2 reverts — to the raw, not null
@@ -1213,7 +1207,7 @@ describe('AngularInlineDate — unresolved injected values', () => {
     expect(h.start().value).toBe(RAW);
 
     // The custom-set clamp: only the codec can flag a side unresolved.
-    inject(db('2026-05-12'));
+    inject('2026-05-12');
     control.resolved.set({ start: false, end: false });
     expect(control.resolved()).toEqual({ start: true, end: true });
 
@@ -1240,7 +1234,7 @@ describe('AngularInlineDate — unresolved injected values', () => {
   `,
 })
 class ScopedDateHost {
-  value = signal<InlineDateValue>(db('2026-05-12'));
+  value = signal<InlineDateValue>('2026-05-12');
   now = () => NOW;
 }
 
@@ -1272,7 +1266,7 @@ describe('AngularInlineDate — the interactive unit', () => {
   it('a range press lands in the NEAREST side, caret at the nearest edge', () => {
     const h = setupHost(DateShapeHost);
     h.host.ranged.set(true);
-    h.host.value.set({ start: db('2026-05-12'), end: db('2026-05-14') });
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-14' });
     h.fixture.detectChanges();
 
     const box = (left: number) => () =>
@@ -1390,7 +1384,7 @@ describe('AngularInlineDate — the interactive unit', () => {
   `,
 })
 class DateActionsHost {
-  value = signal<InlineDateValue>({ start: db('2026-05-12'), end: dbEnd('2026-05-15') });
+  value = signal<InlineDateValue>({ start: '2026-05-12', end: '2026-05-15' });
   now = () => NOW;
 }
 
@@ -1460,7 +1454,7 @@ describe('AngularInlineDate — the opening press', () => {
     expect(
       h.fixture.debugElement
         .query((d) => d.name === 'angular-inline-date')
-        .componentInstance.overlayOpen(),
+        .componentInstance.isOpen(),
     ).toBe(false);
     expect(document.activeElement).toBe(h.start()); // the session survives; only the panel went
   });
@@ -1578,7 +1572,9 @@ describe('AngularInlineDate — affix slots', () => {
   it('renders the prefix and suffix around the field, hidden from assistive tech', () => {
     const fixture = TestBed.createComponent(AffixHost);
     fixture.detectChanges();
-    const affixes = Array.from(fixture.nativeElement.querySelectorAll('.inline-date__affix')) as HTMLElement[];
+    const affixes = Array.from(
+      fixture.nativeElement.querySelectorAll('.inline-date__affix'),
+    ) as HTMLElement[];
 
     expect(affixes.map((a) => a.textContent?.trim())).toEqual(['from', 'CET']);
     expect(affixes.every((a) => a.getAttribute('aria-hidden') === 'true')).toBe(true);
@@ -1592,5 +1588,98 @@ describe('AngularInlineDate — affix slots', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.inline-date__trigger')).toBeNull();
     expect(fixture.nativeElement.querySelector('.unit-suffix')).not.toBeNull();
+  });
+});
+
+// =============================================================================
+// dayFilter — unavailable days are disabled in the grid and the quick picks,
+// and FLAGGED (never swallowed) when typed, with a one-click fix
+// =============================================================================
+
+/** Sundays are unavailable ("Ruhetag"); the suggestion is the Monday after. */
+const isSunday = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay() === 0;
+
+@Component({
+  imports: [AngularInlineDate],
+  template: `
+    <angular-inline-date
+      [(value)]="value"
+      locale="en"
+      [now]="now"
+      [dayFilter]="available"
+      [dayFilterReason]="reason"
+      [dayFilterSuggestion]="suggest"
+    />
+  `,
+})
+class DayFilterHost {
+  value = signal<InlineDateValue>('2026-05-12');
+  now = () => NOW;
+  available = (iso: string) => !isSunday(iso);
+  reason = (iso: string) => (isSunday(iso) ? 'Ruhetag' : null);
+  suggest = (iso: string) => {
+    const next = new Date(`${iso}T12:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    return next.toISOString().slice(0, 10);
+  };
+}
+
+describe('AngularInlineDate dayFilter', () => {
+  it('disables unavailable grid cells and refuses their pick', async () => {
+    const h = setupHost(DayFilterHost);
+    focusInput(h, h.start());
+
+    expect(gridCell('2026-05-17')?.hasAttribute('data-disabled')).toBe(true);
+    gridCell('2026-05-17')!.click();
+    h.fixture.detectChanges();
+    expect(h.host.value()).toBe('2026-05-12');
+
+    await blurAway(h);
+  });
+
+  it('KEEPS a typed unavailable day, names the reason and offers the suggestion', async () => {
+    const h = setupHost(DayFilterHost);
+
+    type(h, h.start(), '17.5.2026');
+    expect(document.querySelector('.inline-date__notice')?.textContent).toContain(
+      'is not available — Ruhetag',
+    );
+
+    press(h, h.start(), 'Enter');
+    expect(h.host.value()).toBe('2026-05-17');
+
+    pointer(h, h.start());
+    const fix = document.querySelector('.inline-date__notice button') as HTMLButtonElement;
+    expect(fix.textContent?.trim()).toBe(`Use ${formatIsoDate('2026-05-18', 'en')}`);
+    fix.click();
+    await settle(h);
+
+    expect(h.host.value()).toBe('2026-05-18');
+    expect(document.querySelector('.inline-date__notice')).toBeNull();
+
+    await blurAway(h);
+  });
+
+  it('keeps a blurred unavailable day too — no snap-back', async () => {
+    const h = setupHost(DayFilterHost);
+
+    type(h, h.start(), '17.5.2026');
+    await blurAway(h);
+
+    expect(h.host.value()).toBe('2026-05-17');
+  });
+
+  it('never offers an unavailable quick pick', async () => {
+    const h = setupHost(DayFilterHost);
+    h.host.now = () => new Date(2026, 4, 18); // Monday: "yesterday" is a Sunday
+    h.fixture.detectChanges();
+    focusInput(h, h.start());
+
+    const picks = [...document.querySelectorAll('.inline-date__quick-pick')].map((b) =>
+      b.textContent?.trim().toLowerCase(),
+    );
+    expect(picks).not.toContain('yesterday');
+
+    await blurAway(h);
   });
 });

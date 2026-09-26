@@ -489,3 +489,36 @@ describe('AngularInlineDuration — the error overlay', () => {
     await blurAway(fixture);
   });
 });
+
+// =============================================================================
+// Ruling 3 (2026-09-26): `format` in the house tokens; the placeholder is its shape
+// =============================================================================
+
+@Component({
+  imports: [AngularInlineDuration],
+  template: `<angular-inline-duration [(value)]="value" [format]="format()" />`,
+})
+class DurationFormatHost {
+  value = signal<number | null>(null);
+  format = signal<'HH:mm' | 'HH:mm:ss' | 'mm:ss'>('HH:mm');
+}
+
+describe('AngularInlineDuration — format', () => {
+  it('shows the format as the placeholder and reads colon notation by it', () => {
+    const fixture = TestBed.createComponent(DurationFormatHost);
+    fixture.detectChanges();
+    const input = () => fixture.nativeElement.querySelector('.inline-duration__input') as HTMLInputElement;
+
+    expect(input().placeholder).toBe('HH:MM');
+
+    fixture.componentInstance.format.set('mm:ss');
+    fixture.componentInstance.value.set(90);
+    fixture.detectChanges();
+    expect(input().placeholder).toBe('MM:SS');
+    expect(input().value).toBe('01:30');
+
+    fixture.componentInstance.format.set('HH:mm:ss');
+    fixture.detectChanges();
+    expect(input().value).toBe('00:01:30');
+  });
+});

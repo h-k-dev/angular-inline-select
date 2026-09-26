@@ -60,11 +60,11 @@ const at = (day: string, time: string) => composeDbEntry(day, time);
 class QuartetHost {
   group = viewChild.required(DateTimeRangeGroup);
 
-  day = signal<string | null>(dayToDbEntry('2026-07-21'));
+  day = signal<string | null>('2026-07-21');
   start = signal<string | null>(at('2026-07-21', '21:00'));
   end = signal<string | null>(at('2026-07-22', '06:00'));
   length = signal<number | null>(32_400);
-  endDay = signal<string | null>(dayToDbEntry('2026-07-22'));
+  endDay = signal<string | null>('2026-07-22');
 
   dateRanges: (ComposedDateRange | null)[] = [];
   timeRanges: (ComposedTimeRange | null)[] = [];
@@ -202,7 +202,7 @@ describe('DateTimeRangeGroup', () => {
   it('day edits shift BOTH instants, preserving wall-clock times and the over-count', async () => {
     await commitInto(h, 0, '24.7.2026');
 
-    expect(h.host.day()).toBe(dayToDbEntry('2026-07-24'));
+    expect(h.host.day()).toBe('2026-07-24');
     expect(h.host.start()).toBe(at('2026-07-24', '21:00'));
     expect(h.host.end()).toBe(at('2026-07-25', '06:00'));
     expect(h.host.length()).toBe(32_400);
@@ -283,10 +283,10 @@ describe('DateTimeRangeGroup', () => {
     await commitInto(h, START, '2026-07-25T08:00');
 
     expect(h.host.start()).toBe(at('2026-07-25', '08:00'));
-    expect(h.host.day()).toBe(dayToDbEntry('2026-07-25')); // day leaf synced
+    expect(h.host.day()).toBe('2026-07-25'); // day leaf synced (a calendar date)
     // The end rolled forward past the new start, wall-clock preserved.
     expect(h.host.end()).toBe(at('2026-07-26', '06:00'));
-    expect(h.host.endDay()).toBe(dayToDbEntry('2026-07-26')); // end-day leaf synced
+    expect(h.host.endDay()).toBe('2026-07-26'); // end-day leaf synced (a calendar date)
     expect(h.host.length()).toBe(22 * 3600);
   });
 
@@ -803,7 +803,7 @@ describe('createTemporalRangeGroup (headless, by-reference roles)', () => {
   `,
 })
 class ShapeBoundDayHost {
-  day = signal<{ start: string | null } | string | null>({ start: dayToDbEntry('2026-07-21') });
+  day = signal<{ start: string | null } | string | null>({ start: '2026-07-21' });
   start = signal<string | null>(at('2026-07-21', '21:00'));
   end = signal<string | null>(at('2026-07-22', '06:00'));
   now = () => NOW;
@@ -836,6 +836,6 @@ describe('DateTimeRangeGroup — leaf shape preservation', () => {
     // The day leaf moved WITH the instant — and stayed the consumer's shape.
     const day = host.day();
     expect(typeof day).toBe('object');
-    expect((day as { start: string }).start).toBe(dayToDbEntry('2026-07-23'));
+    expect((day as { start: string }).start).toBe('2026-07-23');
   });
 });

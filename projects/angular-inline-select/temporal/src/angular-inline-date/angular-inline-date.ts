@@ -58,20 +58,15 @@ import {
   localeDatePlaceholder,
   type DateCommand,
   type DateSavedDetails,
-  type IsoDate,
   type InlineDateValue,
   type DateValueShape,
   type InternalDateRange,
 } from './date-codec';
 import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
+import { INLINE_TEMPORAL_MAT_CONTROL } from '../mat-control';
 import { focusInputNearPoint, isUnitSpacePress } from '../inline-unit';
-import {
-  dayToDbEntry,
-  dayEndToDbEntry,
-  localDayOf,
-  toDateTime,
-  type DbDateTime,
-} from '../datetime/db-entry';
+import { toDateTime } from '../datetime/db-entry';
+import { isIsoDate, type IsoDate } from '../datetime/iso-date';
 import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
 import {
   makeSideSessionChrome,
@@ -127,7 +122,7 @@ interface DateSide extends SideCore<IsoDate> {
    * verbatim — a `baselineDay` of `null` over an occupied value must never
    * settle to `null` (that would be the swallow this control refuses).
    */
-  baselineRaw: DbDateTime | null;
+  baselineRaw: string | null;
   /**
    * The draft's codec reading, CACHED per side (`null` empty, `undefined`
    * unreadable) — the one parse per keystroke every consumer (live channel,
@@ -189,6 +184,8 @@ let nextPanelId = 0;
   ],
   templateUrl: './angular-inline-date.html',
   styleUrl: './angular-inline-date.scss',
+  // The form-field adapter's one way in (`inlineMatFormField`, /temporal-mat).
+  providers: [{ provide: INLINE_TEMPORAL_MAT_CONTROL, useExisting: AngularInlineDate }],
   host: {
     '[style.display]': 'hidden() ? "none" : null',
   },
@@ -198,11 +195,11 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   #injector = inject(Injector);
 
   /**
-   * The committed value channel — polymorphic UTC ISO DB entries (iusta's
-   * `toDBEntry`): a single string binds a single date, `{ start, end? }`
-   * binds a range, and the control ECHOES whichever shape it received.
-   * Behind the back a day is its local `startOf('day')` in UTC (range ends
-   * `endOf('day')`); the DISPLAY is the localized local calendar day.
+   * The committed value channel — CALENDAR DATES (`IsoDate`, `'2026-05-12'`):
+   * a single string binds a single date, `{ start, end? }` binds a range,
+   * and the control ECHOES whichever shape it received; empty is `null`.
+   * No time, no zone — a storage format (a DB entry, a local SQL string)
+   * converts at the consumer's storage boundary, never here.
    */
   value = model<InlineDateValue>(null);
 
@@ -242,7 +239,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const explicit = this.placeholder();
     if (explicit !== undefined) return explicit;
 
-    const locale = this.locale();
+    const locale = this.effectiveLocale();
     return localeDatePlaceholder(locale, this.intl.datePlaceholderTokens(locale));
   });
 
@@ -278,6 +275,9 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   /** Locale for display + parsing (`Intl`); browser default when omitted. */
   locale = input<string | string[] | undefined>(undefined);
+
+  /** The locale every display and parse speaks — the `locale` input, else the browser's. */
+  protected effectiveLocale = computed(() => this.locale());
 
   /**
    * T6 — the DISPLAY ZONE (IANA id): which zone's calendar day the value
@@ -320,8 +320,22 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    */
   quickPicks = input<readonly DateCommand[] | undefined>(undefined);
 
+  /**
+   * The days this field offers — `false` disables a day in the calendar and
+   * the quick picks. A typed unavailable day is KEPT (the consumer's schema
+   * judges it); the panel explains it via `dayFilterReason` and offers
+   * `dayFilterSuggestion`'s day.
+   */
+  dayFilter = input<((iso: IsoDate) => boolean) | undefined>(undefined);
+
+  /** Why an unavailable day is unavailable (a holiday's name); `null` for no reason worth naming. */
+  dayFilterReason = input<((iso: IsoDate) => string | null) | undefined>(undefined);
+
+  /** The nearest available day to offer instead of an unavailable one; unset offers none. */
+  dayFilterSuggestion = input<((iso: IsoDate) => IsoDate | null) | undefined>(undefined);
+
   /** Reference clock — injectable for tests; a fresh `Date` per read otherwise. */
-  now = input<() => Date>(() => new Date());
+  now = input(() => new Date());
 
   /** Affix template passthrough (composition channel + content sugar). */
   prefixTemplate = input<TemplateRef<unknown> | undefined>(undefined);
@@ -356,7 +370,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   );
 
   /** Form Value Contract: touch — emitted whenever a session settles. */
-  touch = output<void>();
+  touch = output();
 
   /**
    * THE consumer commit event — the family DNA: fires once per changed
@@ -404,33 +418,19 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * conversion lives in exactly one place. Echo-equal writes are dropped,
    * so the write-back can never loop.
    */
-  readonly internalRange = linkedSignal<InlineDateValue, InternalDateRange>({
-    source: this.value,
-    computation: (value) => {
-      const zone = this.effectiveZone();
-      const { start, end } = toInternalRange(value);
-      return {
-        start: start === null ? null : localDayOf(start, zone),
-        end: end === null ? null : localDayOf(end, zone),
-      };
-    },
-    set: (range) => {
-      const echoed = this.#daysToDbShape(range, this.shape());
-      if (!dateValuesEqual(echoed, this.value())) this.value.set(echoed);
-    },
+  readonly internalRange = linkedSignal<InternalDateRange, InternalDateRange>({
+    source: () => this.#boundRaw(),
+    computation: ({ start, end }) => ({ start: dayOrNull(start), end: dayOrNull(end) }),
+    set: (range) => this.#writeBound(range),
   });
 
-  /** The value boundary, outbound: local days → DB entries in the echoed shape. */
-  #daysToDbShape(days: InternalDateRange, shape: DateValueShape): InlineDateValue {
-    const zone = this.effectiveZone();
-    const echoed = echoDateShape(days, shape);
-    if (echoed === null) return null;
-    if (typeof echoed === 'string') return dayToDbEntry(echoed, zone);
+  /** The bound channel's per-side entries, readable or not — the ONE read of the value. */
+  #boundRaw = computed((): InternalDateRange => toInternalRange(this.value()));
 
-    const start = echoed.start === null ? null : dayToDbEntry(echoed.start, zone);
-    if (!('end' in echoed)) return { start };
-
-    return { start, end: echoed.end == null ? null : dayEndToDbEntry(echoed.end, zone) };
+  /** The ONE write of the bound channel: a range, echoed in the consumer's shape (equal writes dropped). */
+  #writeBound(range: InternalDateRange) {
+    const echoed = echoDateShape(range, this.shape());
+    if (!dateValuesEqual(echoed, this.value())) this.value.set(echoed);
   }
 
   // -- Unresolved injected values (display, never swallow) -----------------------
@@ -443,7 +443,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * its day reads `null`, but the raw entry keeps existing here.
    */
   readonly #rawRange = computed<InternalDateRange>(() => {
-    const { start, end } = toInternalRange(this.value());
+    const { start, end } = this.#boundRaw();
     return { start: start || null, end: end || null };
   });
 
@@ -453,7 +453,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   }
 
   /** The raw entry a session must restore when its baseline day reads `null` but the value wasn't empty. */
-  #unresolvedRawOf(key: SideKey): DbDateTime | null {
+  #unresolvedRawOf(key: SideKey): string | null {
     return this.#sideUnresolved(key) ? this.#rawRange()[key] : null;
   }
 
@@ -474,27 +474,26 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * re-derives the verdict even after an acknowledgement of the previous
    * one. Date-only — duration and time have no such gate.
    */
-  readonly resolved = linkedSignal<
-    { start: DbDateTime | null; end: DbDateTime | null },
-    DateResolvedState
-  >({
-    source: computed(() => ({
-      start: this.#unresolvedRawOf('start'),
-      // A single-string binding mirrors its raw into `end` INTERNALLY; the
-      // verdict speaks the CONSUMER's shape, where no end side exists.
-      end: this.twoFields() ? this.#unresolvedRawOf('end') : null,
-    })),
-    computation: (unresolved) => ({
-      start: unresolved.start === null,
-      end: unresolved.end === null,
-    }),
-    equal: (a, b) => a.start === b.start && a.end === b.end,
-    set: (next, rawSet) =>
-      rawSet({
-        start: next.start || this.#unresolvedRawOf('start') === null,
-        end: next.end || !this.twoFields() || this.#unresolvedRawOf('end') === null,
+  readonly resolved = linkedSignal<{ start: string | null; end: string | null }, DateResolvedState>(
+    {
+      source: computed(() => ({
+        start: this.#unresolvedRawOf('start'),
+        // A single-string binding mirrors its raw into `end` INTERNALLY; the
+        // verdict speaks the CONSUMER's shape, where no end side exists.
+        end: this.twoFields() ? this.#unresolvedRawOf('end') : null,
+      })),
+      computation: (unresolved) => ({
+        start: unresolved.start === null,
+        end: unresolved.end === null,
       }),
-  });
+      equal: (a, b) => a.start === b.start && a.end === b.end,
+      set: (next, rawSet) =>
+        rawSet({
+          start: next.start || this.#unresolvedRawOf('start') === null,
+          end: next.end || !this.twoFields() || this.#unresolvedRawOf('end') === null,
+        }),
+    },
+  );
 
   // -- The two sides -----------------------------------------------------------
 
@@ -509,7 +508,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const committed = computed(() => this.internalRange()[key]);
     const display = computed(() => {
       const day = committed();
-      if (day !== null) return formatIsoDate(day, this.locale());
+      if (day !== null) return formatIsoDate(day, this.effectiveLocale());
 
       // An unresolved injected value displays VERBATIM — never swallowed.
       return this.#rawRange()[key] ?? '';
@@ -526,7 +525,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       baselineDay: null,
       baselineRaw: null,
       parsed: computed(() =>
-        parseDateInput(core.draft(), this.now()(), this.locale(), this.effectiveZone()),
+        parseDateInput(core.draft(), this.now()(), this.effectiveLocale(), this.effectiveZone()),
       ),
     };
   }
@@ -542,7 +541,8 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   protected focusTarget = this.#chrome.focusTarget;
 
-  protected overlayOpen = signal(false);
+  /** Whether the calendar panel is open. Two-way bindable. */
+  isOpen = model(false);
 
   /**
    * One-shot: the `focusin` that Escape's own focus-return fires must not
@@ -554,7 +554,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   #suppressPanelOnFocus = false;
 
   /** Public: whether the panel is showing (hosting containers coordinate on it). */
-  readonly panelVisible = computed(() => this.overlayOpen());
+  readonly panelVisible = computed(() => this.isOpen());
 
   protected startInput = viewChild<ElementRef<HTMLInputElement>>('startInput');
   protected endInput = viewChild<ElementRef<HTMLInputElement>>('endInput');
@@ -622,11 +622,55 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const iso = side.parsed();
     if (iso === null || iso === undefined) return `… ${raw}`;
 
-    return `${describeIsoDate(iso, this.locale())}`;
+    // An unavailable day's reading lives in the notice below, with its reason.
+    return this.#dayAvailable(iso) ? describeIsoDate(iso, this.effectiveLocale()) : '';
+  });
+
+  /** The effective day filter (a host can derive one; here, the `dayFilter` input). */
+  readonly filterDay = computed(() => this.dayFilter());
+
+  #filterReason = computed(() => this.dayFilterReason());
+
+  #filterSuggestion = computed(() => this.dayFilterSuggestion());
+
+  #dayAvailable(day: IsoDate | null): boolean {
+    if (day === null) return true;
+    const filter = this.filterDay();
+    return filter === undefined || filter(day);
+  }
+
+  /** The day the panel judges: the focused side's readable draft, else its committed day. */
+  #judgedDay = computed((): IsoDate | null => {
+    const side = this.#side(this.focusTarget() ?? 'start');
+    const parsed = side.parsed();
+    return typeof parsed === 'string' ? parsed : side.committed();
+  });
+
+  /** Public: whether the judged day is one the day filter rejects. */
+  readonly dayUnavailable = computed(() => {
+    const day = this.#judgedDay();
+    return day !== null && !this.#dayAvailable(day);
+  });
+
+  /** The panel's notice for an unavailable day: what, why, and the one-click fix. */
+  protected unavailableNotice = computed(() => {
+    const day = this.#judgedDay();
+    if (day === null || this.#dayAvailable(day)) return null;
+
+    const suggestion = this.#filterSuggestion()?.(day) ?? null;
+    return {
+      label: this.intl.unavailableDayLabel(
+        describeIsoDate(day, this.effectiveLocale()),
+        this.#filterReason()?.(day) ?? null,
+      ),
+      suggestion,
+      suggestionLabel:
+        suggestion === null ? '' : this.intl.useDayLabel(formatIsoDate(suggestion, this.effectiveLocale())),
+    };
   });
 
   /** The grid's pending day: the focused side's parsed draft, else its committed day. */
-  protected pendingDay = computed<IsoDate | null>(() => {
+  protected pendingDay = computed(() => {
     const side = this.#side(this.focusTarget() ?? 'start');
     const draft = side.parsed();
     if (typeof draft === 'string') return draft;
@@ -638,11 +682,12 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     this.focusTarget() === 'end' ? this.internalRange().end : this.internalRange().start,
   );
 
-  /** Quick-pick chips: consumer-injected, else yesterday/today/tomorrow. */
-  protected quickPickList = computed(
-    () =>
+  /** Quick-pick chips: consumer-injected, else yesterday/today/tomorrow — day-filtered. */
+  protected quickPickList = computed(() =>
+    (
       this.quickPicks() ??
-      buildDateCommands(this.now()(), this.locale(), this.effectiveZone()).slice(0, 3),
+      buildDateCommands(this.now()(), this.effectiveLocale(), this.effectiveZone()).slice(0, 3)
+    ).filter((command) => this.#dayAvailable(command.iso)),
   );
 
   /**
@@ -669,7 +714,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       focusSide: (key) => this.#chrome.focusSide(key),
       deactivate: (focused) => {
         this.#settle(focused);
-        this.overlayOpen.set(false);
+        this.isOpen.set(false);
         this.focusTarget.set(null);
         this.#inputOf(focused)?.blur();
       },
@@ -712,7 +757,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
     side.draft.set(raw); // the setter marks dirty AND runs the live resolve
     side.saveAttempted.set(false);
-    this.overlayOpen.set(true);
+    this.isOpen.set(true);
   }
 
   /**
@@ -752,20 +797,18 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * the un-swallow: an unresolved injected value survives Escape and
    * snap-back exactly as it arrived, error underline and all.
    */
-  #writeSideRaw(key: SideKey, raw: DbDateTime) {
+  #writeSideRaw(key: SideKey, raw: string) {
     // Slotted by the same move-whole law as the day view — but echoed
     // VERBATIM, deliberately outside `internalRange`: the day-typed view
     // would read the unreadable entry as `null` and swallow the very value
     // this path exists to preserve.
-    const next = this.#sideSlots(key, raw, toInternalRange(this.value()));
-    const echoed = echoDateShape(next, this.shape());
-    if (!dateValuesEqual(echoed, this.value())) this.value.set(echoed);
+    this.#writeBound(this.#sideSlots(key, raw, this.#boundRaw()));
   }
 
   // -- The interactive unit + the hover scope -------------------------------------
 
   /** The wrapper around the inputs — the unit the pointer meets. */
-  protected field = viewChild.required<ElementRef<HTMLElement>>('dateField');
+  protected field = viewChild.required<ElementRef<HTMLElement>>('field');
 
   #unitHost = inject<ElementRef<HTMLElement>>(ElementRef);
   #unitDestroyRef = inject(DestroyRef);
@@ -809,7 +852,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const scope = this.#hoverScope();
     if (scope !== null && scope.contains(event.target as Node)) return;
 
-    this.overlayOpen.set(false);
+    this.isOpen.set(false);
   }
 
   /** The scope's press, forwarded (`pressToFocus`): the same landing from a point outside the unit. */
@@ -864,7 +907,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const suppressed = this.#suppressPanelOnFocus;
     this.#suppressPanelOnFocus = false;
     if (!suppressed && !this.effectiveReadonly() && !this.effectiveDisabled()) {
-      this.overlayOpen.set(true);
+      this.isOpen.set(true);
     }
 
     this.editing.set(true);
@@ -887,7 +930,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     if (this.effectiveDisabled() || this.effectiveReadonly()) return;
 
     this.#armOpeningClick();
-    this.overlayOpen.set(true);
+    this.isOpen.set(true);
   }
 
   /**
@@ -922,7 +965,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   /** CDK detached the panel (a scroll): the open state follows. */
   protected handlePanelDetach() {
-    if (this.overlayOpen()) this.overlayOpen.set(false);
+    if (this.isOpen()) this.isOpen.set(false);
   }
 
   #openingClickPending = false;
@@ -969,7 +1012,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     }
 
     if (!inStart && !inEnd && !inPanel) {
-      this.overlayOpen.set(false);
+      this.isOpen.set(false);
       this.focusTarget.set(null);
       this.editing.set(false);
     } else if (inStart) {
@@ -1123,7 +1166,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
         }
 
         this.#settle(key, { keepOpen: true });
-        this.overlayOpen.set(false);
+        this.isOpen.set(false);
         return;
       }
       case 'Escape': {
@@ -1140,14 +1183,14 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
         // say WHY the commit was refused is feedback, not summoned chrome,
         // and it does not survive the revert anyway — spending a press on it
         // would make a broken draft cost two Escapes to clear.
-        if (this.overlayOpen() && !this.parseGateVisible()) {
-          this.overlayOpen.set(false);
+        if (this.isOpen() && !this.parseGateVisible()) {
+          this.isOpen.set(false);
           return;
         }
 
         // Stage 2 — revert the draft to the session baseline (flash + announce).
         this.#settle(key, { revert: true, keepOpen: true });
-        this.overlayOpen.set(false);
+        this.isOpen.set(false);
         return;
       }
       case 'ArrowDown': {
@@ -1156,7 +1199,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
         if (!this.showCalendar() || this.effectiveReadonly() || this.effectiveDisabled()) return;
 
         event.preventDefault();
-        this.overlayOpen.set(true);
+        this.isOpen.set(true);
 
         const grid = this.calendar();
         if (grid) grid.focusGrid();
@@ -1174,6 +1217,8 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * otherwise the popup closes. An inverted pair is sorted, iusta-style.
    */
   protected pickDate(day: IsoDate) {
+    if (!this.#dayAvailable(day)) return;
+
     const key = this.focusTarget() ?? 'start';
     const side = this.#side(key);
     if (!side.open()) {
@@ -1212,7 +1257,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * write, both sides re-baselined, ONE `saved`.
    */
   #commitBothSides(startDay: IsoDate | null, endDay: IsoDate | null) {
-    const before = this.value();
+    const before = this.#boundRaw();
     this.internalRange.set({ start: startDay, end: endDay });
 
     for (const key of ['start', 'end'] as const) {
@@ -1224,16 +1269,17 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       side.saveAttempted.set(false);
     }
 
-    const value = this.value();
-    const changed = !dateValuesEqual(value, before);
+    const changed = !dateValuesEqual(this.#boundRaw(), before);
     this.#selfTouched.set(true);
     this.touch.emit();
     if (changed) this.#emitSavedModel();
-    this.saved.emit({ value, changed });
+    this.saved.emit({ value: this.value(), changed });
   }
 
   /** A drag painted [start, end] — commit the pair whole and close. */
   protected commitDraggedRange(range: { start: IsoDate; end: IsoDate }) {
+    if (!this.#dayAvailable(range.start) || !this.#dayAvailable(range.end)) return;
+
     this.#commitBothSides(range.start, range.end);
     this.#closePanelReturningFocus(this.focusTarget() ?? 'start');
   }
@@ -1244,6 +1290,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * the very next pick completes the pair.
    */
   protected ctrlPickDate(day: IsoDate) {
+    if (!this.#dayAvailable(day)) return;
     if (!this.twoFields()) {
       this.pickDate(day);
       return;
@@ -1280,7 +1327,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const movingFocus = input !== undefined && this.#document.activeElement !== input;
 
     this.#suppressPanelOnFocus = movingFocus;
-    this.overlayOpen.set(false);
+    this.isOpen.set(false);
     if (movingFocus) this.#chrome.focusSide(key);
   }
 
@@ -1293,13 +1340,13 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   togglePanel() {
     if (this.effectiveDisabled() || this.effectiveReadonly()) return;
 
-    if (this.overlayOpen()) {
-      this.overlayOpen.set(false);
+    if (this.isOpen()) {
+      this.isOpen.set(false);
       return;
     }
 
     if (this.focusTarget() === null) this.#chrome.focusSide('start');
-    this.overlayOpen.set(true);
+    this.isOpen.set(true);
   }
 
   /** The 📅 trigger. */
@@ -1411,7 +1458,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     // clear can't strand a frozen draft mid-session.
     if (this.editing()) return;
 
-    const before = this.value();
+    const before = this.#boundRaw();
     this.#writeSideDay(key, null);
 
     for (const side of [this.#startSide, this.#endSide]) {
@@ -1425,10 +1472,9 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     this.#selfTouched.set(true);
     this.touch.emit();
 
-    const value = this.value();
-    const changed = !dateValuesEqual(value, before);
+    const changed = !dateValuesEqual(this.#boundRaw(), before);
     if (changed) this.#emitSavedModel();
-    this.saved.emit({ value, changed });
+    this.saved.emit({ value: this.value(), changed });
   }
 
   // -- Form Value Contract ------------------------------------------------------------
@@ -1459,6 +1505,11 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       side.saveAttempted.set(false);
     }
 
-    this.overlayOpen.set(false);
+    this.isOpen.set(false);
   }
+}
+
+/** A bound side as a calendar day — anything else (a stray instant, free text) reads `null`, unresolved. */
+function dayOrNull(entry: unknown): IsoDate | null {
+  return isIsoDate(entry) ? entry : null;
 }

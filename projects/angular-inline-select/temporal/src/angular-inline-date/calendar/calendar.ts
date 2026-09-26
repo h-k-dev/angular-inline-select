@@ -17,7 +17,8 @@ import { DOCUMENT } from '@angular/common';
 
 import { DateTime } from 'luxon';
 
-import { toIsoDate, formatIsoDate, type IsoDate } from '../date-codec';
+import { toIsoDate, formatIsoDate } from '../date-codec';
+import type { IsoDate } from '../../datetime/iso-date';
 import { todayIn } from '../../datetime/db-entry';
 import { TemporalIntl } from '../../temporal-intl';
 
@@ -168,7 +169,7 @@ export class Calendar {
   }
 
   /** Reference clock — the today marker and the empty-field fallback month. */
-  now = input<() => Date>(() => new Date());
+  now = input(() => new Date());
 
   /** Today, in the display zone. */
   protected today = computed(() => todayIn(this.now()(), this.zone()));
@@ -178,7 +179,7 @@ export class Calendar {
   ctrlPicked = output<IsoDate>();
   /** A drag settled across at least two days — the sorted range. */
   dragEnded = output<{ start: IsoDate; end: IsoDate }>();
-  escaped = output<void>();
+  escaped = output();
 
   // -- The drag (iusta's DateRangeDragAndRelease pointer logic, on our cells) ----
 
@@ -290,7 +291,7 @@ export class Calendar {
     computation: () => 'day',
   });
 
-  protected weeks = computed<CalendarDay[][]>(() => {
+  protected weeks = computed(() => {
     const [, month] = parts(this.active());
     const first = firstDayOfWeek(this.locale());
     const today = this.today();

@@ -260,3 +260,11 @@ export function formatWallClock(time: WallClockTime | null, locale?: string | st
     return time;
   }
 }
+
+/** The time field's display format — the RAW wall clock (parses back), with or without seconds. */
+export type TimeDisplayFormat = 'HH:mm' | 'HH:mm:ss';
+
+/** The empty field's placeholder: the display format's own shape (`'HH:MM'`, `'HH:MM:SS'`). */
+export function timePlaceholder(format: TimeDisplayFormat): string {
+  return format.toUpperCase();
+}

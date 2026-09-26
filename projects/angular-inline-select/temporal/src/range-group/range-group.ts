@@ -17,7 +17,6 @@ import {
 import { FormField, type ValidationError } from '@angular/forms/signals';
 
 import { AngularInlineDate } from '../angular-inline-date/angular-inline-date';
-import { toInternalRange } from '../angular-inline-date/date-codec';
 import { AngularInlineTime } from '../angular-inline-time/angular-inline-time';
 import { INLINE_TIME_DAY_OFFSET } from '../angular-inline-time/day-offset';
 import { AngularInlineDuration } from '../angular-inline-duration/angular-inline-duration';
@@ -217,23 +216,11 @@ export function createTemporalRangeGroup(
       current === null ? (previous?.value ?? true) : 'duration' in current,
   });
 
-  /** The stay's LOCAL calendar day, read off the date control. */
-  const day = computed<string | null>(() => {
-    const control = dayCtl();
-    if (!control) return null;
+  /** The stay's calendar day, read off the date control's day view. */
+  const day = computed(() => dayCtl()?.internalRange().start ?? null);
 
-    const start = toInternalRange(control.value()).start;
-    return start === null ? null : localDayOf(start, zone());
-  });
-
-  /** The END's LOCAL calendar day, read off the end-day control (the maximal form). */
-  const endDay = computed<string | null>(() => {
-    const control = endDayCtl();
-    if (!control) return null;
-
-    const start = toInternalRange(control.value()).start;
-    return start === null ? null : localDayOf(start, zone());
-  });
+  /** The END's calendar day, read off the end-day control (the maximal form). */
+  const endDay = computed(() => endDayCtl()?.internalRange().start ?? null);
 
   /**
    * The endpoint instants and duration, read live off the controls. Two
@@ -716,7 +703,7 @@ export class DateTimeRangeGroup {
   invalid = input(false);
 
   /** Form Value Contract: touch — any leaf touching bubbles up as the group's. */
-  touch = output<void>();
+  touch = output();
 
   /** One commit event for the whole range: the composed `{start, end, duration?}`. */
   savedModelChange = output<TemporalRangeValue | null>();
@@ -877,7 +864,7 @@ function wireRole<TControl>(
   const holder = inject(RANGE_ROLE_CORE, { self: true });
   const leafBound = leafHasOwnField();
 
-  const resolvedCore = computed<TemporalRangeGroup | null>(() => {
+  const resolvedCore = computed(() => {
     const ref = reference();
     return typeof ref === 'object' && ref !== null ? ref : (di?.core ?? null);
   });

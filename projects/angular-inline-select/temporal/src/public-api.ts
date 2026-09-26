@@ -7,7 +7,9 @@
 
 export * from './datetime/db-entry';
 export * from './datetime/zone';
+export * from './datetime/iso-date';
 export * from './leaf-state';
+export * from './mat-control';
 export * from './interval-rounding';
 export * from './temporal-intl';
 export * from './angular-inline-date/angular-inline-date';

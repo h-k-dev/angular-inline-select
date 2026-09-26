@@ -125,3 +125,26 @@ export function describeDuration(seconds: number): string {
 
   return parts.join(' ');
 }
+
+/**
+ * The field's display format in the house tokens (`HH` hours, `mm` minutes,
+ * `ss` seconds) — what hosts bind; the codec's positional `DurationFormat`
+ * derives from it.
+ */
+export type DurationDisplayFormat = 'HH:mm' | 'HH:mm:ss' | 'mm:ss';
+
+const CODEC_FORMATS: Record<DurationDisplayFormat, DurationFormat> = {
+  'HH:mm': 'h:mm',
+  'HH:mm:ss': 'h:mm:ss',
+  'mm:ss': 'mm:ss',
+};
+
+/** The codec's positional format for a display format. */
+export function durationCodecFormat(format: DurationDisplayFormat): DurationFormat {
+  return CODEC_FORMATS[format];
+}
+
+/** The empty field's placeholder: the display format's own shape (`'HH:MM'`, `'MM:SS'` …). */
+export function durationPlaceholder(format: DurationDisplayFormat): string {
+  return format.toUpperCase();
+}

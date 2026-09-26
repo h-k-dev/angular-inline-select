@@ -118,6 +118,22 @@ export class TemporalIntl {
     return `Not a valid ${noun.toLowerCase()}`;
   }
 
+  /** Why a weekend day is unavailable — the working-day calendar's reason word. */
+  readonly weekendLabel = signal('Weekend');
+
+  /**
+   * The panel notice for a day the field's day filter rejects — `day` as its
+   * long reading, `reason` when the host names one (a holiday, the weekend).
+   */
+  unavailableDayLabel(day: string, reason: string | null): string {
+    return reason ? `${day} is not available — ${reason}` : `${day} is not available`;
+  }
+
+  /** The one-click fix to the nearest available day. */
+  useDayLabel(day: string): string {
+    return `Use ${day}`;
+  }
+
   /** The snap-back announcement; `''` restored → the empty word. */
   revertedLabel(restored: string): string {
     return `Reverted to ${restored === '' ? this.emptyLabel() : restored}`;
