@@ -190,8 +190,8 @@
 }
 
 <!--
-  The panel: preview line + unavailable-day notice + calendar grid +
-  quick-picks + the error slot. Opens on focus WITHOUT stealing it (the grid
+  The panel: preview line + unavailable-day notice + calendar grid (presets
+  beside it in filter mode) + quick-picks + the error slot. Opens on focus WITHOUT stealing it (the grid
   mirrors the draft); focus inside the panel belongs to the focused side's
   session. The day filter disables unavailable cells.
 -->
@@ -236,7 +236,35 @@
       </div>
     }
 
-    @if (showCalendar()) {
+    <!--
+      Presets sit BESIDE the calendar (the analytics-dashboard range picker:
+      named ranges on the leading side, days on the other). Without presets
+      the calendar stands alone, as it always has.
+    -->
+    @if (presetList().length > 0) {
+      <div class="inline-date__body">
+        <div class="inline-date__presets" role="group" [attr.aria-label]="intl.presetsLabel()">
+          @for (preset of presetList(); track preset.id) {
+            <button
+              type="button"
+              class="inline-date__preset"
+              [attr.aria-pressed]="activePreset() === preset.id"
+              (mousedown)="$event.preventDefault()"
+              (click)="pickPreset(preset)"
+            >
+              {{ preset.label }}
+            </button>
+          }
+        </div>
+        @if (showCalendar()) {
+          <ng-container [ngTemplateOutlet]="calendarGrid" />
+        }
+      </div>
+    } @else if (showCalendar()) {
+      <ng-container [ngTemplateOutlet]="calendarGrid" />
+    }
+
+    <ng-template #calendarGrid>
       <temporal-calendar
         [activeDay]="pendingDay()"
         [selectedDay]="selectedForGrid()"
@@ -252,7 +280,7 @@
         (dragEnded)="commitDraggedRange($event)"
         (escaped)="escapeCalendar()"
       />
-    }
+    </ng-template>
 
     @if (quickPickList().length > 0) {
       <div class="inline-date__quick-picks" role="group" [attr.aria-label]="intl.quickPicksLabel()">

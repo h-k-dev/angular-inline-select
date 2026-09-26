@@ -84,6 +84,7 @@ import {
   type DbDateTime,
 } from '../datetime/db-entry';
 import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
+import { INLINE_TEMPORAL_LOCALE } from '../locale';
 import { roundToInterval, type IntervalRounding } from '../interval-rounding';
 
 /** The `editableActions` payload of the time control: the committed instant (UTC ISO DB entry) of that side. */
@@ -274,11 +275,13 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     () => this.clearBubbleSide() ?? this.#bubbleSideDefault ?? 'end',
   );
 
-  /** Locale for the idle display (`Intl`); browser default when omitted. */
+  /** Locale for the idle display (`Intl`); falls back to `INLINE_TEMPORAL_LOCALE`, then the browser's. */
   locale = input<string | string[] | undefined>(undefined);
 
-  /** The locale every parse speaks — the `locale` input, else the browser's. */
-  protected effectiveLocale = computed(() => this.locale());
+  #localeDefault = inject(INLINE_TEMPORAL_LOCALE, { optional: true });
+
+  /** The locale every parse speaks. */
+  protected effectiveLocale = computed(() => this.locale() ?? this.#localeDefault?.());
 
   /**
    * T6 — the DISPLAY ZONE (IANA id): which zone's wall clock the field

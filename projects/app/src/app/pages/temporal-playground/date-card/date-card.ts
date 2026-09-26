@@ -16,8 +16,13 @@ import { MatButtonModule } from '@angular/material/button';
 // Components
 import {
   AngularInlineDate,
+  addDays,
   dayToDbEntry,
   dayEndToDbEntry,
+  formatDateFilterParam,
+  type DateFilter,
+  type DateFilterPreset,
+  type FilterClause,
   type IsoDateRange,
 } from 'angular-inline-select/temporal';
 
@@ -53,8 +58,33 @@ export class DateCard {
   });
 
   protected dueMissing = computed(() =>
-    this.dateForm.due().errors().some((error) => error.kind === 'required'),
+    this.dateForm
+      .due()
+      .errors()
+      .some((error) => error.kind === 'required'),
   );
+
+  /** Filter mode: named relative ranges beside the calendar. */
+  protected presets: DateFilterPreset[] = [
+    {
+      id: 'overdue',
+      label: 'Overdue',
+      range: (today) => ({ start: null, end: addDays(today, -1) }),
+    },
+    { id: 'today', label: 'Today', range: (today) => ({ start: today, end: today }) },
+    {
+      id: 'next7',
+      label: 'Next 7 days',
+      range: (today) => ({ start: today, end: addDays(today, 7) }),
+    },
+  ];
+
+  protected dueFilter = signal<DateFilter>({ preset: 'overdue' });
+  protected dueClause = signal<FilterClause | undefined>(undefined);
+
+  /** The filter as its URL parameter (OGC API – Features interval notation). */
+  protected dueParam = computed(() => formatDateFilterParam(this.dueFilter()) ?? '');
+  protected dueClauseText = computed(() => JSON.stringify(this.dueClause()) ?? '∅');
 
   protected resetDateFields() {
     this.dateForm.due().reset();

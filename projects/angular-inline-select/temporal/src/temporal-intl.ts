@@ -56,6 +56,9 @@ export class TemporalIntl {
   /** The quick-pick command group. */
   readonly quickPicksLabel = signal('Quick picks');
 
+  /** The filter-mode preset group (named ranges beside the calendar). */
+  readonly presetsLabel = signal('Presets');
+
   /** Default accessible names, used when the consumer sets no `ariaLabel`. */
   readonly dateLabel = signal('Date');
   readonly timeLabel = signal('Time');

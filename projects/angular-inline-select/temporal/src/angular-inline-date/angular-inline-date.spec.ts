@@ -1,4 +1,4 @@
-import { Component, signal, type Type } from '@angular/core';
+import { Component, Directive, signal, type Type } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { FormField, form } from '@angular/forms/signals';
@@ -27,6 +27,11 @@ import {
   type InlineDateValue,
 } from './date-codec';
 import { localDayOf } from '../datetime/db-entry';
+import { addDays } from '../datetime/iso-date';
+import { provideInlineTemporalLocale } from '../locale';
+import { INLINE_DAY_AVAILABILITY, type InlineDayAvailability } from '../day-availability';
+import type { DayColumn, FilterClause } from '../filter/filter-dialect';
+import type { DateFilter, DateFilterPreset } from '../filter/date-filter';
 
 // The value contract: CALENDAR DATES (`'2026-05-12'`) behind, localized
 // days in front — no time, no zone, so specs are TZ-independent.
@@ -1680,6 +1685,243 @@ describe('AngularInlineDate dayFilter', () => {
     );
     expect(picks).not.toContain('yesterday');
 
+    await blurAway(h);
+  });
+});
+
+// =============================================================================
+// Filter mode — a query filter, not a value: `filter` moves once per decision,
+// each settled change is spoken as a (LoopBack 3) clause.
+// =============================================================================
+
+const PRESETS: DateFilterPreset[] = [
+  { id: 'overdue', label: 'Overdue', range: (today) => ({ start: null, end: addDays(today, -1) }) },
+  {
+    id: 'next7',
+    label: 'Next 7 days',
+    range: (today) => ({ start: today, end: addDays(today, 7) }),
+  },
+];
+
+@Component({
+  imports: [AngularInlineDate],
+  template: `
+    <angular-inline-date
+      mode="filter"
+      [ranged]="true"
+      filterProperty="dueAt"
+      [filterColumn]="column()"
+      [zone]="zone()"
+      [presets]="presets"
+      [(filter)]="filter"
+      [(value)]="value"
+      (clauseChange)="clauses.push($event)"
+      locale="en"
+      [now]="now"
+    />
+  `,
+})
+class FilterHost {
+  filter = signal<DateFilter>(null);
+  value = signal<InlineDateValue>(null);
+  column = signal<DayColumn>('date');
+  zone = signal<string | undefined>(undefined);
+  clauses: (FilterClause | undefined)[] = [];
+  presets = PRESETS;
+  now = () => NOW;
+}
+
+describe('AngularInlineDate — filter mode', () => {
+  it('publishes the filter on commit, never per keystroke, and speaks a half-open clause', async () => {
+    const h = setupHost(FilterHost);
+
+    type(h, h.start(), '12.5.2026');
+    expect(h.host.filter()).toBeNull(); // typing alone decides nothing
+    press(h, h.start(), 'Enter');
+    expect(h.host.filter()).toEqual({ start: '2026-05-12', end: null });
+    expect(h.host.clauses).toEqual([{ dueAt: { gte: '2026-05-12 00:00:00' } }]);
+
+    type(h, h.end()!, '15.5.2026');
+    press(h, h.end()!, 'Enter');
+    expect(h.host.filter()).toEqual({ start: '2026-05-12', end: '2026-05-15' });
+    expect(h.host.clauses.at(-1)).toEqual({
+      and: [{ dueAt: { gte: '2026-05-12 00:00:00' } }, { dueAt: { lt: '2026-05-16 00:00:00' } }],
+    });
+
+    expect(h.host.value()).toBeNull(); // the value channel is never touched
+    await blurAway(h);
+  });
+
+  it('clearing every day is no filter — and no clause', async () => {
+    const h = setupHost(FilterHost);
+    h.host.filter.set({ start: '2026-05-12', end: null });
+    h.fixture.detectChanges();
+
+    type(h, h.start(), '');
+    press(h, h.start(), 'Enter');
+
+    expect(h.host.filter()).toBeNull();
+    expect(h.host.clauses).toEqual([undefined]);
+    await blurAway(h);
+  });
+
+  it('offers the presets beside the calendar instead of the quick picks', async () => {
+    const h = setupHost(FilterHost);
+    focusInput(h, h.start());
+
+    const labels = [...document.querySelectorAll('.inline-date__preset')].map((b) =>
+      b.textContent?.trim(),
+    );
+    expect(labels).toEqual(['Overdue', 'Next 7 days']);
+    expect(document.querySelector('.inline-date__quick-picks')).toBeNull();
+    expect(gridCell('2026-05-12')).not.toBeNull(); // the calendar stays
+
+    await blurAway(h);
+  });
+
+  it('a preset pick stays RELATIVE: the filter names it, the fields show its days', async () => {
+    const h = setupHost(FilterHost);
+    focusInput(h, h.start());
+
+    (document.querySelector('.inline-date__preset') as HTMLButtonElement).click();
+    await settle(h);
+
+    expect(h.host.filter()).toEqual({ preset: 'overdue' });
+    expect(h.host.clauses).toEqual([{ dueAt: { lt: '2026-05-12 00:00:00' } }]);
+    expect(h.start().value).toBe('');
+    expect(h.end()!.value).toBe(formatIsoDate('2026-05-11', 'en'));
+
+    pointer(h, h.start());
+    expect(
+      document.querySelector('.inline-date__preset[aria-pressed="true"]')?.textContent?.trim(),
+    ).toBe('Overdue');
+
+    // Leaving without an edit keeps the preset — it is not frozen into days.
+    await blurAway(h);
+    expect(h.host.filter()).toEqual({ preset: 'overdue' });
+  });
+
+  it('typing over a preset makes the filter explicit days', async () => {
+    const h = setupHost(FilterHost);
+    h.host.filter.set({ preset: 'next7' });
+    h.fixture.detectChanges();
+
+    type(h, h.end()!, '14.5.2026');
+    press(h, h.end()!, 'Enter');
+
+    expect(h.host.filter()).toEqual({ start: '2026-05-12', end: '2026-05-14' });
+    await blurAway(h);
+  });
+
+  it('shows a filter set from outside (a route, a widget) without speaking a clause', () => {
+    const h = setupHost(FilterHost);
+
+    h.host.filter.set({ start: '2026-05-01', end: '2026-05-03' });
+    h.fixture.detectChanges();
+
+    expect(h.start().value).toBe(formatIsoDate('2026-05-01', 'en'));
+    expect(h.end()!.value).toBe(formatIsoDate('2026-05-03', 'en'));
+    expect(h.host.clauses).toEqual([]);
+  });
+
+  it('bounds an instant column by the display zone midnights', async () => {
+    const h = setupHost(FilterHost);
+    h.host.column.set('instant');
+    h.host.zone.set('Europe/Berlin');
+    h.fixture.detectChanges();
+
+    type(h, h.start(), '12.5.2026');
+    press(h, h.start(), 'Enter');
+
+    expect(h.host.clauses).toEqual([{ dueAt: { gte: '2026-05-11T22:00:00.000Z' } }]);
+    await blurAway(h);
+  });
+});
+
+// =============================================================================
+// Element-lent day calendar, the app-wide locale, modified arrows
+// =============================================================================
+
+@Directive({
+  selector: '[sundaysOff]',
+  providers: [{ provide: INLINE_DAY_AVAILABILITY, useExisting: SundaysOff }],
+})
+class SundaysOff implements InlineDayAvailability {
+  readonly filter = signal((iso: string) => !isSunday(iso)).asReadonly();
+  readonly reason = signal((iso: string) => (isSunday(iso) ? 'Ruhetag' : null)).asReadonly();
+  readonly suggestion = signal(undefined).asReadonly();
+}
+
+@Component({
+  imports: [AngularInlineDate, SundaysOff],
+  template: `
+    <angular-inline-date sundaysOff [(value)]="value" [dayFilter]="own()" locale="en" [now]="now" />
+  `,
+})
+class LentCalendarHost {
+  value = signal<InlineDateValue>('2026-05-12');
+  own = signal<((iso: string) => boolean) | undefined>(undefined);
+  now = () => NOW;
+}
+
+describe('AngularInlineDate — a day calendar lent by a directive', () => {
+  it("disables the lent calendar's days and names its reason", async () => {
+    const h = setupHost(LentCalendarHost);
+
+    type(h, h.start(), '17.5.2026');
+    expect(gridCell('2026-05-17')?.hasAttribute('data-disabled')).toBe(true);
+    expect(document.querySelector('.inline-date__notice')?.textContent).toContain('Ruhetag');
+
+    await blurAway(h);
+  });
+
+  it('yields to a bound dayFilter input', async () => {
+    const h = setupHost(LentCalendarHost);
+    h.host.own.set(() => true);
+    h.fixture.detectChanges();
+    focusInput(h, h.start());
+
+    expect(gridCell('2026-05-17')?.hasAttribute('data-disabled')).toBe(false);
+    await blurAway(h);
+  });
+});
+
+@Component({
+  imports: [AngularInlineDate],
+  template: `<angular-inline-date [(value)]="value" [now]="now" />`,
+})
+class AppLocaleHost {
+  value = signal<InlineDateValue>('2026-12-24');
+  now = () => NOW;
+}
+
+describe('AngularInlineDate — the app-wide locale', () => {
+  it('speaks INLINE_TEMPORAL_LOCALE when no locale input is bound', () => {
+    TestBed.configureTestingModule({ providers: [provideInlineTemporalLocale('de')] });
+    const h = setupHost(AppLocaleHost);
+
+    expect(h.start().value).toBe(formatIsoDate('2026-12-24', 'de'));
+  });
+});
+
+describe("AngularInlineDate — modified arrows stay the host's", () => {
+  it('Shift+ArrowDown neither opens the panel nor takes the keyboard', async () => {
+    const h = setupHost(AppLocaleHost);
+    focusInput(h, h.start());
+    press(h, h.start(), 'Escape'); // peel the panel focus opened
+    expect(h.panel()).toBeNull();
+
+    const shiftDown = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    h.start().dispatchEvent(shiftDown);
+    h.fixture.detectChanges();
+
+    expect(shiftDown.defaultPrevented).toBe(false);
+    expect(h.panel()).toBeNull();
     await blurAway(h);
   });
 });

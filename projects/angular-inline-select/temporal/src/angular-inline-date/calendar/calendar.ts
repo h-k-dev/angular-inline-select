@@ -161,7 +161,8 @@ export class Calendar {
   /**
    * Days failing this predicate render DISABLED and cannot be picked — a
    * host's business calendar (holidays, weekends; the date field's
-   * `strictMode`). `undefined` = every day picks.
+   * `filterDay` — its `dayFilter` input or a lent `InlineDayAvailability`).
+   * `undefined` = every day picks.
    */
   dayFilter = input<((iso: IsoDate) => boolean) | undefined>(undefined);
 

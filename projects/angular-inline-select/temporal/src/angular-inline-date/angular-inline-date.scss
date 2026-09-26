@@ -284,6 +284,59 @@
 .inline-date__quick-pick:hover {
   background: var(--mat-sys-surface-container-highest, #eee);
 }
+/* Filter-mode presets: named ranges on the leading side, the calendar beside. */
+.inline-date__body {
+  display: flex;
+  gap: 8px;
+}
+.inline-date__presets {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-inline-end: 8px;
+  border-inline-end: 1px solid var(--mat-sys-outline-variant, #ddd);
+}
+.inline-date__preset {
+  font: var(--mat-sys-label-large, 500 0.875rem/1.4 system-ui);
+  text-align: start;
+  white-space: nowrap;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--mat-sys-corner-full, 999px);
+  background: transparent;
+  color: var(--mat-sys-on-surface, inherit);
+  cursor: pointer;
+}
+/* Hover: the house nav wash — primary at the state-layer alpha, times the hover opacity. */
+.inline-date__preset:hover {
+  background: var(
+    --editable-preset-hover-background,
+    oklch(
+      from var(--mat-sys-primary, #4285f4) l c h /
+        calc(0.3875 * var(--mat-sys-hover-state-layer-opacity, 0.08))
+    )
+  );
+}
+/* The preset in force: a wash of the primary, never a brand container colour. */
+.inline-date__preset[aria-pressed='true'] {
+  background: var(
+    --editable-preset-selected-background,
+    oklch(from var(--mat-sys-primary, #4285f4) l c h / 0.12)
+  );
+  color: var(--editable-preset-selected-color, var(--mat-sys-on-surface, inherit));
+}
+/* Too narrow for two columns: the presets wrap above the calendar. */
+@media (max-width: 480px) {
+  .inline-date__body {
+    flex-direction: column;
+  }
+  .inline-date__presets {
+    flex-flow: row wrap;
+    padding: 0 0 4px;
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--mat-sys-outline-variant, #ddd);
+  }
+}
 .inline-date__errors:not([hidden]) {
   padding: 0 8px 4px;
   font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);

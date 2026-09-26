@@ -65,9 +65,21 @@ import {
 import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
 import { INLINE_TEMPORAL_MAT_CONTROL } from '../mat-control';
 import { focusInputNearPoint, isUnitSpacePress } from '../inline-unit';
-import { toDateTime } from '../datetime/db-entry';
+import { toDateTime, todayIn } from '../datetime/db-entry';
 import { isIsoDate, type IsoDate } from '../datetime/iso-date';
 import { INLINE_TEMPORAL_ZONE } from '../datetime/zone';
+import { INLINE_TEMPORAL_LOCALE } from '../locale';
+import { INLINE_DAY_AVAILABILITY } from '../day-availability';
+import { INLINE_FILTER_DIALECT, type DayColumn, type FilterClause } from '../filter/filter-dialect';
+import {
+  dateFiltersEqual,
+  dayRangeClause,
+  dayRangeFilter,
+  isPresetFilter,
+  resolveDateFilter,
+  type DateFilter,
+  type DateFilterPreset,
+} from '../filter/date-filter';
 import {
   makeSideSessionChrome,
   makeClearBubbleVisibility,
@@ -167,6 +179,14 @@ let nextPanelId = 0;
  * the per-side verdict (and the acknowledge seam), and Escape/snap-back
  * restore the raw entry — only an actual commit or clear replaces it.
  * Date-only; duration and time have no such gate.
+ *
+ * FILTER MODE (`mode="filter"`) turns the field into a query filter: it
+ * edits `filter` — a `DateFilter` (explicit days, either side open, or a
+ * relative preset from `presets`, offered beside the calendar) — instead of
+ * `value`, and speaks each settled change as a clause (`clauseChange`)
+ * compiled by the injected `INLINE_FILTER_DIALECT` (LoopBack 3 by default):
+ * half-open day bounds on `filterProperty`, spoken for a date-only or an
+ * instant column (`filterColumn`).
  */
 @Component({
   selector: 'angular-inline-date',
@@ -210,6 +230,44 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * `makeShapeMemory`).
    */
   ranged = input(false);
+
+  /**
+   * `'value'` (the default) edits `value`; `'filter'` edits `filter` and
+   * speaks clauses (see the class doc) — `value` stays untouched.
+   */
+  mode = input<'value' | 'filter'>('value');
+
+  /**
+   * Filter mode's two-way value. It changes only when a session SETTLES
+   * (Enter, blur, a pick, a preset, a clear) — never per keystroke — so a
+   * query derived from it runs once per decision.
+   */
+  filter = model<DateFilter>(null);
+
+  /** The property the filter's clause is on (`'dueAt'`). */
+  filterProperty = input('');
+
+  /** What `filterProperty` holds — how a day is spoken on the wire. */
+  filterColumn = input<DayColumn>('date');
+
+  /**
+   * Named relative ranges offered beside the calendar ("Overdue", "Next 7
+   * days"). Picking one sets `filter` to `{ preset: id }`, which stays
+   * relative — tomorrow it covers tomorrow's days. Filter mode only.
+   */
+  presets = input<readonly DateFilterPreset[]>([]);
+
+  /**
+   * The filter's clause, once per changed settlement — `undefined` once the
+   * filter is cleared. The shortcut for a host that keeps no filter state of
+   * its own; a host that also sets `filter` from outside (a route, a widget)
+   * derives the clause from `filter` with `DateFilterCompiler` instead.
+   */
+  clauseChange = output<FilterClause | undefined>();
+
+  #dialect = inject(INLINE_FILTER_DIALECT);
+
+  protected isFilter = computed(() => this.mode() === 'filter');
 
   /** Form Value Contract. */
   errors = input<readonly ValidationError.WithOptionalFieldTree[]>([]);
@@ -273,11 +331,13 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     () => this.clearBubbleSide() ?? this.#bubbleSideDefault ?? 'end',
   );
 
-  /** Locale for display + parsing (`Intl`); browser default when omitted. */
+  /** Locale for display + parsing (`Intl`); falls back to `INLINE_TEMPORAL_LOCALE`, then the browser's. */
   locale = input<string | string[] | undefined>(undefined);
 
-  /** The locale every display and parse speaks — the `locale` input, else the browser's. */
-  protected effectiveLocale = computed(() => this.locale());
+  #localeDefault = inject(INLINE_TEMPORAL_LOCALE, { optional: true });
+
+  /** The locale every display and parse speaks. */
+  protected effectiveLocale = computed(() => this.locale() ?? this.#localeDefault?.());
 
   /**
    * T6 — the DISPLAY ZONE (IANA id): which zone's calendar day the value
@@ -424,13 +484,90 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     set: (range) => this.#writeBound(range),
   });
 
-  /** The bound channel's per-side entries, readable or not — the ONE read of the value. */
-  #boundRaw = computed((): InternalDateRange => toInternalRange(this.value()));
+  /**
+   * The bound channel's per-side entries, readable or not — the ONE read of
+   * the value. In filter mode the channel is the STAGED filter, resolved to
+   * its days (a preset reads as today's).
+   */
+  #boundRaw = computed((): InternalDateRange => {
+    if (!this.isFilter()) return toInternalRange(this.value());
 
-  /** The ONE write of the bound channel: a range, echoed in the consumer's shape (equal writes dropped). */
+    const range = this.#resolveFilter(this.#stagedFilter());
+    const start = range?.start ?? null;
+    return { start, end: this.twoFields() ? (range?.end ?? null) : start };
+  });
+
+  /**
+   * The ONE write of the bound channel: a range, echoed in the consumer's
+   * shape (equal writes dropped). In filter mode it stages explicit days —
+   * unless they are the days already shown, so a preset stays a preset.
+   */
   #writeBound(range: InternalDateRange) {
+    if (this.isFilter()) {
+      const next = { start: range.start, end: this.twoFields() ? range.end : range.start };
+      const current = this.#boundRaw();
+      if (next.start !== current.start || next.end !== current.end) {
+        this.#stagedFilter.set(dayRangeFilter(next));
+      }
+      return;
+    }
+
     const echoed = echoDateShape(range, this.shape());
     if (!dateValuesEqual(echoed, this.value())) this.value.set(echoed);
+  }
+
+  // -- Filter mode ---------------------------------------------------------------
+
+  /**
+   * Filter mode's working copy: sessions edit it live, settlement publishes
+   * it to `filter` (`#publishFilter`) — so `filter` moves once per decision.
+   * Re-seeded whenever `filter` is set from outside.
+   */
+  #stagedFilter = linkedSignal(() => this.filter());
+
+  /** The days a filter covers today, in the display zone. */
+  #resolveFilter(filter: DateFilter) {
+    return resolveDateFilter(filter, this.presets(), todayIn(this.now()(), this.effectiveZone()));
+  }
+
+  /** Public: the id of the preset in force, `null` when the filter is explicit days or none. */
+  readonly activePreset = computed(() => {
+    const filter = this.#stagedFilter();
+    return this.isFilter() && isPresetFilter(filter) ? filter.preset : null;
+  });
+
+  /** The presets the panel offers — filter mode only. */
+  protected presetList = computed(() => (this.isFilter() ? this.presets() : []));
+
+  /** Filter mode's commit: the staged filter becomes `filter`, and its clause is spoken. */
+  #publishFilter() {
+    const filter = this.#stagedFilter();
+    if (!dateFiltersEqual(filter, this.filter())) this.filter.set(filter);
+
+    this.clauseChange.emit(
+      dayRangeClause(
+        this.#dialect,
+        this.filterProperty(),
+        this.#resolveFilter(filter),
+        this.filterColumn(),
+        this.effectiveZone(),
+      ),
+    );
+  }
+
+  /** A preset pick: one whole commit of both sides, then the panel closes. */
+  protected pickPreset(preset: DateFilterPreset) {
+    const before = this.#stagedFilter();
+    this.#stagedFilter.set({ preset: preset.id });
+    this.#rebaselineSides();
+
+    const changed = !dateFiltersEqual(before, this.#stagedFilter());
+    this.#selfTouched.set(true);
+    this.touch.emit();
+    if (changed) this.#emitSavedModel();
+    this.saved.emit({ value: this.value(), changed });
+
+    this.#closePanelReturningFocus(this.focusTarget() ?? 'start');
   }
 
   // -- Unresolved injected values (display, never swallow) -----------------------
@@ -626,12 +763,20 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     return this.#dayAvailable(iso) ? describeIsoDate(iso, this.effectiveLocale()) : '';
   });
 
-  /** The effective day filter (a host can derive one; here, the `dayFilter` input). */
-  readonly filterDay = computed(() => this.dayFilter());
+  /** A day calendar lent by a directive on this element (see `InlineDayAvailability`). */
+  #availability = inject(INLINE_DAY_AVAILABILITY, { optional: true, self: true });
 
-  #filterReason = computed(() => this.dayFilterReason());
+  /** The lent calendar, unless the `dayFilter` input is bound — the inputs then speak alone. */
+  #lentCalendar = computed(() => (this.dayFilter() === undefined ? this.#availability : null));
 
-  #filterSuggestion = computed(() => this.dayFilterSuggestion());
+  /** The effective day filter: the `dayFilter` input, else the lent calendar's. */
+  readonly filterDay = computed(() => this.dayFilter() ?? this.#lentCalendar()?.filter());
+
+  #filterReason = computed(() => this.dayFilterReason() ?? this.#lentCalendar()?.reason());
+
+  #filterSuggestion = computed(
+    () => this.dayFilterSuggestion() ?? this.#lentCalendar()?.suggestion(),
+  );
 
   #dayAvailable(day: IsoDate | null): boolean {
     if (day === null) return true;
@@ -665,7 +810,9 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       ),
       suggestion,
       suggestionLabel:
-        suggestion === null ? '' : this.intl.useDayLabel(formatIsoDate(suggestion, this.effectiveLocale())),
+        suggestion === null
+          ? ''
+          : this.intl.useDayLabel(formatIsoDate(suggestion, this.effectiveLocale())),
     };
   });
 
@@ -682,12 +829,14 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     this.focusTarget() === 'end' ? this.internalRange().end : this.internalRange().start,
   );
 
-  /** Quick-pick chips: consumer-injected, else yesterday/today/tomorrow — day-filtered. */
+  /** Quick-pick chips: consumer-injected, else yesterday/today/tomorrow — day-filtered; presets replace them. */
   protected quickPickList = computed(() =>
-    (
-      this.quickPicks() ??
-      buildDateCommands(this.now()(), this.effectiveLocale(), this.effectiveZone()).slice(0, 3)
-    ).filter((command) => this.#dayAvailable(command.iso)),
+    this.presetList().length > 0
+      ? []
+      : (
+          this.quickPicks() ??
+          buildDateCommands(this.now()(), this.effectiveLocale(), this.effectiveZone()).slice(0, 3)
+        ).filter((command) => this.#dayAvailable(command.iso)),
   );
 
   /**
@@ -1108,6 +1257,11 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * the start-only shape reports its single-day range `[start, start]`.
    */
   #emitSavedModel() {
+    if (this.isFilter()) {
+      this.#publishFilter();
+      return;
+    }
+
     const { start, end } = this.internalRange();
     this.savedModelChange.emit({
       start: toDateTime(start),
@@ -1194,8 +1348,10 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
         return;
       }
       case 'ArrowDown': {
-        // The combobox-datepicker handoff: focus moves INTO the grid.
-        if (event.altKey || event.defaultPrevented) return;
+        // The combobox-datepicker handoff: focus moves INTO the grid. Modified
+        // arrows stay the host's — Shift extends the text selection, and apps
+        // bind their own shortcuts to it.
+        if (event.altKey || event.shiftKey || event.defaultPrevented) return;
         if (!this.showCalendar() || this.effectiveReadonly() || this.effectiveDisabled()) return;
 
         event.preventDefault();
@@ -1259,21 +1415,24 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   #commitBothSides(startDay: IsoDate | null, endDay: IsoDate | null) {
     const before = this.#boundRaw();
     this.internalRange.set({ start: startDay, end: endDay });
-
-    for (const key of ['start', 'end'] as const) {
-      const side = this.#side(key);
-      side.baselineDay = side.committed();
-      side.baselineRaw = this.#unresolvedRawOf(key);
-      side.restore();
-      side.dirty.set(false);
-      side.saveAttempted.set(false);
-    }
+    this.#rebaselineSides();
 
     const changed = !dateValuesEqual(this.#boundRaw(), before);
     this.#selfTouched.set(true);
     this.touch.emit();
     if (changed) this.#emitSavedModel();
     this.saved.emit({ value: this.value(), changed });
+  }
+
+  /** Both sides re-baselined on the value as it now stands — no stale draft can re-commit. */
+  #rebaselineSides() {
+    for (const side of [this.#startSide, this.#endSide]) {
+      side.baselineDay = side.committed();
+      side.baselineRaw = this.#unresolvedRawOf(side.key);
+      side.restore();
+      side.dirty.set(false);
+      side.saveAttempted.set(false);
+    }
   }
 
   /** A drag painted [start, end] — commit the pair whole and close. */
@@ -1460,14 +1619,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
     const before = this.#boundRaw();
     this.#writeSideDay(key, null);
-
-    for (const side of [this.#startSide, this.#endSide]) {
-      side.baselineDay = side.committed();
-      side.baselineRaw = this.#unresolvedRawOf(side.key);
-      side.restore();
-      side.dirty.set(false);
-      side.saveAttempted.set(false);
-    }
+    this.#rebaselineSides();
 
     this.#selfTouched.set(true);
     this.touch.emit();

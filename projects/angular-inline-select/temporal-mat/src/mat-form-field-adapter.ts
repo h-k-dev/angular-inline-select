@@ -89,6 +89,12 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
   }
 
   constructor() {
+    // Outside a mat-form-field there is nothing to host — and as a host
+    // directive this runs on EVERY control — so stay truly inert: no render
+    // hook, no effect.
+    const formField = this.#formField;
+    if (formField === null) return;
+
     // Container CHROME must not steal focus: a mousedown on the box's
     // padding/label/outline would blur the input, settle the session and
     // close the panel. Preventing it keeps the session alive, so the click
@@ -96,7 +102,7 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
     // our host) keep their native behavior.
     // The form field renders the errors (`mat-error`): a control with its own
     // error overlay keeps it closed.
-    if (this.#formField !== null) this.#control.externalErrors?.set(true);
+    this.#control.externalErrors?.set(true);
 
     const injector = inject(Injector);
     const destroyRef = inject(DestroyRef);
@@ -108,9 +114,7 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
         // of at the input's text baseline. The control never learns what mat
         // is; it only receives a CDK-generic ElementRef through its OPTIONAL
         // `overlayOrigin` contract seam.
-        if (this.#formField !== null) {
-          this.#control.overlayOrigin?.set(this.#formField.getConnectedOverlayOrigin());
-        }
+        this.#control.overlayOrigin?.set(formField.getConnectedOverlayOrigin());
 
         const host = this.#element.nativeElement;
         const container = host.closest('mat-form-field');

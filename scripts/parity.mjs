@@ -410,6 +410,28 @@ const PAIRS = [
     `${DT}/iso-date.spec.ts`,
   ],
   ['datetime/zone', `${SB}/temporal/src/datetime/zone.ts`, `${DT}/zone.ts`],
+  ['temporal/locale', `${SB}/temporal/src/locale.ts`, `${CE}/temporal/locale.ts`],
+  [
+    'temporal/day-availability',
+    `${SB}/temporal/src/day-availability.ts`,
+    `${CE}/temporal/day-availability.ts`,
+  ],
+  // filter mode
+  [
+    'filter/dialect',
+    `${SB}/temporal/src/filter/filter-dialect.ts`,
+    `${CE}/temporal/filter/filter-dialect.ts`,
+  ],
+  [
+    'filter/date',
+    `${SB}/temporal/src/filter/date-filter.ts`,
+    `${CE}/temporal/filter/date-filter.ts`,
+  ],
+  [
+    'filter/date.spec',
+    `${SB}/temporal/src/filter/date-filter.spec.ts`,
+    `${CE}/temporal/filter/date-filter.spec.ts`,
+  ],
   // mat adapter
   [
     'mat-adapter',
@@ -422,6 +444,16 @@ const PAIRS = [
     `${CE}/adapters/datetime/inline-mat-form-field.spec.ts`,
   ],
 ];
+
+// App lines kept ON PURPOSE — the one app-layer composition: the mat-form-field adapter as a HOST
+// DIRECTIVE, so app templates never opt in (the sandbox core can't: it must not depend on Material,
+// its users write the `inlineMatFormField` attribute). Stripped from the app side before comparing;
+// the row says so.
+const MAT_HOST = [
+  /^import \{ InlineMatFormField \} from '[^']+';\n/m,
+  /^[ \t]*\/\/ iusta: every temporal field hosts itself[^\n]*\n[ \t]*hostDirectives: \[InlineMatFormField\],\n/m,
+];
+const DECLARED_EXTRAS = { 'date.ts': MAT_HOST, 'time.ts': MAT_HOST, 'duration.ts': MAT_HOST };
 
 // Sandbox → app names, applied to both sides. Longest first so prefixes never win early.
 const RENAMES = [
@@ -522,12 +554,16 @@ try {
         )
       : sbRaw;
     const a = await normalise(rename(sbText), ext);
-    const appText = readFileSync(appPath, 'utf8');
-    const stale = (appText.match(STALE_NAME) ?? []).length;
+    const appRaw = readFileSync(appPath, 'utf8');
+    const stale = (appRaw.match(STALE_NAME) ?? []).length;
     const staleNote = stale ? `  (${stale} stale sandbox name${stale > 1 ? 's' : ''} in app)` : '';
+    const extras = DECLARED_EXTRAS[label] ?? [];
+    const declared = extras.filter((re) => re.test(appRaw)).length;
+    const appText = extras.reduce((text, re) => text.replace(re, ''), appRaw);
+    const extraNote = declared ? '  (declared app extra: mat host directive)' : '';
     const b = await normalise(rename(appText), ext);
     if (a === b) {
-      rows.push([label, `ok${staleNote}`]);
+      rows.push([label, `ok${extraNote}${staleNote}`]);
       continue;
     }
 
