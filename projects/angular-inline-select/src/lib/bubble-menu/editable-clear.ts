@@ -1,6 +1,7 @@
 import { Component, Directive, TemplateRef, inject, output } from '@angular/core';
 
 import type { BubbleMenuSide } from './bubble-menu';
+import { EditableTextIntl } from '../angular-inline-text/editable-text-intl';
 
 /**
  * The clear-button BEHAVIOR, detached from any styling — drop it on your own
@@ -47,7 +48,8 @@ export class EditableClear {
  * The DEFAULT clear button — {@link EditableClear}'s behavior (composed as a
  * host directive, so its `clear` output is exposed here) plus the shared pill
  * chrome (`editable-action editable-action-clear`, global in
- * styles/_editable.scss) and a "clear" label. Use it for the stock look; reach
+ * styles/_editable.scss) and the localized "clear" label
+ * (`EditableTextIntl.clearButtonLabel`). Use it for the stock look; reach
  * for the bare `[editableClear]` directive when you want your own button.
  *
  * ```html
@@ -58,9 +60,11 @@ export class EditableClear {
   selector: 'button[editableClearButton]',
   hostDirectives: [{ directive: EditableClear, outputs: ['clear'] }],
   host: { class: 'editable-action editable-action-clear' },
-  template: 'clear',
+  template: '{{ intl.clearButtonLabel() }}',
 })
-export class EditableClearButton {}
+export class EditableClearButton {
+  protected intl = inject(EditableTextIntl);
+}
 
 /**
  * Template context for {@link EditableClearTemplate} — everything a custom
