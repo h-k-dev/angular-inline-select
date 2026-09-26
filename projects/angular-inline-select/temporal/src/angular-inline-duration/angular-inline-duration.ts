@@ -133,7 +133,9 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
    * resolved placeholder text, so hosting containers never branch on the
    * concrete control.
    */
-  readonly placeholderText = computed(() => this.placeholder() ?? durationPlaceholder(this.format()));
+  readonly placeholderText = computed(
+    () => this.placeholder() ?? durationPlaceholder(this.format()),
+  );
 
   /** Accessible name for the field. */
   ariaLabel = input<string | undefined>(undefined);
@@ -282,7 +284,6 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   /** Enter was pressed on an unreadable draft — reveals the parse-gate error. */
   #saveAttempted = signal(false);
 
-  /** Enter/Escape hide the panel until the next keystroke or session. */
   /**
    * Whether a HOSTING container renders this field's errors — the
    * mat-form-field adapter sets it — so the error overlay stays closed and
@@ -291,6 +292,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
    */
   externalErrors = model(false);
 
+  /** Enter/Escape hide the panel until the next keystroke or session. */
   #panelDismissed = signal(false);
 
   /** The parse gate: whether the current draft fails the codec. Public for consumers. */
@@ -612,10 +614,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
 
         // `'stay'` refuses the Tab like Enter's parse gate (Tab gesture
         // only — blur keeps the native snap-back regardless of policy).
-        if (
-          scope.onBlocked() === 'stay' &&
-          parseDuration(this.draft(), this.#codecFormat()) === undefined
-        ) {
+        if (scope.onBlocked() === 'stay' && this.parseFailed()) {
           event.preventDefault();
           this.#saveAttempted.set(true);
           scope.announce('blocked');
@@ -631,7 +630,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
       }
       case 'Enter': {
         event.preventDefault();
-        if (parseDuration(this.draft(), this.#codecFormat()) === undefined) {
+        if (this.parseFailed()) {
           // The parse gate: the user ASKED for a commit — block and say why.
           this.#saveAttempted.set(true);
           return;

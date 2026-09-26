@@ -58,7 +58,10 @@ const UNIT_SECONDS: Record<string, number> = {
  * - Unit tokens, format-independent: `'1h 30m'`, `'45m'`, `'90s'`, `'1.5h'`.
  * - A bare number: minutes under hour-based formats, seconds under `mm:ss`.
  */
-export function parseDuration(raw: string, format: DurationFormat = 'h:mm'): number | null | undefined {
+export function parseDuration(
+  raw: string,
+  format: DurationFormat = 'h:mm',
+): number | null | undefined {
   const trimmed = raw.trim().toLowerCase();
   if (trimmed === '') return null;
 
@@ -95,7 +98,12 @@ export function parseDuration(raw: string, format: DurationFormat = 'h:mm'): num
   return undefined;
 }
 
-/** Renders seconds in the given clock format (`null` → `''`). */
+/**
+ * Renders seconds in the given clock format (`null` → `''`). EVERY component
+ * is zero-padded to two digits — the committed display matches the field's
+ * `HH:MM` / `MM:SS` / `HH:MM:SS` placeholder shape (`5400` → `'01:30'`). The
+ * leading component still grows past two digits when it must (`100:00`).
+ */
 export function formatDuration(seconds: number | null, format: DurationFormat = 'h:mm'): string {
   if (seconds === null) return '';
 
