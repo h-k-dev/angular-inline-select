@@ -1,7 +1,16 @@
-import { Component, signal } from '@angular/core';
+// Angular
+import {
+  Component,
+
+  // Signals
+  signal,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+
+// Forms
 import { FormField, form, required } from '@angular/forms/signals';
 
+// Editables
 import { AngularInlineTime, type InlineTimeSaved } from './angular-inline-time';
 import { EditablePrefix, EditableSuffix } from 'angular-inline-select';
 import type { IntervalRounding } from '../interval-rounding';
@@ -138,7 +147,13 @@ describe('db-entry zones (T6)', () => {
 });
 
 @Component({
-  imports: [AngularInlineTime, FormField],
+  imports: [
+    // Forms
+    FormField,
+
+    // Components
+    AngularInlineTime,
+  ],
   template: `
     <angular-inline-time
       [formField]="field"
@@ -198,7 +213,13 @@ describe('AngularInlineTime with a display zone (T6) + native bounds (T3)', () =
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineTime, FormField],
+  imports: [
+    // Forms
+    FormField,
+
+    // Components
+    AngularInlineTime,
+  ],
   template: `
     <angular-inline-time
       [formField]="field"
@@ -465,7 +486,10 @@ describe('AngularInlineTime (input rehost)', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineTime],
+  imports: [
+    // Components
+    AngularInlineTime,
+  ],
   template: `
     <angular-inline-time
       [(value)]="value"
@@ -796,7 +820,10 @@ describe('AngularInlineTime two-field range', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineTime],
+  imports: [
+    // Components
+    AngularInlineTime,
+  ],
   template: `<angular-inline-time [(value)]="value" format="HH:mm:ss" locale="en" />`,
 })
 class SecondsHost {
@@ -876,7 +903,14 @@ describe('the aria-live announcer (visually hidden)', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineTime, EditableClear, EditableClearTemplate],
+  imports: [
+    // Components
+    AngularInlineTime,
+
+    // Directives
+    EditableClear,
+    EditableClearTemplate,
+  ],
   template: `
     <angular-inline-time [(value)]="value" [ranged]="true" (saved)="sessions.push($event)">
       <ng-template editableClear let-clear let-label="label" let-side="side">
@@ -1016,7 +1050,9 @@ describe('AngularInlineTime — the rounding grid', () => {
   });
 
   it('the native picker keeps its own granularity (`step`, default 60 s)', () => {
-    const native = r.fixture.nativeElement.querySelector('.inline-time__native') as HTMLInputElement;
+    const native = r.fixture.nativeElement.querySelector(
+      '.inline-time__native',
+    ) as HTMLInputElement;
     expect(native.getAttribute('step')).toBe('60');
   });
 });
@@ -1027,7 +1063,13 @@ describe('AngularInlineTime — the rounding grid', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineTime, FormField],
+  imports: [
+    // Forms
+    FormField,
+
+    // Components
+    AngularInlineTime,
+  ],
   template: `<angular-inline-time [formField]="field" />`,
 })
 class OverlayHost {
@@ -1036,8 +1078,16 @@ class OverlayHost {
 }
 
 @Component({
-  imports: [AngularInlineTime, FormField],
-  template: `<angular-inline-time [formField]="field"><span editable-error class="custom-error">Custom message</span></angular-inline-time>`,
+  imports: [
+    // Forms
+    FormField,
+
+    // Components
+    AngularInlineTime,
+  ],
+  template: `<angular-inline-time [formField]="field"
+    ><span editable-error class="custom-error">Custom message</span></angular-inline-time
+  >`,
 })
 class OverlaySlotHost {
   model = signal<string | null>(null);
@@ -1083,7 +1133,9 @@ describe('AngularInlineTime — the error overlay', () => {
     input.value = 'zz';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     fixture.detectChanges();
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    );
     fixture.detectChanges();
 
     expect(panel()?.textContent).toContain('Not a valid time');
@@ -1106,7 +1158,14 @@ describe('AngularInlineTime — the error overlay', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineTime, EditablePrefix, EditableSuffix],
+  imports: [
+    // Components
+    AngularInlineTime,
+
+    // Directives
+    EditablePrefix,
+    EditableSuffix,
+  ],
   template: `
     <angular-inline-time>
       <ng-template editablePrefix><span class="unit-prefix">from</span></ng-template>
@@ -1114,14 +1173,15 @@ describe('AngularInlineTime — the error overlay', () => {
     </angular-inline-time>
   `,
 })
-class AffixHost {
-}
+class AffixHost {}
 
 describe('AngularInlineTime — affix slots', () => {
   it('renders the prefix and suffix around the field, hidden from assistive tech', () => {
     const fixture = TestBed.createComponent(AffixHost);
     fixture.detectChanges();
-    const affixes = Array.from(fixture.nativeElement.querySelectorAll('.inline-time__affix')) as HTMLElement[];
+    const affixes = Array.from(
+      fixture.nativeElement.querySelectorAll('.inline-time__affix'),
+    ) as HTMLElement[];
 
     expect(affixes.map((a) => a.textContent?.trim())).toEqual(['from', 'CET']);
     expect(affixes.every((a) => a.getAttribute('aria-hidden') === 'true')).toBe(true);
@@ -1136,7 +1196,10 @@ describe('AngularInlineTime — affix slots', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineTime],
+  imports: [
+    // Components
+    AngularInlineTime,
+  ],
   template: `<angular-inline-time [(value)]="value" [format]="format()" locale="en-US" />`,
 })
 class RawDisplayHost {
@@ -1148,7 +1211,8 @@ describe('AngularInlineTime — format shape and raw display', () => {
   it('shows the format as the placeholder: HH:MM, then HH:MM:SS', () => {
     const fixture = TestBed.createComponent(RawDisplayHost);
     fixture.detectChanges();
-    const input = () => fixture.nativeElement.querySelector('.inline-time__input') as HTMLInputElement;
+    const input = () =>
+      fixture.nativeElement.querySelector('.inline-time__input') as HTMLInputElement;
 
     expect(input().placeholder).toBe('HH:MM');
 
@@ -1162,7 +1226,9 @@ describe('AngularInlineTime — format shape and raw display', () => {
     fixture.componentInstance.value.set(at('21:05'));
     fixture.detectChanges();
 
-    expect((fixture.nativeElement.querySelector('.inline-time__input') as HTMLInputElement).value).toBe('21:05');
+    expect(
+      (fixture.nativeElement.querySelector('.inline-time__input') as HTMLInputElement).value,
+    ).toBe('21:05');
   });
 });
 

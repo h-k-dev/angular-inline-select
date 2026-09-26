@@ -1,20 +1,17 @@
 // Angular
 import {
   Component,
-  DestroyRef,
   ElementRef,
   inject,
   type TemplateRef,
 
   // Signals
-  afterNextRender,
   computed,
   contentChild,
   input,
   linkedSignal,
   model,
   output,
-  signal,
   type Signal,
   viewChild,
 } from '@angular/core';
@@ -24,11 +21,7 @@ import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 // CDK
-import {
-  CdkConnectedOverlay,
-  CdkOverlayOrigin,
-  type ConnectedPosition,
-} from '@angular/cdk/overlay';
+import { CdkConnectedOverlay, CdkOverlayOrigin } from '@angular/cdk/overlay';
 
 // Editables
 import {
@@ -40,7 +33,7 @@ import {
   EditableClearTemplate,
   type BubbleMenuSide,
   type EditableClearContext,
-  observeHoverScope,
+  watchHoverScope,
   type EditableHoverScopePress,
   EditableActionsTemplate,
   type EditableActionsContext,
@@ -60,7 +53,7 @@ import {
   type TimeValueShape,
 } from './time-codec';
 import { INLINE_TIME_DAY_OFFSET } from './day-offset';
-import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
+import { INLINE_TEMPORAL_BUBBLE_SIDE } from '../leaf-state';
 import { INLINE_TEMPORAL_MAT_CONTROL } from '../mat-control';
 import { focusInputNearPoint, isUnitSpacePress } from '../inline-unit';
 import {
@@ -75,6 +68,10 @@ import {
   type SideKey,
   makeActionsContexts,
   ACTIONS_GUARDS,
+  makeLeafContract,
+  makeErrorPanel,
+  handleScopeTab,
+  TEMPORAL_PANEL_POSITIONS,
 } from '../side-session';
 import { TemporalIntl } from '../temporal-intl';
 import { INLINE_TEMPORAL_LOCALE } from '../locale';
@@ -361,24 +358,22 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   #groupDayOffset = inject(INLINE_TIME_DAY_OFFSET, { optional: true, self: true });
 
   /**
-   * Group-forwarded contract state (role-provided; absent standalone).
-   * Merged by PULL — the leaf stays decoupled, no effects involved.
+   * The Form Value Contract as this leaf shows it: own inputs merged with the
+   * state a range group forwards (role-provided; absent standalone), by pull.
    */
-  #leafState = inject(INLINE_TEMPORAL_LEAF_STATE, { optional: true, self: true });
+  #contract = makeLeafContract({
+    disabled: this.disabled,
+    readonly: this.readonly,
+    touched: this.touched,
+    invalid: this.invalid,
+    errors: this.errors,
+  });
 
   /** Public: the composed disabled verdict (own input + group-fed state). */
-  readonly effectiveDisabled = computed(
-    () => this.disabled() || (this.#leafState?.disabled() ?? false),
-  );
-  protected effectiveReadonly = computed(
-    () => this.readonly() || (this.#leafState?.readonly() ?? false),
-  );
-  protected effectiveTouched = computed(
-    () => this.touched() || (this.#leafState?.touched() ?? false),
-  );
-  protected effectiveInvalid = computed(
-    () => this.invalid() || (this.#leafState?.invalid() ?? false),
-  );
+  readonly effectiveDisabled = this.#contract.disabled;
+  protected effectiveReadonly = this.#contract.readonly;
+  protected effectiveTouched = this.#contract.touched;
+  protected effectiveInvalid = this.#contract.invalid;
 
   /**
    * Days the end overflows past the start's calendar day (the `+n` badge).
@@ -534,23 +529,14 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     () => this.parsedDraft() === undefined && this.explicitDraft() === undefined,
   );
 
-  #selfTouched = signal(false);
-
-  protected isInvalid = computed(
-    () =>
-      this.effectiveInvalid() ||
-      this.errors().length > 0 ||
-      (this.#leafState?.errors().length ?? 0) > 0,
-  );
+  protected isInvalid = this.#contract.isInvalid;
 
   /**
    * The mat split: the consumer decides what errors say, the field when they
    * show. Public — the field's presentational verdict, the thing a hosting
    * container (a mat-form-field adapter) needs to mirror.
    */
-  readonly errorsVisible = computed(
-    () => this.isInvalid() && (this.effectiveTouched() || this.#selfTouched()),
-  );
+  readonly errorsVisible = this.#contract.errorsVisible;
 
   /** Public: whether the field holds no value at all (both sides empty). */
   readonly isEmpty = computed(() => {
@@ -566,8 +552,15 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
    */
   externalErrors = model(false);
 
-  /** Enter/Escape hide the panel until the next keystroke or session. */
-  #panelDismissed = signal(false);
+  /** The error-only panel — it appears while editing with an error to show. */
+  #panel = makeErrorPanel({
+    session: () => this.editing(),
+    external: () => this.externalErrors(),
+    errorsVisible: () => this.errorsVisible(),
+    parseGate: () => this.parseGateVisible(),
+    locked: () => this.effectiveDisabled() || this.effectiveReadonly(),
+    scope: () => this.#hoverScope.element(),
+  });
 
   /** The parse-gate reveal: Enter was attempted on an unreadable draft. */
   protected parseGateVisible = computed(() => {
@@ -575,44 +568,20 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     return key !== null && this.#side(key).saveAttempted() && this.parseFailed();
   });
 
-  protected errorSlotVisible = computed(() => this.errorsVisible() || this.parseGateVisible());
+  protected errorSlotVisible = this.#panel.slotVisible;
 
   /** The message-carrying errors — the overlay's default content (mat-error's analogue). */
-  protected errorMessages = computed(() => this.errors().filter((error) => !!error.message));
+  protected errorMessages = this.#contract.errorMessages;
 
   /** The parse gate's own line: an unreadable draft on Enter says so. */
   protected parseGateLabel = computed(() => this.#intl.invalidEntryLabel(this.#intl.timeLabel()));
 
-  /** The panel appears only to carry an error — there is no live preview. */
-  protected panelOpen = computed(
-    () =>
-      this.editing() &&
-      !this.externalErrors() &&
-      !this.#panelDismissed() &&
-      this.errorSlotVisible(),
-  );
+  protected panelOpen = this.#panel.open;
 
   /** Public: whether the panel is showing (hosting containers coordinate on it). */
-  readonly panelVisible = computed(() => this.panelOpen());
+  readonly panelVisible = this.#panel.open;
 
-  /** An outside click dismisses the panel — the session survives (focusout settles). */
-  protected dismissPanel() {
-    this.#panelDismissed.set(true);
-  }
-
-  /**
-   * Below the field first, above as a fallback; each side also tries an
-   * inline-END alignment so a panel near the inline-end screen edge flips
-   * instead of overflowing. Should nothing fit (narrow viewports), the
-   * template's `cdkConnectedOverlayPush` slides the panel inside the viewport
-   * margin rather than leaving it clipped.
-   */
-  protected overlayPositions: ConnectedPosition[] = [
-    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
-    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 4 },
-    { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
-    { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -4 },
-  ];
+  protected overlayPositions = TEMPORAL_PANEL_POSITIONS;
 
   protected revertFlash = this.#chrome.revertFlash;
   protected revertNotice = this.#chrome.revertNotice;
@@ -661,7 +630,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     side.anchorDay = this.#anchorDay();
     side.dirty.set(false);
     side.saveAttempted.set(false);
-    this.#panelDismissed.set(false);
+    this.#panel.dismissed.set(false);
     side.open.set(true);
   }
 
@@ -696,16 +665,13 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     const side = this.#side(key);
     side.draft.set(raw); // the setter marks dirty AND runs the live resolve
     side.saveAttempted.set(false);
-    this.#panelDismissed.set(false);
+    this.#panel.dismissed.set(false);
   }
 
   // -- The interactive unit + the hover scope -------------------------------------
 
   /** The wrapper around the inputs — the unit the pointer meets. */
   protected field = viewChild.required<ElementRef<HTMLElement>>('field');
-
-  #unitHost = inject<ElementRef<HTMLElement>>(ElementRef);
-  #unitDestroyRef = inject(DestroyRef);
 
   #inputs(): (HTMLInputElement | undefined)[] {
     return [this.startInput()?.nativeElement, this.endInput()?.nativeElement];
@@ -726,20 +692,9 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     focusInputNearPoint(this.#inputs(), event.clientX, event.clientY);
   }
 
-  /**
-   * The overlay's outside click, SCOPE-AWARE: a press on the hover scope's
-   * own space is the gesture that just focused this control (the scope
-   * forwards it, the panel opens on focus), and the CLICK that completes
-   * that press lands on the row — outside the overlay's origin, so CDK
-   * reports it as outside and the panel would flash open and shut. The row
-   * is the unit: a click on it is a click on us. Clicks on another row, or
-   * anywhere else, still dismiss.
-   */
+  /** The overlay's outside click — scope-aware (see `ErrorPanel.outsideClick`). */
   protected handleOutsideClick(event: MouseEvent) {
-    const scope = this.#hoverScope();
-    if (scope !== null && scope.contains(event.target as Node)) return;
-
-    this.dismissPanel();
+    this.#panel.outsideClick(event);
   }
 
   /** The scope's press, forwarded (`pressToFocus`): the same landing from a point outside the unit. */
@@ -757,17 +712,9 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
    * hands the paint decision to the styles (the scope paints, the unit's own
    * shape rests unless `--editable-text-shape-in-scope`).
    */
-  #hoverScope = signal<HTMLElement | null>(null);
-  protected hasHoverScope = computed(() => this.#hoverScope() !== null);
-  protected scopeHover = signal(false);
-
-  #watchHoverScope = afterNextRender(() => {
-    const watch = observeHoverScope(this.#unitHost.nativeElement, (hover) =>
-      this.scopeHover.set(hover),
-    );
-    this.#hoverScope.set(watch.scope);
-    this.#unitDestroyRef.onDestroy(watch.disconnect);
-  });
+  #hoverScope = watchHoverScope();
+  protected hasHoverScope = this.#hoverScope.present;
+  protected scopeHover = this.#hoverScope.hover;
 
   // -- Focus flow -------------------------------------------------------------------
 
@@ -891,7 +838,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
 
     if (snappedBack) this.#chrome.announceRevert(key, this.#side(key).display());
 
-    this.#selfTouched.set(true);
+    this.#contract.markTouched();
     this.touch.emit();
 
     const value = this.value();
@@ -922,27 +869,12 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   protected handleKeydown(key: SideKey, event: KeyboardEvent) {
     switch (event.key) {
       case 'Tab': {
-        const scope = this.#scope;
-        if (!scope?.tabCommits()) return;
-
-        const direction = event.shiftKey ? -1 : 1;
-        const internalMove =
-          this.twoFields() &&
-          ((key === 'start' && direction === 1) || (key === 'end' && direction === -1));
-        if (internalMove) return; // the native side-to-side Tab stays
-
-        // `'stay'` refuses the Tab like Enter's parse gate (Tab gesture
-        // only — blur keeps the native snap-back regardless of policy).
-        if (scope.onBlocked() === 'stay' && this.parseFailed()) {
-          event.preventDefault();
-          this.#side(key).saveAttempted.set(true);
-          scope.announce('blocked');
-          return;
-        }
-
-        // Own the Tab only when the walk can place it — at the scope's edge
-        // the native Tab proceeds (blur settles, focus leaves the region).
-        if (scope.advanceFrom(event.target as HTMLElement, direction)) event.preventDefault();
+        // The native side-to-side Tab of a pair stays native.
+        handleScopeTab(this.#scope, event, {
+          internal: this.twoFields() && (key === 'start' ? !event.shiftKey : event.shiftKey),
+          blocked: () => this.parseFailed(),
+          markBlocked: () => this.#side(key).saveAttempted.set(true),
+        });
         return;
       }
       case 'Enter': {
@@ -954,14 +886,14 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
         }
 
         this.#settle(key, { keepOpen: true });
-        this.#panelDismissed.set(true);
+        this.#panel.dismissed.set(true);
         return;
       }
       case 'Escape': {
         event.preventDefault();
         event.stopPropagation();
         this.#settle(key, { revert: true, keepOpen: true });
-        this.#panelDismissed.set(true);
+        this.#panel.dismissed.set(true);
         return;
       }
     }
@@ -973,8 +905,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
    * error to show the panel stays empty-quiet — there is no live preview.)
    */
   togglePanel() {
-    if (this.effectiveDisabled() || this.effectiveReadonly()) return;
-    this.#panelDismissed.update((dismissed) => !dismissed);
+    this.#panel.toggle();
   }
 
   // -- The OS picker ---------------------------------------------------------------------
@@ -1037,7 +968,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
 
     if (side.open()) {
       side.draft.set(raw); // the setter marks dirty AND runs the live resolve
-      this.#panelDismissed.set(false);
+      this.#panel.dismissed.set(false);
       return;
     }
 
@@ -1149,7 +1080,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
       side.saveAttempted.set(false);
     }
 
-    this.#selfTouched.set(true);
+    this.#contract.markTouched();
     this.touch.emit();
 
     const value = this.value();
@@ -1185,6 +1116,6 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
       side.saveAttempted.set(false);
     }
 
-    this.#panelDismissed.set(true);
+    this.#panel.dismissed.set(true);
   }
 }

@@ -90,6 +90,31 @@ const PAIRS = [
     `${E}/editable-inline/editable-panel-actions.ts`,
   ],
   [
+    'text/slash-menu',
+    `${SB}/src/lib/angular-inline-text/slash-menu.ts`,
+    `${E}/editable-inline/slash-menu.ts`,
+  ],
+  [
+    'text/content-end',
+    `${SB}/src/lib/angular-inline-text/content-end.ts`,
+    `${E}/editable-inline/content-end.ts`,
+  ],
+  [
+    'text/panel-geometry',
+    `${SB}/src/lib/angular-inline-text/panel-geometry.ts`,
+    `${E}/editable-inline/panel-geometry.ts`,
+  ],
+  [
+    'text/draft-pass',
+    `${SB}/src/lib/angular-inline-text/draft-pass.ts`,
+    `${E}/editable-inline/draft-pass.ts`,
+  ],
+  [
+    'text/error-state',
+    `${SB}/src/lib/angular-inline-text/text-error-state.ts`,
+    `${E}/editable-inline/text-error-state.ts`,
+  ],
+  [
     'text/intl',
     `${SB}/src/lib/angular-inline-text/editable-text-intl.ts`,
     `${E}/editable-inline/editable-text-intl.ts`,

@@ -15,7 +15,6 @@ import {
   linkedSignal,
   model,
   output,
-  signal,
   type Signal,
   viewChild,
 } from '@angular/core';
@@ -25,12 +24,7 @@ import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 // CDK
-import {
-  CdkConnectedOverlay,
-  CdkOverlayOrigin,
-  type ConnectedPosition,
-  Overlay,
-} from '@angular/cdk/overlay';
+import { CdkConnectedOverlay, CdkOverlayOrigin, Overlay } from '@angular/cdk/overlay';
 
 // Editables
 import {
@@ -42,7 +36,7 @@ import {
   EditableClearTemplate,
   type BubbleMenuSide,
   type EditableClearContext,
-  observeHoverScope,
+  watchHoverScope,
   type EditableHoverScopePress,
   EditableActionsTemplate,
   type EditableActionsContext,
@@ -63,7 +57,7 @@ import {
   type DateValueShape,
   type InternalDateRange,
 } from './date-codec';
-import { INLINE_TEMPORAL_BUBBLE_SIDE, INLINE_TEMPORAL_LEAF_STATE } from '../leaf-state';
+import { INLINE_TEMPORAL_BUBBLE_SIDE } from '../leaf-state';
 import { INLINE_TEMPORAL_MAT_CONTROL } from '../mat-control';
 import { focusInputNearPoint, isUnitSpacePress } from '../inline-unit';
 import { INLINE_TEMPORAL_LOCALE } from '../locale';
@@ -90,6 +84,9 @@ import {
   type SideKey,
   makeActionsContexts,
   ACTIONS_GUARDS,
+  makeLeafContract,
+  handleScopeTab,
+  TEMPORAL_PANEL_POSITIONS,
 } from '../side-session';
 import { TemporalIntl } from '../temporal-intl';
 import { Calendar } from './calendar/calendar';
@@ -418,24 +415,22 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   );
 
   /**
-   * Group-forwarded contract state (role-provided; absent standalone).
-   * Merged by PULL — the leaf stays decoupled, no effects involved.
+   * The Form Value Contract as this leaf shows it: own inputs merged with the
+   * state a range group forwards (role-provided; absent standalone), by pull.
    */
-  #leafState = inject(INLINE_TEMPORAL_LEAF_STATE, { optional: true, self: true });
+  #contract = makeLeafContract({
+    disabled: this.disabled,
+    readonly: this.readonly,
+    touched: this.touched,
+    invalid: this.invalid,
+    errors: this.errors,
+  });
 
   /** Public: the composed disabled verdict (own input + group-fed state). */
-  readonly effectiveDisabled = computed(
-    () => this.disabled() || (this.#leafState?.disabled() ?? false),
-  );
-  protected effectiveReadonly = computed(
-    () => this.readonly() || (this.#leafState?.readonly() ?? false),
-  );
-  protected effectiveTouched = computed(
-    () => this.touched() || (this.#leafState?.touched() ?? false),
-  );
-  protected effectiveInvalid = computed(
-    () => this.invalid() || (this.#leafState?.invalid() ?? false),
-  );
+  readonly effectiveDisabled = this.#contract.disabled;
+  protected effectiveReadonly = this.#contract.readonly;
+  protected effectiveTouched = this.#contract.touched;
+  protected effectiveInvalid = this.#contract.invalid;
 
   /** Form Value Contract: touch — emitted whenever a session settles. */
   touch = output();
@@ -570,7 +565,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     this.#rebaselineSides();
 
     const changed = !dateFiltersEqual(before, this.#stagedFilter());
-    this.#selfTouched.set(true);
+    this.#contract.markTouched();
     this.touch.emit();
     if (changed) this.#emitSavedModel();
     this.saved.emit({ value: this.value(), changed });
@@ -723,23 +718,14 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   /** The parse gate: whether the focused draft fails the codec. Public for consumers. */
   readonly parseFailed = computed(() => this.parsedDraft() === undefined);
 
-  #selfTouched = signal(false);
-
-  protected isInvalid = computed(
-    () =>
-      this.effectiveInvalid() ||
-      this.errors().length > 0 ||
-      (this.#leafState?.errors().length ?? 0) > 0,
-  );
+  protected isInvalid = this.#contract.isInvalid;
 
   /**
    * The mat split: the consumer decides what errors say, the field when they
    * show. Public — it is the field's presentational verdict, the thing a
    * hosting container (a mat-form-field adapter) needs to mirror.
    */
-  readonly errorsVisible = computed(
-    () => this.isInvalid() && (this.effectiveTouched() || this.#selfTouched()),
-  );
+  readonly errorsVisible = this.#contract.errorsVisible;
 
   /**
    * Public: whether the field holds no value at all (both sides empty).
@@ -847,19 +833,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
         ).filter((command) => this.#dayAvailable(command.iso)),
   );
 
-  /**
-   * Below the field first, above as a fallback; each side also tries an
-   * inline-END alignment so a panel near the inline-end screen edge flips
-   * instead of overflowing. Should nothing fit (narrow viewports), the
-   * template's `cdkConnectedOverlayPush` slides the panel inside the viewport
-   * margin rather than leaving it clipped.
-   */
-  protected overlayPositions: ConnectedPosition[] = [
-    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
-    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 4 },
-    { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
-    { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -4 },
-  ];
+  protected overlayPositions = TEMPORAL_PANEL_POSITIONS;
 
   protected revertFlash = this.#chrome.revertFlash;
   protected revertNotice = this.#chrome.revertNotice;
@@ -967,7 +941,6 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   /** The wrapper around the inputs — the unit the pointer meets. */
   protected field = viewChild.required<ElementRef<HTMLElement>>('field');
 
-  #unitHost = inject<ElementRef<HTMLElement>>(ElementRef);
   #unitDestroyRef = inject(DestroyRef);
 
   #inputs(): (HTMLInputElement | undefined)[] {
@@ -1006,7 +979,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
       return;
     }
 
-    const scope = this.#hoverScope();
+    const scope = this.#hoverScope.element();
     if (scope !== null && scope.contains(event.target as Node)) return;
 
     this.isOpen.set(false);
@@ -1028,17 +1001,9 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * hands the paint decision to the styles (the scope paints, the unit's own
    * shape rests unless `--editable-text-shape-in-scope`).
    */
-  #hoverScope = signal<HTMLElement | null>(null);
-  protected hasHoverScope = computed(() => this.#hoverScope() !== null);
-  protected scopeHover = signal(false);
-
-  #watchHoverScope = afterNextRender(() => {
-    const watch = observeHoverScope(this.#unitHost.nativeElement, (hover) =>
-      this.scopeHover.set(hover),
-    );
-    this.#hoverScope.set(watch.scope);
-    this.#unitDestroyRef.onDestroy(watch.disconnect);
-  });
+  #hoverScope = watchHoverScope();
+  protected hasHoverScope = this.#hoverScope.present;
+  protected scopeHover = this.#hoverScope.hover;
 
   // -- Focus flow ----------------------------------------------------------------
 
@@ -1251,7 +1216,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
     if (snappedBack) this.#chrome.announceRevert(key, side.display());
 
-    this.#selfTouched.set(true);
+    this.#contract.markTouched();
     this.touch.emit();
 
     const value = this.value();
@@ -1292,30 +1257,12 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   protected handleInputKeydown(key: SideKey, event: KeyboardEvent) {
     switch (event.key) {
       case 'Tab': {
-        const scope = this.#scope;
-        if (!scope?.tabCommits()) return;
-
-        const direction = event.shiftKey ? -1 : 1;
-        const internalMove =
-          this.twoFields() &&
-          ((key === 'start' && direction === 1) || (key === 'end' && direction === -1));
-        if (internalMove) return; // the native side-to-side Tab stays
-
-        // `'stay'` refuses the Tab like Enter's parse gate would. Only the
-        // Tab GESTURE — blur can never be refused, so it keeps the native
-        // snap-back regardless of policy.
-        if (scope.onBlocked() === 'stay' && this.#side(key).parsed() === undefined) {
-          event.preventDefault();
-          this.#side(key).saveAttempted.set(true);
-          scope.announce('blocked');
-          return;
-        }
-
-        // Own the Tab only when the walk can place it. At the scope's edge
-        // the NATIVE Tab proceeds — blur settles and focus leaves the
-        // region, exactly the `wrap: false` contract. Preventing first
-        // would turn the last field into a Tab trap.
-        if (scope.advanceFrom(event.target as HTMLElement, direction)) event.preventDefault();
+        // The native side-to-side Tab of a pair stays native.
+        handleScopeTab(this.#scope, event, {
+          internal: this.twoFields() && (key === 'start' ? !event.shiftKey : event.shiftKey),
+          blocked: () => this.#side(key).parsed() === undefined,
+          markBlocked: () => this.#side(key).saveAttempted.set(true),
+        });
         return;
       }
       case 'Enter': {
@@ -1426,7 +1373,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     this.#rebaselineSides();
 
     const changed = !dateValuesEqual(this.#boundRaw(), before);
-    this.#selfTouched.set(true);
+    this.#contract.markTouched();
     this.touch.emit();
     if (changed) this.#emitSavedModel();
     this.saved.emit({ value: this.value(), changed });
@@ -1629,7 +1576,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     this.#writeSideDay(key, null);
     this.#rebaselineSides();
 
-    this.#selfTouched.set(true);
+    this.#contract.markTouched();
     this.touch.emit();
 
     const changed = !dateValuesEqual(this.#boundRaw(), before);

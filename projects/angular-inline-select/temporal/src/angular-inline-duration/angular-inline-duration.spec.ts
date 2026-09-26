@@ -1,7 +1,16 @@
-import { Component, signal } from '@angular/core';
+// Angular
+import {
+  Component,
+
+  // Signals
+  signal,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+
+// Forms
 import { FormField, form, required } from '@angular/forms/signals';
 
+// Editables
 import { AngularInlineDuration, type InlineDurationSaved } from './angular-inline-duration';
 import type { IntervalRounding } from '../interval-rounding';
 import { EditableClear, EditableClearTemplate } from 'angular-inline-select';
@@ -56,7 +65,13 @@ describe('duration codec', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineDuration, FormField],
+  imports: [
+    // Forms
+    FormField,
+
+    // Components
+    AngularInlineDuration,
+  ],
   template: `
     <angular-inline-duration
       [formField]="field"
@@ -204,7 +219,14 @@ describe('the aria-live announcer (visually hidden)', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineDuration, EditableClear, EditableClearTemplate],
+  imports: [
+    // Components
+    AngularInlineDuration,
+
+    // Directives
+    EditableClear,
+    EditableClearTemplate,
+  ],
   template: `
     <angular-inline-duration [(value)]="value" (saved)="sessions.push($event)">
       <ng-template editableClear let-clear let-label="label" let-side="side">
@@ -296,7 +318,13 @@ describe('AngularInlineDuration — the interactive unit', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineDuration, FormField],
+  imports: [
+    // Forms
+    FormField,
+
+    // Components
+    AngularInlineDuration,
+  ],
   template: `
     <angular-inline-duration
       [formField]="field"
@@ -317,13 +345,17 @@ describe('AngularInlineDuration — the rounding grid', () => {
     const fixture = TestBed.createComponent(DurationGridHost);
     setup?.(fixture.componentInstance);
     fixture.detectChanges();
-    const input = fixture.nativeElement.querySelector('.inline-duration__input') as HTMLInputElement;
+    const input = fixture.nativeElement.querySelector(
+      '.inline-duration__input',
+    ) as HTMLInputElement;
     input.focus();
     fixture.detectChanges();
     input.value = text;
     input.dispatchEvent(new Event('input', { bubbles: true }));
     fixture.detectChanges();
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    );
     fixture.detectChanges();
     return fixture.componentInstance.model();
   }
@@ -355,8 +387,15 @@ describe('AngularInlineDuration — the rounding grid', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineDuration],
-  template: `<angular-inline-duration [(value)]="value" [emptyValue]="emptyValue()" (saved)="sessions.push($event)" />`,
+  imports: [
+    // Components
+    AngularInlineDuration,
+  ],
+  template: `<angular-inline-duration
+    [(value)]="value"
+    [emptyValue]="emptyValue()"
+    (saved)="sessions.push($event)"
+  />`,
 })
 class EmptyValueHost {
   value = signal<number | null>(null);
@@ -369,7 +408,9 @@ describe('AngularInlineDuration — emptyValue', () => {
     const fixture = TestBed.createComponent(EmptyValueHost);
     init(fixture.componentInstance);
     fixture.detectChanges();
-    const input = fixture.nativeElement.querySelector('.inline-duration__input') as HTMLInputElement;
+    const input = fixture.nativeElement.querySelector(
+      '.inline-duration__input',
+    ) as HTMLInputElement;
     const field = fixture.debugElement.query((el) => el.name === 'angular-inline-duration')!
       .componentInstance as AngularInlineDuration;
     return { fixture, input, field, host: fixture.componentInstance };
@@ -381,7 +422,9 @@ describe('AngularInlineDuration — emptyValue', () => {
     m.input.value = '';
     m.input.dispatchEvent(new Event('input', { bubbles: true }));
     m.fixture.detectChanges();
-    m.input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    m.input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    );
     m.fixture.detectChanges();
   }
 
@@ -416,7 +459,13 @@ describe('AngularInlineDuration — emptyValue', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineDuration, FormField],
+  imports: [
+    // Forms
+    FormField,
+
+    // Components
+    AngularInlineDuration,
+  ],
   template: `<angular-inline-duration [formField]="field" />`,
 })
 class OverlayHost {
@@ -425,8 +474,16 @@ class OverlayHost {
 }
 
 @Component({
-  imports: [AngularInlineDuration, FormField],
-  template: `<angular-inline-duration [formField]="field"><span editable-error class="custom-error">Custom message</span></angular-inline-duration>`,
+  imports: [
+    // Forms
+    FormField,
+
+    // Components
+    AngularInlineDuration,
+  ],
+  template: `<angular-inline-duration [formField]="field"
+    ><span editable-error class="custom-error">Custom message</span></angular-inline-duration
+  >`,
 })
 class OverlaySlotHost {
   model = signal<number | null>(null);
@@ -440,7 +497,9 @@ describe('AngularInlineDuration — the error overlay', () => {
     const fixture = TestBed.createComponent(type);
     fixture.componentInstance.field().markAsTouched();
     fixture.detectChanges();
-    const input = fixture.nativeElement.querySelector('.inline-duration__input') as HTMLInputElement;
+    const input = fixture.nativeElement.querySelector(
+      '.inline-duration__input',
+    ) as HTMLInputElement;
     return { fixture, input };
   }
 
@@ -472,7 +531,9 @@ describe('AngularInlineDuration — the error overlay', () => {
     input.value = 'zz';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     fixture.detectChanges();
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    );
     fixture.detectChanges();
 
     expect(panel()?.textContent).toContain('Not a valid duration');
@@ -495,7 +556,10 @@ describe('AngularInlineDuration — the error overlay', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineDuration],
+  imports: [
+    // Components
+    AngularInlineDuration,
+  ],
   template: `<angular-inline-duration [(value)]="value" [format]="format()" />`,
 })
 class DurationFormatHost {
@@ -507,7 +571,8 @@ describe('AngularInlineDuration — format', () => {
   it('shows the format as the placeholder and reads colon notation by it', () => {
     const fixture = TestBed.createComponent(DurationFormatHost);
     fixture.detectChanges();
-    const input = () => fixture.nativeElement.querySelector('.inline-duration__input') as HTMLInputElement;
+    const input = () =>
+      fixture.nativeElement.querySelector('.inline-duration__input') as HTMLInputElement;
 
     expect(input().placeholder).toBe('HH:MM');
 

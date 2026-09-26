@@ -15,8 +15,19 @@ import {
   type WritableSignal,
 } from '@angular/core';
 
+// Forms
+import type { ValidationError } from '@angular/forms/signals';
+
+// CDK
+import type { ConnectedPosition } from '@angular/cdk/overlay';
+
 // Editables
-import type { EditableClearContext, EditableActionsContext } from 'angular-inline-select';
+import type {
+  EditableClearContext,
+  EditableActionsContext,
+  EditableScopeContract,
+} from 'angular-inline-select';
+import { INLINE_TEMPORAL_LEAF_STATE } from './leaf-state';
 import { TemporalIntl } from './temporal-intl';
 
 /**
@@ -380,4 +391,155 @@ export function makeActionsContexts<T>(options: {
     start: context('start', 'start', focusStart),
     end: context('end', 'end', focusEnd),
   };
+}
+
+// -- The leaf contract, the error panel, the scope's Tab --------------------------
+
+/** What a temporal leaf shows of the Form Value Contract — see `makeLeafContract`. */
+export interface LeafContract {
+  /** Own input OR the group's forwarded verdict. */
+  readonly disabled: Signal<boolean>;
+  readonly readonly: Signal<boolean>;
+  readonly touched: Signal<boolean>;
+  readonly invalid: Signal<boolean>;
+  /** Invalid by any account: the flag, own errors, or errors the group routed here. */
+  readonly isInvalid: Signal<boolean>;
+  /** The mat split: the consumer decides what errors say, the field WHEN they show. */
+  readonly errorsVisible: Signal<boolean>;
+  /** The message-carrying errors — the overlay's default content (mat-error's analogue). */
+  readonly errorMessages: Signal<readonly ValidationError.WithOptionalFieldTree[]>;
+  /** A session settled (or a clear): the field counts as touched from here on. */
+  markTouched(): void;
+}
+
+/**
+ * The contract state of a temporal leaf: its own inputs MERGED with what a
+ * range group forwards through `INLINE_TEMPORAL_LEAF_STATE` — by pull, no
+ * effects, the leaf stays decoupled (standalone it sees no group at all).
+ * Call in an injection context (a field initializer): the group state is
+ * injected from the control's own element only.
+ */
+export function makeLeafContract(own: {
+  disabled: Signal<boolean>;
+  readonly: Signal<boolean>;
+  touched: Signal<boolean>;
+  invalid: Signal<boolean>;
+  errors: Signal<readonly ValidationError.WithOptionalFieldTree[]>;
+}): LeafContract {
+  const group = inject(INLINE_TEMPORAL_LEAF_STATE, { optional: true, self: true });
+  const selfTouched = signal(false);
+
+  const disabled = computed(() => own.disabled() || (group?.disabled() ?? false));
+  const readonly = computed(() => own.readonly() || (group?.readonly() ?? false));
+  const touched = computed(() => own.touched() || (group?.touched() ?? false));
+  const invalid = computed(() => own.invalid() || (group?.invalid() ?? false));
+  const isInvalid = computed(
+    () => invalid() || own.errors().length > 0 || (group?.errors().length ?? 0) > 0,
+  );
+
+  return {
+    disabled,
+    readonly,
+    touched,
+    invalid,
+    isInvalid,
+    errorsVisible: computed(() => isInvalid() && (touched() || selfTouched())),
+    errorMessages: computed(() => own.errors().filter((error) => !!error.message)),
+    markTouched: () => selfTouched.set(true),
+  };
+}
+
+/**
+ * Below the field first, above as a fallback; each side also tries an
+ * inline-END alignment so a panel near the inline-end screen edge flips
+ * instead of overflowing. Should nothing fit (narrow viewports), the
+ * template's `cdkConnectedOverlayPush` slides the panel inside the viewport
+ * margin rather than leaving it clipped.
+ */
+export const TEMPORAL_PANEL_POSITIONS: ConnectedPosition[] = [
+  { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
+  { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 4 },
+  { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
+  { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -4 },
+];
+
+/** The error-only panel of the time and duration controls — see `makeErrorPanel`. */
+export interface ErrorPanel {
+  /** Enter/Escape hide the panel until the next keystroke or session. */
+  readonly dismissed: WritableSignal<boolean>;
+  /** Whether there is an error to show — the schema's, or the parse gate's. */
+  readonly slotVisible: Signal<boolean>;
+  /** Whether the panel shows: only to carry an error — there is no live preview. */
+  readonly open: Signal<boolean>;
+  /** Toggles it — the container-click affordance a hosting adapter delegates to. */
+  toggle(): void;
+  /**
+   * The overlay's outside click, SCOPE-AWARE: a press on the hover scope's
+   * own space is the gesture that just focused this control, and the click
+   * completing it lands on the row — outside the overlay's origin, so CDK
+   * reports it as outside and the panel would flash shut. The row is the
+   * unit: a click on it is a click on us. Clicks anywhere else dismiss.
+   */
+  outsideClick(event: MouseEvent): void;
+}
+
+/**
+ * The error panel: it appears while a session is open and there is an error
+ * to show — and never inside a hosting container whose own error area speaks
+ * (`external`, the mat adapter's `externalErrors`). Inputs are thunks, so the
+ * panel can be built before the fields it reads are declared.
+ */
+export function makeErrorPanel(options: {
+  session: () => boolean;
+  external: () => boolean;
+  errorsVisible: () => boolean;
+  parseGate: () => boolean;
+  locked: () => boolean;
+  scope: () => HTMLElement | null;
+}): ErrorPanel {
+  const dismissed = signal(false);
+  const slotVisible = computed(() => options.errorsVisible() || options.parseGate());
+
+  return {
+    dismissed,
+    slotVisible,
+    open: computed(() => options.session() && !options.external() && !dismissed() && slotVisible()),
+    toggle() {
+      if (options.locked()) return;
+      dismissed.update((value) => !value);
+    },
+    outsideClick(event) {
+      const scope = options.scope();
+      if (scope !== null && scope.contains(event.target as Node)) return;
+      dismissed.set(true);
+    },
+  };
+}
+
+/**
+ * Tab inside a Tab-to-accept scope (`[editableScope]`). The commit already
+ * rides the native focusout; only the EDGE Tab's landing spot is the scope's
+ * business — a Tab moving between a pair's own inputs (`internal`) stays
+ * native. `'stay'` refuses the Tab like Enter's parse gate would (the Tab
+ * GESTURE only — blur keeps the native snap-back regardless of policy). The
+ * Tab is owned only when the walk can place it: at the scope's edge the native
+ * Tab proceeds (blur settles, focus leaves the region — `wrap: false`).
+ */
+export function handleScopeTab(
+  scope: EditableScopeContract | null,
+  event: KeyboardEvent,
+  options: { internal: boolean; blocked: () => boolean; markBlocked: () => void },
+): void {
+  if (!scope?.tabCommits() || options.internal) return;
+
+  if (scope.onBlocked() === 'stay' && options.blocked()) {
+    event.preventDefault();
+    options.markBlocked();
+    scope.announce('blocked');
+    return;
+  }
+
+  if (scope.advanceFrom(event.target as HTMLElement, event.shiftKey ? -1 : 1)) {
+    event.preventDefault();
+  }
 }

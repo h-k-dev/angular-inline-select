@@ -1,14 +1,17 @@
 // Angular
 import {
   booleanAttribute,
+  DestroyRef,
   Directive,
   ElementRef,
   inject,
 
   // Signals
+  afterNextRender,
   computed,
   input,
   signal,
+  type Signal,
 } from '@angular/core';
 
 /**
@@ -177,5 +180,41 @@ export function observeHoverScope(
       scope.removeEventListener('focusin', enter);
       scope.removeEventListener('focusout', focusOut);
     },
+  };
+}
+
+/** The hover-scope watch as signals (see `watchHoverScope`). */
+export interface HoverScopeSignals {
+  /** The `[editableHoverScope]` ancestor, once found after the first render (`null` without one). */
+  readonly element: Signal<HTMLElement | null>;
+  /** Whether a scope surrounds the control — the styles hand the paint to it. */
+  readonly present: Signal<boolean>;
+  /** The scope is hovered or holds focus — what arms the control's bubbles. */
+  readonly hover: Signal<boolean>;
+}
+
+/**
+ * `observeHoverScope` for a control, as signals and wired to its lifecycle:
+ * the scope is looked up by DOM after the first render (never injected — the
+ * mat-table trap) and the listeners go with the control. Call in an injection
+ * context (a field initializer); the control's own host element is the start
+ * of the lookup.
+ */
+export function watchHoverScope(): HoverScopeSignals {
+  const host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+  const destroyRef = inject(DestroyRef);
+  const element = signal<HTMLElement | null>(null);
+  const hover = signal(false);
+
+  afterNextRender(() => {
+    const watch = observeHoverScope(host, (next) => hover.set(next));
+    element.set(watch.scope);
+    destroyRef.onDestroy(watch.disconnect);
+  });
+
+  return {
+    element: element.asReadonly(),
+    present: computed(() => element() !== null),
+    hover: hover.asReadonly(),
   };
 }

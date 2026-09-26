@@ -1,8 +1,19 @@
-import { Component, Directive, signal, type Type } from '@angular/core';
+// Angular
+import {
+  Component,
+  Directive,
+  type Type,
+
+  // Signals
+  signal,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+
+// Forms
 import { FormField, form } from '@angular/forms/signals';
 
+// Editables
 import { AngularInlineDate, type InlineDateSaved } from './angular-inline-date';
 import { EditablePrefix, EditableSuffix } from 'angular-inline-select';
 import {
@@ -26,12 +37,14 @@ import {
   type DateSavedDetails,
   type InlineDateValue,
 } from './date-codec';
-import { localDayOf } from '../datetime/db-entry';
-import { addDays } from '../datetime/iso-date';
 import { provideInlineTemporalLocale } from '../locale';
 import { INLINE_DAY_AVAILABILITY, type InlineDayAvailability } from '../day-availability';
 import type { DayColumn, FilterClause } from '../filter/filter-dialect';
 import type { DateFilter, DateFilterPreset } from '../filter/date-filter';
+
+// Datetime
+import { localDayOf } from '../datetime/db-entry';
+import { addDays } from '../datetime/iso-date';
 
 // The value contract: CALENDAR DATES (`'2026-05-12'`) behind, localized
 // days in front — no time, no zone, so specs are TZ-independent.
@@ -209,7 +222,13 @@ describe('date shape-echo codec', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineDate, FormField],
+  imports: [
+    // Forms
+    FormField,
+
+    // Components
+    AngularInlineDate,
+  ],
   template: `
     <angular-inline-date
       [formField]="field"
@@ -231,7 +250,10 @@ class DateFormHost {
 }
 
 @Component({
-  imports: [AngularInlineDate],
+  imports: [
+    // Components
+    AngularInlineDate,
+  ],
   template: `
     <angular-inline-date
       [(value)]="value"
@@ -257,7 +279,14 @@ class DateShapeHost {
 }
 
 @Component({
-  imports: [AngularInlineDate, EditableClear, EditableClearTemplate],
+  imports: [
+    // Components
+    AngularInlineDate,
+
+    // Directives
+    EditableClear,
+    EditableClearTemplate,
+  ],
   template: `
     <angular-inline-date
       [(value)]="value"
@@ -643,7 +672,10 @@ describe('AngularInlineDate (input rehost)', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineDate],
+  imports: [
+    // Components
+    AngularInlineDate,
+  ],
   template: ` <angular-inline-date [(value)]="value" locale="en" zone="Asia/Tokyo" [now]="now" /> `,
 })
 class ZonedDateHost {
@@ -1230,7 +1262,13 @@ describe('AngularInlineDate — unresolved injected values', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineDate, EditableHoverScope],
+  imports: [
+    // Components
+    AngularInlineDate,
+
+    // Directives
+    EditableHoverScope,
+  ],
   template: `
     <div class="row" editableHoverScope>
       <span class="label">Deadline</span>
@@ -1373,7 +1411,13 @@ describe('AngularInlineDate — the interactive unit', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineDate, EditableActionsTemplate],
+  imports: [
+    // Components
+    AngularInlineDate,
+
+    // Directives
+    EditableActionsTemplate,
+  ],
   template: `
     <angular-inline-date
       [(value)]="value"
@@ -1528,7 +1572,13 @@ describe('AngularInlineDate — reset() leaves a clean session', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineDate, FormField],
+  imports: [
+    // Forms
+    FormField,
+
+    // Components
+    AngularInlineDate,
+  ],
   template: `<angular-inline-date [formField]="field" locale="en" [showTrigger]="showTrigger()" />`,
 })
 class ShowTriggerHost {
@@ -1561,7 +1611,14 @@ describe('AngularInlineDate — showTrigger', () => {
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineDate, EditablePrefix, EditableSuffix],
+  imports: [
+    // Components
+    AngularInlineDate,
+
+    // Directives
+    EditablePrefix,
+    EditableSuffix,
+  ],
   template: `
     <angular-inline-date [showTrigger]="showTrigger()">
       <ng-template editablePrefix><span class="unit-prefix">from</span></ng-template>
@@ -1605,7 +1662,10 @@ describe('AngularInlineDate — affix slots', () => {
 const isSunday = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay() === 0;
 
 @Component({
-  imports: [AngularInlineDate],
+  imports: [
+    // Components
+    AngularInlineDate,
+  ],
   template: `
     <angular-inline-date
       [(value)]="value"
@@ -1704,7 +1764,10 @@ const PRESETS: DateFilterPreset[] = [
 ];
 
 @Component({
-  imports: [AngularInlineDate],
+  imports: [
+    // Components
+    AngularInlineDate,
+  ],
   template: `
     <angular-inline-date
       mode="filter"
@@ -1844,7 +1907,10 @@ describe('AngularInlineDate — filter mode', () => {
 
 @Directive({
   selector: '[sundaysOff]',
-  providers: [{ provide: INLINE_DAY_AVAILABILITY, useExisting: SundaysOff }],
+  providers: [
+    // Tokens
+    { provide: INLINE_DAY_AVAILABILITY, useExisting: SundaysOff },
+  ],
 })
 class SundaysOff implements InlineDayAvailability {
   readonly filter = signal((iso: string) => !isSunday(iso)).asReadonly();
@@ -1853,7 +1919,11 @@ class SundaysOff implements InlineDayAvailability {
 }
 
 @Component({
-  imports: [AngularInlineDate, SundaysOff],
+  imports: [
+    // Components
+    AngularInlineDate,
+    SundaysOff,
+  ],
   template: `
     <angular-inline-date sundaysOff [(value)]="value" [dayFilter]="own()" locale="en" [now]="now" />
   `,
@@ -1887,7 +1957,10 @@ describe('AngularInlineDate — a day calendar lent by a directive', () => {
 });
 
 @Component({
-  imports: [AngularInlineDate],
+  imports: [
+    // Components
+    AngularInlineDate,
+  ],
   template: `<angular-inline-date [(value)]="value" [now]="now" />`,
 })
 class AppLocaleHost {
