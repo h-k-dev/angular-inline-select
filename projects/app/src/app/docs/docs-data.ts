@@ -197,6 +197,12 @@ const TEXT_SURFACE_TOKENS: TokenGroup = {
       description: 'Color of the resting dashed affordance underline.',
     },
     {
+      token: '--editable-text-underline-style',
+      fallback: 'dashed',
+      description:
+        'The resting underline’s style. Shared by every editable’s resting mark — the text decoration and the temporal empty-state border alike — so the values that work everywhere are solid, dashed, dotted and double (`wavy` is decoration-only). Focus stays solid.',
+    },
+    {
       token: '--editable-text-underline-focus-indicator-color',
       fallback: 'var(--mat-sys-primary, #428bca)',
       description: 'Color of the solid focus underline — separate from the resting color, so hiding the resting line never hides focus.',
@@ -496,6 +502,12 @@ const TEMPORAL_TOKENS: TokenGroup = {
       description: 'Dashed border-bottom affordance color.',
     },
     {
+      token: '--editable-text-underline-style',
+      fallback: 'dashed',
+      description:
+        'The resting underline’s style. Shared by every editable’s resting mark — the text decoration and the temporal empty-state border alike — so the values that work everywhere are solid, dashed, dotted and double (`wavy` is decoration-only). Focus stays solid.',
+    },
+    {
       token: '--editable-text-error-color',
       fallback: 'var(--mat-sys-error, #dc3545)',
       description: 'Border-bottom color while invalid and errors are visible.',
@@ -543,6 +555,12 @@ const JSON_SURFACE_TOKENS: TokenGroup = {
       token: '--editable-text-underline-color',
       fallback: 'var(--mat-sys-on-surface-variant, #6b7280)',
       description: 'Color of the resting dashed affordance underline.',
+    },
+    {
+      token: '--editable-text-underline-style',
+      fallback: 'dashed',
+      description:
+        'The resting underline’s style. Shared by every editable’s resting mark — the text decoration and the temporal empty-state border alike — so the values that work everywhere are solid, dashed, dotted and double (`wavy` is decoration-only). Focus stays solid.',
     },
     {
       token: '--editable-text-underline-focus-indicator-color',

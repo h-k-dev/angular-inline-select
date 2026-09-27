@@ -213,7 +213,7 @@
   // focus-visible and the idle error state re-assert their underlines below,
   // so hiding the idle line never hides the a11y/error signals.
   text-decoration-line: var(--editable-text-underline-line, underline);
-  text-decoration-style: dashed;
+  text-decoration-style: var(--editable-text-underline-style, dashed);
   text-decoration-thickness: 0.0625rem;
   text-underline-offset: 0.4em;
   text-decoration-color: var(

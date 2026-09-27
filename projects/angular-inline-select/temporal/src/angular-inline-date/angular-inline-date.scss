@@ -68,11 +68,15 @@
   // reserving it here, transparent, means the box height is identical whether
   // that fallback is showing or not. Typing the first character can never jog
   // the row by a pixel.
+  //
+  // Both marks read `--editable-text-underline-style`, so one token restyles
+  // the decoration and its empty-state border alike. The values they share:
+  // solid | dashed | dotted | double (`wavy` is decoration-only).
   // ---------------------------------------------------------------------------
-  border-bottom: 0.0625rem dashed transparent;
+  border-bottom: 0.0625rem var(--editable-text-underline-style, dashed) transparent;
 
   text-decoration-line: var(--editable-text-underline-line, underline);
-  text-decoration-style: dashed;
+  text-decoration-style: var(--editable-text-underline-style, dashed);
   text-decoration-thickness: 0.0625rem;
   text-underline-offset: 0.4em;
   text-decoration-color: var(
@@ -255,15 +259,6 @@
   font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
   color: var(--mat-sys-on-surface-variant, #5f6368);
   font-variant-numeric: tabular-nums;
-}
-.inline-date__notice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  padding: 2px 8px 4px;
-  font: var(--mat-sys-body-small, 0.8125rem/1.4 system-ui);
-  color: var(--mat-sys-error, #dc3545);
 }
 .inline-date__quick-picks {
   display: flex;

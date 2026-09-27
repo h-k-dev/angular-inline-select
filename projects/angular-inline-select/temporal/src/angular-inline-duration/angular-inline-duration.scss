@@ -64,11 +64,15 @@
   // fall back to a border — and reserving it here, transparent, means the box
   // height is identical whether that fallback is showing or not. Typing the
   // first character can never jog the row by a pixel.
+  //
+  // Both marks read `--editable-text-underline-style`, so one token restyles
+  // the decoration and its empty-state border alike. The values they share:
+  // solid | dashed | dotted | double (`wavy` is decoration-only).
   // ---------------------------------------------------------------------------
-  border-bottom: 0.0625rem dashed transparent;
+  border-bottom: 0.0625rem var(--editable-text-underline-style, dashed) transparent;
 
   text-decoration-line: var(--editable-text-underline-line, underline);
-  text-decoration-style: dashed;
+  text-decoration-style: var(--editable-text-underline-style, dashed);
   text-decoration-thickness: 0.0625rem;
   text-underline-offset: 0.4em;
   text-decoration-color: var(--editable-text-underline-color, var(--mat-sys-on-surface-variant, #6b7280));

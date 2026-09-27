@@ -387,17 +387,10 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   /**
    * The days this field offers — `false` disables a day in the calendar and
-   * the quick picks. A typed unavailable day is KEPT (the consumer's schema
-   * judges it); the panel explains it via `dayFilterReason` and offers
-   * `dayFilterSuggestion`'s day.
+   * the quick picks. A typed unavailable day is KEPT: the consumer's schema
+   * judges it and says why, under the field.
    */
   dayFilter = input<((iso: IsoDate) => boolean) | undefined>(undefined);
-
-  /** Why an unavailable day is unavailable (a holiday's name); `null` for no reason worth naming. */
-  dayFilterReason = input<((iso: IsoDate) => string | null) | undefined>(undefined);
-
-  /** The nearest available day to offer instead of an unavailable one; unset offers none. */
-  dayFilterSuggestion = input<((iso: IsoDate) => IsoDate | null) | undefined>(undefined);
 
   /** Reference clock — injectable for tests; a fresh `Date` per read otherwise. */
   now = input(() => new Date());
@@ -753,8 +746,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     const iso = side.parsed();
     if (iso === null || iso === undefined) return `… ${raw}`;
 
-    // An unavailable day's reading lives in the notice below, with its reason.
-    return this.#dayAvailable(iso) ? describeIsoDate(iso, this.effectiveLocale()) : '';
+    return describeIsoDate(iso, this.effectiveLocale());
   });
 
   /** A day calendar lent by a directive on this element (see `InlineDayAvailability`). */
@@ -765,12 +757,6 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
 
   /** The effective day filter: the `dayFilter` input, else the lent calendar's. */
   readonly filterDay = computed(() => this.dayFilter() ?? this.#lentCalendar()?.filter());
-
-  #filterReason = computed(() => this.dayFilterReason() ?? this.#lentCalendar()?.reason());
-
-  #filterSuggestion = computed(
-    () => this.dayFilterSuggestion() ?? this.#lentCalendar()?.suggestion(),
-  );
 
   #dayAvailable(day: IsoDate | null): boolean {
     if (day === null) return true;
@@ -789,25 +775,6 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   readonly dayUnavailable = computed(() => {
     const day = this.#judgedDay();
     return day !== null && !this.#dayAvailable(day);
-  });
-
-  /** The panel's notice for an unavailable day: what, why, and the one-click fix. */
-  protected unavailableNotice = computed(() => {
-    const day = this.#judgedDay();
-    if (day === null || this.#dayAvailable(day)) return null;
-
-    const suggestion = this.#filterSuggestion()?.(day) ?? null;
-    return {
-      label: this.intl.unavailableDayLabel(
-        describeIsoDate(day, this.effectiveLocale()),
-        this.#filterReason()?.(day) ?? null,
-      ),
-      suggestion,
-      suggestionLabel:
-        suggestion === null
-          ? ''
-          : this.intl.useDayLabel(formatIsoDate(suggestion, this.effectiveLocale())),
-    };
   });
 
   /** The grid's pending day: the focused side's parsed draft, else its committed day. */

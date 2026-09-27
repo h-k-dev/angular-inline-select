@@ -190,7 +190,7 @@
 }
 
 <!--
-  The panel: preview line + unavailable-day notice + calendar grid (presets
+  The panel: preview line + calendar grid (presets
   beside it in filter mode) + quick-picks + the error slot. Opens on focus WITHOUT stealing it (the grid
   mirrors the draft); focus inside the panel belongs to the focused side's
   session. The day filter disables unavailable cells.
@@ -217,23 +217,6 @@
   >
     @if (preview(); as reading) {
       <div class="inline-date__preview">{{ reading }}</div>
-    }
-
-    <!-- An unavailable day (dayFilter): what and why, plus the one-click fix. -->
-    @if (unavailableNotice(); as notice) {
-      <div class="inline-date__notice" role="status">
-        <span class="inline-date__notice-text">{{ notice.label }}</span>
-        @if (notice.suggestion; as suggestion) {
-          <button
-            type="button"
-            class="inline-date__quick-pick"
-            (mousedown)="$event.preventDefault()"
-            (click)="pickDate(suggestion)"
-          >
-            {{ notice.suggestionLabel }}
-          </button>
-        }
-      </div>
     }
 
     <!--

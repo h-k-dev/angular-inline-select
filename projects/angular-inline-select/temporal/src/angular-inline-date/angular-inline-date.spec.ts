@@ -1658,7 +1658,7 @@ describe('AngularInlineDate — affix slots', () => {
 // and FLAGGED (never swallowed) when typed, with a one-click fix
 // =============================================================================
 
-/** Sundays are unavailable ("Ruhetag"); the suggestion is the Monday after. */
+/** Sundays are unavailable. */
 const isSunday = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay() === 0;
 
 @Component({
@@ -1667,26 +1667,13 @@ const isSunday = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay() === 0
     AngularInlineDate,
   ],
   template: `
-    <angular-inline-date
-      [(value)]="value"
-      locale="en"
-      [now]="now"
-      [dayFilter]="available"
-      [dayFilterReason]="reason"
-      [dayFilterSuggestion]="suggest"
-    />
+    <angular-inline-date [(value)]="value" locale="en" [now]="now" [dayFilter]="available" />
   `,
 })
 class DayFilterHost {
   value = signal<InlineDateValue>('2026-05-12');
   now = () => NOW;
   available = (iso: string) => !isSunday(iso);
-  reason = (iso: string) => (isSunday(iso) ? 'Ruhetag' : null);
-  suggest = (iso: string) => {
-    const next = new Date(`${iso}T12:00:00Z`);
-    next.setUTCDate(next.getUTCDate() + 1);
-    return next.toISOString().slice(0, 10);
-  };
 }
 
 describe('AngularInlineDate dayFilter', () => {
@@ -1702,25 +1689,15 @@ describe('AngularInlineDate dayFilter', () => {
     await blurAway(h);
   });
 
-  it('KEEPS a typed unavailable day, names the reason and offers the suggestion', async () => {
+  it("KEEPS a typed unavailable day and reads it like any other — why is the schema's to say", async () => {
     const h = setupHost(DayFilterHost);
 
     type(h, h.start(), '17.5.2026');
-    expect(document.querySelector('.inline-date__notice')?.textContent).toContain(
-      'is not available — Ruhetag',
-    );
+    expect(document.querySelector('.inline-date__preview')?.textContent).toContain('2026');
+    expect(document.querySelector('.inline-date__notice')).toBeNull();
 
     press(h, h.start(), 'Enter');
     expect(h.host.value()).toBe('2026-05-17');
-
-    pointer(h, h.start());
-    const fix = document.querySelector('.inline-date__notice button') as HTMLButtonElement;
-    expect(fix.textContent?.trim()).toBe(`Use ${formatIsoDate('2026-05-18', 'en')}`);
-    fix.click();
-    await settle(h);
-
-    expect(h.host.value()).toBe('2026-05-18');
-    expect(document.querySelector('.inline-date__notice')).toBeNull();
 
     await blurAway(h);
   });
@@ -1914,8 +1891,6 @@ describe('AngularInlineDate — filter mode', () => {
 })
 class SundaysOff implements InlineDayAvailability {
   readonly filter = signal((iso: string) => !isSunday(iso)).asReadonly();
-  readonly reason = signal((iso: string) => (isSunday(iso) ? 'Ruhetag' : null)).asReadonly();
-  readonly suggestion = signal(undefined).asReadonly();
 }
 
 @Component({
@@ -1935,12 +1910,11 @@ class LentCalendarHost {
 }
 
 describe('AngularInlineDate — a day calendar lent by a directive', () => {
-  it("disables the lent calendar's days and names its reason", async () => {
+  it("disables the lent calendar's days", async () => {
     const h = setupHost(LentCalendarHost);
 
     type(h, h.start(), '17.5.2026');
     expect(gridCell('2026-05-17')?.hasAttribute('data-disabled')).toBe(true);
-    expect(document.querySelector('.inline-date__notice')?.textContent).toContain('Ruhetag');
 
     await blurAway(h);
   });

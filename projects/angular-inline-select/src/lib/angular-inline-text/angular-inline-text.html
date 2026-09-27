@@ -174,11 +174,16 @@
         so pressing any action keeps the caret (and the session) in the
         editor. Keys bubble on to the panel's own handlers.
       -->
-      <div class="editable-panel__actions" (mousedown)="$event.preventDefault(); $event.stopPropagation()">
+      <div
+        class="editable-panel__actions"
+        (mousedown)="$event.preventDefault(); $event.stopPropagation()"
+      >
         @if (panelActionsTpl(); as tpl) {
           <ng-container *ngTemplateOutlet="tpl; context: panelActionsTemplateContext" />
         } @else {
-          <ng-container *ngComponentOutlet="panelActionsComponent; injector: panelActionsInjector" />
+          <ng-container
+            *ngComponentOutlet="panelActionsComponent; injector: panelActionsInjector"
+          />
         }
       </div>
     </div>
@@ -198,6 +203,7 @@
       <ng-container *ngTemplateOutlet="actionsTpl()!; context: actionsContext()" />
     </span>
   }
+
   @if (clearCanShow()) {
     <span class="editable-bubble__group editable-bubble__clear">
       @if (clearTpl(); as tpl) {
