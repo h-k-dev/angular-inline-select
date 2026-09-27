@@ -13,6 +13,7 @@
 <span
   #fieldArea
   class="editable-text__field editable-unit"
+  [class.editable-text__field--no-wrap]="wrapMode() === 'noWrap'"
   (mousedown)="handleFieldMouseDown($event)"
   (editableScopePress)="handleScopePress($event)"
 >

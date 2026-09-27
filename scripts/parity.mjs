@@ -121,7 +121,7 @@ const PAIRS = [
   ],
   [
     'text/paint.spec',
-    `${SB}/src/lib/styles/editable-text-paint.spec.ts`,
+    `${SB}/src/lib/angular-inline-text/angular-inline-text-paint.spec.ts`,
     `${E}/editable-text-v2/editable-text-v2-paint.spec.ts`,
   ],
   [
@@ -154,10 +154,10 @@ const PAIRS = [
     `${SB}/src/lib/bubble-menu/editable-clear.ts`,
     `${E}/editable-inline/bubble-menu/editable-clear.ts`,
   ],
-  // global styles: the sandbox splits what the app keeps in one partial
+  // global styles
   [
     'styles/_editable',
-    [`${SB}/src/lib/styles/_editable.scss`, `${SB}/src/lib/styles/_editable-text.scss`],
+    `${SB}/src/lib/styles/_editable.scss`,
     `${SASS}/_editable.scss`,
   ],
   [

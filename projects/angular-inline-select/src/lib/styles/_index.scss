@@ -6,8 +6,8 @@
 //
 //   @use '<path-to-lib>/src/lib/styles';
 //
-// - editable        → reusable chrome (panel, scrim, bubble), --editable-* tokens
-// - editable-text   → the text component surfaces, --editable-text-* tokens
+// - editable        → reusable chrome (panel, scrim, bubble, affix), --editable-*
+//                      tokens (the text control's own surfaces are component styles)
 // - editable-hover-scope → the container-as-unit surface (`[editableHoverScope]`),
 //                      --editable-hover-scope-* tokens
 // - editable-dialog → the reusable modal editing surface (centered card /
@@ -18,7 +18,6 @@
 //                      safe to include even if the app never imports it)
 // =============================================================================
 @use './editable';
-@use './editable-text';
 @use './editable-hover-scope';
 @use './editable-dialog';
 @use './editable-scrollbar';

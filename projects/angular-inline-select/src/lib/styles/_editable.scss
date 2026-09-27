@@ -70,6 +70,26 @@
 }
 
 // -----------------------------------------------------------------------------
+// AFFIX: unit, icon — never part of the draft, aria-hidden. Shared markup:
+// the text control and the JSON control both render it.
+// -----------------------------------------------------------------------------
+.editable-text__affix {
+  display: inline;
+  white-space: nowrap;
+  user-select: none;
+
+  color: var(--editable-text-affix-color, var(--mat-sys-on-surface, inherit));
+
+  &--prefix {
+    margin-inline-end: 0.25ch;
+  }
+
+  &--suffix {
+    margin-inline-start: 0.25ch;
+  }
+}
+
+// -----------------------------------------------------------------------------
 // ELEMENT: slash-command menu (consumer options, control navigation)
 // -----------------------------------------------------------------------------
 .editable-menu {

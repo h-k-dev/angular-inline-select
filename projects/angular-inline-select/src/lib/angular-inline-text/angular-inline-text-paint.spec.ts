@@ -1,11 +1,10 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { compile } from 'sass';
 
-import { AngularInlineText, type InlineTextWrapBehavior } from '../angular-inline-text/angular-inline-text';
+import { AngularInlineText, type InlineTextWrapBehavior } from './angular-inline-text';
 
 // =============================================================================
-// Caret paint order — the global `_editable-text.scss` against the real template
+// Caret paint order — the component stylesheet against the real template
 //
 // Chrome paints a caret with its enclosing BLOCK. A wrapping display is
 // `inline`, so that block sits outside `.editable-text__field` — and if the
@@ -15,15 +14,16 @@ import { AngularInlineText, type InlineTextWrapBehavior } from '../angular-inlin
 // and the caret never shows. jsdom does not paint, so this pins the cause:
 // the wrapping field must not form a layer. The no-wrap field must (its
 // `::after` shape is `z-index: -1`) — which also proves the stylesheet is
-// applied and `:has()` resolves, so the wrap assertions can't pass vacuously.
-//
-// Global styles are not part of the spec bundle; the partial is compiled here.
-// `sass` resolves the relative path against the workspace root (`ng test`).
+// applied, so the wrap assertions can't pass vacuously.
 // =============================================================================
 
 @Component({
   imports: [AngularInlineText],
-  template: `<angular-inline-text [(value)]="value" [isSingleLine]="true" [wrapBehavior]="wrapBehavior()" />`,
+  template: `<angular-inline-text
+    [(value)]="value"
+    [isSingleLine]="true"
+    [wrapBehavior]="wrapBehavior()"
+  />`,
 })
 class PaintHost {
   value = signal('Müller ./. Beispiel GmbH');
@@ -54,23 +54,15 @@ function forms(layer: ReturnType<typeof layerProperties>): string[] {
   if (layer.opacity && Number(layer.opacity) < 1) causes.push(`opacity: ${layer.opacity}`);
   if (layer.transform && layer.transform !== 'none') causes.push(`transform: ${layer.transform}`);
   if (layer.filter && layer.filter !== 'none') causes.push(`filter: ${layer.filter}`);
-  if (layer.willChange && layer.willChange !== 'auto') causes.push(`will-change: ${layer.willChange}`);
+  if (layer.willChange && layer.willChange !== 'auto')
+    causes.push(`will-change: ${layer.willChange}`);
   if (layer.contain && layer.contain !== 'none') causes.push(`contain: ${layer.contain}`);
-  if (layer.mixBlendMode && layer.mixBlendMode !== 'normal') causes.push(`mix-blend-mode: ${layer.mixBlendMode}`);
+  if (layer.mixBlendMode && layer.mixBlendMode !== 'normal')
+    causes.push(`mix-blend-mode: ${layer.mixBlendMode}`);
   return causes;
 }
 
 describe('editable-text styles — caret paint order', () => {
-  let sheet: HTMLStyleElement;
-
-  beforeAll(() => {
-    sheet = document.createElement('style');
-    sheet.textContent = compile('projects/angular-inline-select/src/lib/styles/_editable-text.scss').css;
-    document.head.append(sheet);
-  });
-
-  afterAll(() => sheet.remove());
-
   function render(wrapBehavior: InlineTextWrapBehavior) {
     const fixture = TestBed.createComponent(PaintHost);
     fixture.componentInstance.wrapBehavior.set(wrapBehavior);

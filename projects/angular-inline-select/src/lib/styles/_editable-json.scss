@@ -6,7 +6,7 @@
 // flows exactly like the inline-text control (per-line dashed underline,
 // inherited typography, no box) — the value IS a JSON-stringified string, so
 // it presents as text. The visual property block below mirrors
-// _editable-text.scss's `.editable-text__display` on purpose; keep them in
+// angular-inline-text.scss's `.editable-text__display` on purpose; keep them in
 // sync when the text affordance changes.
 //
 // Shared concerns resolve the SAME --editable-text-*/--editable-panel-*
@@ -32,7 +32,7 @@
 
 // -----------------------------------------------------------------------------
 // ELEMENT: the bounded preview — visually the inline-text display (mirrors
-// _editable-text.scss). Multi-line pre-wrap text with a per-line dashed
+// angular-inline-text.scss). Multi-line pre-wrap text with a per-line dashed
 // underline; activation (click/Enter/Space) elevates instead of typing.
 // -----------------------------------------------------------------------------
 .editable-json__display {

@@ -1,6 +1,6 @@
 // =============================================================================
 // THE INTERACTIVE UNIT for the input-hosted family — the text control's shape
-// (styles/_editable-text.scss, "THE SHAPE"), applied to the inline-flex
+// (angular-inline-text.scss, "THE SHAPE"), applied to the inline-flex
 // wrapper around a control's real <input>s. Same tokens, same idiom: an
 // `::after` behind the content, larger than the box, hit-testable so it IS
 // the halo, faded in on hover and while an input holds focus. Inside an
