@@ -35,11 +35,29 @@
   // on inputs. So the line box is set here in em — scaling with font-size, and
   // deliberately not from `--mat-sys-body-medium-line-height`, whose 20px is
   // exactly too short — and the extra leading is taken straight back off the
-  // layout with a matching negative bottom margin, so no row grows by it.
-  // Measured layout-neutral to within half a pixel.
+  // layout with negative margins, so no row grows by it.
+  //
+  // TAKEN BACK WHERE IT LANDS. A line box hands its leading out in halves,
+  // above the text and below it, so the room added for the underline lifts
+  // nothing: half of it pushes the text DOWN. Taking all of it off the bottom
+  // kept the height and left the text low (1.75px at 14px) — a label aligned
+  // on the baseline followed it down, and a line holding the field grew by
+  // the difference. So half comes off the top, and half off the bottom
+  // together with the border reserved there: what is left is the family's
+  // `1.5` line, with the text on its baseline.
+  //
+  // IN WHOLE PIXELS. `1.75em` is 24.5px at 14px, and a browser rounds a
+  // half-leading that does not fall on a pixel — a quarter of one was left
+  // over. The line box is rounded up to a whole pixel, and the margins are
+  // taken from the line box actually used (`1lh`), never from a number of
+  // their own. Measured exact wherever the line around the field is itself a
+  // whole number of pixels. The first of each pair below is the same rule
+  // without the rounding, for a browser that knows neither function.
   // ---------------------------------------------------------------------------
   line-height: 1.75;
-  margin: 0 0 -0.32em;
+  line-height: round(up, 1.75em, 1px);
+  margin: -0.125em 0 calc(-0.125em - 0.0625rem);
+  margin: calc((1.5em - 1lh) / 2) 0 calc((1.5em - 1lh) / 2 - 0.0625rem);
 
   font-variant-numeric: tabular-nums;
   color: inherit;
@@ -352,8 +370,8 @@
   );
 
   /* No decoration to fit here (both painters are retired below), so the extra
-     leading and its compensating margin hand back to the container. */
-  margin-bottom: 0;
+     leading and its compensating margins hand back to the container. */
+  margin: 0;
 }
 
 /* The bare variant retires BOTH painters — the decoration and the empty-state
