@@ -211,6 +211,12 @@ export class EditableScope implements EditableScopeContract {
   }
 
   advanceFrom(origin: HTMLElement, direction: 1 | -1): boolean {
+    // Never pull focus IN from outside the host. A control rendered elsewhere
+    // — a dialog or panel in the overlay container, reached through an
+    // injector that still carries this scope — is not one of our stops, and
+    // "entering at the edge" from there would yank focus out of that dialog.
+    if (!this.#host.nativeElement.contains(origin)) return false;
+
     const stops = this.#stops();
     if (stops.length === 0) return false;
 
@@ -218,7 +224,7 @@ export class EditableScope implements EditableScopeContract {
       (stop) => stop.element === origin || (stop.field?.host.contains(origin) ?? false),
     );
 
-    // Origin unknown (registered after a DOM move, or outside the host):
+    // Origin unknown although inside the host (registered after a DOM move):
     // enter the scope at the edge the direction implies.
     let next = index === -1 ? (direction === 1 ? 0 : stops.length - 1) : index + direction;
 

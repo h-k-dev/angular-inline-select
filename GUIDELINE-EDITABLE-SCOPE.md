@@ -121,6 +121,13 @@ The advance is a DOM-order walk over the scope host's tabbables:
   Escape, not Tab.
 - **Panel chrome** (Save/Discard, the clear bubble) renders in the CDK
   overlay container outside the scope host and is excluded by construction.
+- **A dialog opened from a scoped field is its own focus context.** Its
+  controls are rendered outside the scope host, but an injector built from
+  the opener still carries the scope — so the opener cuts it
+  (`{ provide: EDITABLE_SCOPE, useValue: null }` in the dialog's injector),
+  and Tab inside is native again, held by the dialog's focus trap. As a
+  backstop, `advanceFrom` refuses an origin outside the host: a scope never
+  walks focus IN from elsewhere.
 - **Popup-trigger chrome is click-only by default** — the phone flag and the
   date 📅 calendar trigger ship `tabindex="-1"` (the ARIA combobox
   convention for auxiliary popup buttons), scoped or not: Tab lands in the

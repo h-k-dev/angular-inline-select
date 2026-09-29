@@ -1,5 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { LiveAnnouncer } from '@angular/cdk/a11y';
 import { AngularInlineDate } from 'angular-inline-select/temporal';
 
@@ -479,5 +480,23 @@ describe('EditableScope — Tab-to-accept', () => {
     expect(event.defaultPrevented).toBe(false);
     expect(h.panel()).not.toBeNull();
     expect(h.host.sessions).toEqual([]);
+  });
+
+  // A control rendered OUTSIDE the host — a dialog opened from a scoped field,
+  // reached through an injector that still carries this scope — is not a stop.
+  // Entering "at the edge" from there would yank focus out of that dialog.
+  it('refuses an advance from outside its host — focus is never pulled in', () => {
+    const h = setup();
+    const scope = h.fixture.debugElement.query(By.directive(EditableScope)).injector.get(EditableScope);
+
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    outside.focus();
+
+    expect(scope.advanceFrom(outside, 1)).toBe(false);
+    expect(scope.advanceFrom(outside, -1)).toBe(false);
+    expect(document.activeElement).toBe(outside);
+
+    outside.remove();
   });
 });
