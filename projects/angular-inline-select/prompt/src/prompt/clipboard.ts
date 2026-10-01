@@ -1,5 +1,5 @@
 // Editables
-import type { PromptTextLine } from './format';
+import { readPromptLines, type PromptTextLine } from './format';
 
 /**
  * A prompt's lines as the HTML every editor reads — what a copy puts on the
@@ -72,4 +72,39 @@ export function promptLinesToDOM(
   }
 
   return fragment;
+}
+
+/**
+ * Puts a stored prompt on the clipboard the way a copy out of the editor
+ * does — the Markdown as `text/plain`, its lines as semantic HTML — so a
+ * prompt copied by a button pastes like one selected and copied by hand: a
+ * chat keeps its lists, a model or a plain field gets the Markdown.
+ *
+ * Resolves whether anything was written. Where the rich write is refused
+ * (no `ClipboardItem`, or a frame without clipboard-write), the Markdown goes
+ * alone; where that is refused too, nothing does.
+ */
+export async function copyPrompt(text: string, document: Document): Promise<boolean> {
+  const clipboard = document.defaultView?.navigator.clipboard;
+  if (!clipboard) return false;
+
+  const host = document.createElement('div');
+  host.appendChild(promptLinesToDOM(readPromptLines(text), document));
+
+  try {
+    await clipboard.write([
+      new ClipboardItem({
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+        'text/html': new Blob([host.innerHTML], { type: 'text/html' }),
+      }),
+    ]);
+    return true;
+  } catch {
+    try {
+      await clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }

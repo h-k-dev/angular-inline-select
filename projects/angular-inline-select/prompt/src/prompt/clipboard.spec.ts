@@ -1,5 +1,5 @@
 // Editables
-import { promptLinesToDOM } from './clipboard';
+import { copyPrompt, promptLinesToDOM } from './clipboard';
 import { readPromptLines } from './format';
 
 const html = (markdown: string) => {
@@ -39,5 +39,53 @@ describe('promptLinesToDOM', () => {
 
   it('writes text as text, never as markup', () => {
     expect(html('- <b>nicht fett</b>')).toBe('<ul><li>&lt;b&gt;nicht fett&lt;/b&gt;</li></ul>');
+  });
+});
+
+describe('copyPrompt', () => {
+  const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  const originalItem = (globalThis as { ClipboardItem?: unknown }).ClipboardItem;
+  let write: ReturnType<typeof vi.fn>;
+  let writeText: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    write = vi.fn(async () => undefined);
+    writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { write, writeText },
+      configurable: true,
+    });
+    (globalThis as { ClipboardItem?: unknown }).ClipboardItem = class {
+      constructor(readonly items: Record<string, Blob>) {}
+    };
+  });
+
+  afterEach(() => {
+    if (original) Object.defineProperty(navigator, 'clipboard', original);
+    else delete (navigator as { clipboard?: unknown }).clipboard;
+    (globalThis as { ClipboardItem?: unknown }).ClipboardItem = originalItem;
+  });
+
+  it('writes the Markdown and the lines as HTML, as a copy by hand does', async () => {
+    expect(await copyPrompt('# Rolle\n- a', document)).toBe(true);
+
+    const [[[item]]] = write.mock.calls as [[[{ items: Record<string, Blob> }]]];
+    expect(await item.items['text/plain'].text()).toBe('# Rolle\n- a');
+    expect(await item.items['text/html'].text()).toBe('<h1>Rolle</h1><ul><li>a</li></ul>');
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it('writes the Markdown alone where the rich write is refused', async () => {
+    write.mockRejectedValue(new Error('NotAllowedError'));
+
+    expect(await copyPrompt('- a', document)).toBe(true);
+    expect(writeText).toHaveBeenCalledWith('- a');
+  });
+
+  it('says so when nothing could be written', async () => {
+    write.mockRejectedValue(new Error('NotAllowedError'));
+    writeText.mockRejectedValue(new Error('NotAllowedError'));
+
+    expect(await copyPrompt('- a', document)).toBe(false);
   });
 });
