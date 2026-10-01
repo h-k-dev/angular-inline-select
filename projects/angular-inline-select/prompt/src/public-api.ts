@@ -26,6 +26,7 @@ export * from './prompt/format';
 export * from './prompt/codec';
 export * from './prompt/kit';
 export * from './prompt/render';
+export * from './prompt/clipboard';
 export * from './prompt/editor';
 export * from './prompt/nodes/line';
 

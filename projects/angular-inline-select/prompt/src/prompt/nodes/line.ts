@@ -49,9 +49,10 @@ export const PROMPT_LINE_GRAMMAR: LineGrammar = {
 const KINDS: readonly PromptBlockKind[] = ['paragraph', 'heading', 'bullet', 'number'];
 
 /**
- * A line copied out of a prompt editor reads back as itself: the default
- * clipboard HTML is the lines as `toDOM` draws them. The number is left to
- * the count, as for any paste.
+ * A line copied as it is drawn reads back as itself — a selection of a
+ * prompt at rest, which the browser copies as the static lines, `toDOM`'s
+ * own elements. The number is left to the count, as for any paste. A copy
+ * out of the editor carries semantic HTML instead (`clipboard.ts`).
  */
 function ownLineAttrs(node: HTMLElement): Attrs | false {
   const block = node.getAttribute('data-block') as PromptBlockKind;

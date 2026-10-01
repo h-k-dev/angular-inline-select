@@ -42,13 +42,21 @@ export function serializePromptDoc(doc: ProseMirrorNode): string {
 }
 
 /**
+ * A loose fragment — a copy — as lines, or `null` for one that starts and
+ * ends inside a line: inline content with no line around it.
+ */
+export function promptFragmentLines(content: Fragment): PromptTextLine[] | null {
+  return content.firstChild?.isInline ? null : toLines(content);
+}
+
+/**
  * A loose fragment — a copy. One that starts mid-line is inline content with
  * no line around it, and is just its text.
  */
 export function serializePromptFragment(content: Fragment): string {
   if (!content.childCount) return '';
-  if (content.firstChild?.isInline) return content.textBetween(0, content.size, undefined, '\n');
-  return writePromptLines(toLines(content));
+  const lines = promptFragmentLines(content);
+  return lines ? writePromptLines(lines) : content.textBetween(0, content.size, undefined, '\n');
 }
 
 export const PROMPT_CODEC: LineCodec = {

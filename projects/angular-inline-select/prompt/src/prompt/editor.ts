@@ -4,13 +4,14 @@
  */
 
 // 3rd Party
-import { Schema, Slice } from 'prosemirror-model';
+import { DOMSerializer, Fragment, Schema, Slice } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
 
 // Editables
 import { Extension } from '../line/extension';
 import { createLineEditor, LineEditor, sliceFromText } from '../line/editor';
-import { PROMPT_CODEC, serializePromptFragment } from './codec';
+import { PROMPT_CODEC, promptFragmentLines, serializePromptFragment } from './codec';
+import { promptLinesToDOM } from './clipboard';
 import { promptSchema } from './kit';
 
 /**
@@ -44,9 +45,27 @@ export function createPromptEditor(options: PromptEditorOptions): LineEditor {
     codec: PROMPT_CODEC,
     onUpdate: options.onUpdate,
     props: {
-      // `text/plain` is the prompt as stored, Markdown; `text/html` is the
-      // lines as drawn, which a prompt editor reads back exactly.
+      /**
+       * What a copy puts on the clipboard. `text/plain` is the prompt as
+       * stored, Markdown — what a plain field or a model reads. `text/html` is
+       * the lines as semantic HTML (`clipboard.ts`): headings and lists any
+       * rich editor keeps, the chat composer's lists included. A copy from
+       * inside one line is just its text in both.
+       */
       clipboardTextSerializer: (slice) => serializePromptFragment(slice.content),
+      clipboardSerializer: {
+        serializeFragment: (content: Fragment, options?: { document?: Document }) => {
+          const target = options?.document ?? document;
+          const lines = promptFragmentLines(content);
+          if (lines) return promptLinesToDOM(lines, target);
+
+          const inline = target.createDocumentFragment();
+          inline.appendChild(
+            target.createTextNode(content.textBetween(0, content.size, undefined, '\n')),
+          );
+          return inline;
+        },
+      } as DOMSerializer,
       transformPasted: (slice, view) => normalizePasted(slice, view.state.schema),
     },
   });

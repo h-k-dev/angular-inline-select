@@ -1,7 +1,11 @@
+// Angular
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+
+// 3rd Party
 import { TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 
+// Editables
 import { AngularInlinePrompt } from './angular-inline-prompt';
 
 describe('AngularInlinePrompt', () => {

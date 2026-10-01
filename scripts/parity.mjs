@@ -489,6 +489,8 @@ const PAIRS = [
   ['prompt/render', `${PSB}/prompt/render.ts`, `${PM}/prompt/render.ts`],
   ['prompt/editor', `${PSB}/prompt/editor.ts`, `${PM}/prompt/editor.ts`],
   ['prompt/nodes/line', `${PSB}/prompt/nodes/line.ts`, `${PM}/prompt/nodes/line.ts`],
+  ['prompt/clipboard', `${PSB}/prompt/clipboard.ts`, `${PM}/prompt/clipboard.ts`],
+  ['prompt/clipboard.spec', `${PSB}/prompt/clipboard.spec.ts`, `${PM}/prompt/clipboard.spec.ts`],
   [
     'prompt/control',
     `${PSB}/angular-inline-prompt/angular-inline-prompt.ts`,
