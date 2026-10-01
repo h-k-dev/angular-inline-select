@@ -1,0 +1,177 @@
+///
+/// What every line editor's surface shares: the rules the ProseMirror view
+/// layer depends on, and the geometry of a line — paragraph gaps, the bullet
+/// and number gutter, the one nesting step, the placeholder.
+///
+/// Mixins rather than a shared class, because each editor scopes by its own
+/// class on the editable root (`.iusta-prompt`, a chat composer's) and reads
+/// its own token family (`--iusta-sys-<family>-editor-*`). The geometry being
+/// one source is the point: every line editor's lines are laid out by the same
+/// rules, so one measurement model — line units plus known constants — fits
+/// them all, for whoever virtualizes a long list of them.
+///
+/// Both halves work on the static copy a lazily mounted editor draws at rest
+/// (`prompt/render.ts`) as much as on the live view: nothing below depends on
+/// `.ProseMirror`, so the row does not move when a view takes it over.
+///
+
+/// The ProseMirror view baseline — functional, not decorative. This stands in
+/// for `prosemirror-view/style/prosemirror.css` rather than importing it: the
+/// vendor sheet is unscoped, and Dart Sass passes a nested `@import` of a
+/// `.css` file straight through instead of inlining it, so it cannot be wrapped
+/// in a scope from here. The rules the view layer actually depends on are
+/// reproduced, each with the reason it exists.
+@mixin view-baseline($family) {
+  /* Widget and node decorations position themselves against this. */
+  position: relative;
+
+  /* The view maps DOM offsets back to document positions against the computed
+     white-space value. `break-spaces` keeps a trailing space addressable;
+     `pre-wrap` alone collapses it and the caret lands one position short. */
+  white-space: break-spaces;
+  word-wrap: break-word;
+
+  /* A ligature merges two characters into one glyph box, which desynchronises
+     the caret from its document position. */
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0;
+
+  /* The focus ring is drawn by the surrounding field, not by the editable. */
+  outline: none;
+
+  /* A host reset may make every image a block. The view injects a zero-width
+     `<img class="ProseMirror-separator">` to keep empty textblocks addressable,
+     and a block-level separator opens a phantom line inside the editor. The
+     element-plus-class selector already outranks a bare `img` reset, so this
+     needs no `!important`. */
+  img.ProseMirror-separator {
+    display: inline;
+    margin: 0;
+    border: 0;
+  }
+
+  /* Set on the editable root while the view owns the selection itself — during
+     a node selection or a composition. Leaving the native selection visible
+     underneath paints two selections at once. */
+  &.ProseMirror-hideselection {
+    caret-color: transparent;
+
+    *::selection {
+      background: transparent;
+    }
+  }
+
+  /* A draggable node is `contenteditable=false`, which also kills text selection
+     across it in Chrome unless this is restored. Relevant from the first
+     attachment or mention node onward. */
+  [draggable][contenteditable='false'] {
+    user-select: text;
+  }
+
+  /* A whole node selected as a unit — an attachment chip, an inline image. Costs
+     nothing today and is the one baseline rule that is purely visual, so it gets
+     a token rather than ProseMirror's hardcoded blue. */
+  .ProseMirror-selectednode {
+    outline: 2px solid
+      var(--iusta-sys-#{$family}-editor-selected-node-color, var(--mat-sys-primary, #0b57d0));
+  }
+}
+
+/// The lines: a paragraph per line, list items drawn from their `data-block`
+/// (see `line/line-node.ts`) — the marker is not in the text, it is drawn
+/// here, the same bullet and number a rendered list shows.
+@mixin line-shapes($family) {
+  /* The document always holds at least one paragraph, so paragraph margins would
+     show up as leading inside a single-line editor.
+
+     The family is inherited on purpose. A host stylesheet may give every `p` a
+     display face of its own, and the same text shown elsewhere in `div`s would
+     then change face on the way out of the editor. It also decides whether
+     bold-italic exists: a display face shipped without a 600 italic, under a
+     root `font-synthesis-weight: none`, renders a bold-italic run as a regular
+     italic. */
+  > p {
+    margin: 0;
+    font-family: inherit;
+  }
+
+  > p + p {
+    margin-block-start: var(--iusta-sys-#{$family}-editor-paragraph-gap, 0.5em);
+  }
+
+  /* Two lines of one list sit closer than two paragraphs do. */
+  > p[data-block] + p[data-block] {
+    margin-block-start: var(--iusta-sys-#{$family}-editor-item-gap, 0.15em);
+  }
+
+  > p[data-block='bullet'],
+  > p[data-block='number'] {
+    position: relative;
+    padding-inline-start: 1.5em;
+
+    &::before {
+      position: absolute;
+      inset-inline-start: 0;
+      inline-size: 1.25em;
+      text-align: end;
+      /* Not text: the caret must never land in the marker. */
+      pointer-events: none;
+      user-select: none;
+    }
+  }
+
+  > p[data-block='bullet']::before {
+    content: '•';
+  }
+
+  /* One level of nesting: the line indents once more, and a nested bullet is
+     hollow, as it is in a rendered nested list. */
+  > p[data-block][data-level='1'] {
+    padding-inline-start: 3em;
+
+    &::before {
+      inset-inline-start: 1.5em;
+    }
+  }
+
+  > p[data-block='bullet'][data-level='1']::before {
+    content: '◦';
+  }
+
+  > p[data-block='number']::before {
+    content: attr(data-number) '.';
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/// The placeholder.
+///
+/// ProseMirror never leaves the editable empty — an empty document still
+/// renders `<p><br class="ProseMirror-trailingBreak"></p>` — so `:empty` and
+/// the `contenteditable` placeholder tricks both fail. Matching the trailing
+/// break keeps this free of a decoration plugin, and holds for a static copy
+/// too, which draws the same break. `content` reads `data-placeholder` off the
+/// editable, where the translated string already is.
+///
+/// A shaped line is not empty even with nothing typed yet: after `- ` the
+/// writer is looking at a bullet waiting for its text, and a placeholder over
+/// it would say the editor is blank. Hence `:not([data-block])`.
+///
+/// `$padding` is the editable's own padding: an absolutely positioned pseudo
+/// is placed against the padding box, not the content box, so without
+/// repeating it the placeholder would sit above and left of the text it
+/// stands in for.
+@mixin placeholder($family, $padding) {
+  &:has(> p:only-child:not([data-block]) > br.ProseMirror-trailingBreak:only-child)::before {
+    content: attr(data-placeholder);
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    padding: $padding;
+    pointer-events: none;
+    color: var(
+      --iusta-sys-#{$family}-editor-placeholder-color,
+      var(--mat-sys-on-surface-variant, #5f6368)
+    );
+  }
+}

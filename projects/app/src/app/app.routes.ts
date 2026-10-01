@@ -76,6 +76,17 @@ export const routes: Routes = [
       ...docChildren('json'),
     ],
   },
+  {
+    path: 'prompt',
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./pages/prompt-playground/prompt-playground').then((m) => m.PromptPlayground),
+      },
+      ...docChildren('prompt'),
+    ],
+  },
 
   // Pattern section — a layout recipe, not a documented component: no
   // api/theming children, so the section tabs stay hidden here.

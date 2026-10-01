@@ -103,6 +103,7 @@
               "../phone/src/**/*.spec.ts",
               "../phone-libphonenumber/src/**/*.spec.ts",
               "../json/src/**/*.spec.ts",
+              "../prompt/src/**/*.spec.ts",
               "../temporal/src/**/*.spec.ts",
               "../temporal-mat/src/**/*.spec.ts"
             ]

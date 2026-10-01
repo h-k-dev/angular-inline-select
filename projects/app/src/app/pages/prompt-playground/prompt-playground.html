@@ -1,0 +1,73 @@
+<main>
+  <section class="example" id="prompt-example">
+    <header class="example__header">
+      <h2>Prompt</h2>
+      <p>
+        <code>angular-inline-prompt</code> edits Markdown's line shapes — <code>#</code> headings,
+        <code>-</code> bullets, <code>1.</code> numbered items, one level of nesting with Tab — as
+        shapes, and stores the Markdown a language model reads. Numbers are counted: add an item in
+        the middle of a list and the rest renumber. A stored prompt always reads back byte for byte.
+      </p>
+    </header>
+
+    <div class="example__body example-stack">
+      <div class="example-card">
+        <h3 class="example-card__title">Standalone [(value)]</h3>
+        <div class="prompt-pair">
+          <div
+            angular-inline-prompt
+            class="prompt-box"
+            [(value)]="prompt"
+            placeholder="Beschreibe, was extrahiert werden soll…"
+            ariaLabel="Prompt"
+          ></div>
+          <pre class="prompt-wire" aria-label="Stored Markdown">{{ prompt() }}</pre>
+        </div>
+      </div>
+
+      <div class="example-card" id="prompt-form-example">
+        <h3 class="example-card__title">Signal form</h3>
+        <div
+          angular-inline-prompt
+          class="prompt-box"
+          [formField]="promptForm.query"
+          ariaLabel="Answer format"
+        ></div>
+
+        <div class="form-toggles" role="group" aria-label="Field state">
+          <button mat-stroked-button (click)="fieldReadonly.update((v) => !v)">
+            Readonly: {{ fieldReadonly() ? 'on' : 'off' }}
+          </button>
+          <button mat-stroked-button (click)="fieldDisabled.update((v) => !v)">
+            Disabled: {{ fieldDisabled() ? 'on' : 'off' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="example-card" id="prompt-many-example">
+        <h3 class="example-card__title">900 prompts — static at rest, one view in use</h3>
+        <div class="form-toggles" role="group" aria-label="Many prompts">
+          <button mat-stroked-button (click)="manyShown.update((v) => !v)">
+            {{ manyShown() ? 'Hide' : 'Show' }} 900 prompts
+          </button>
+          <button mat-stroked-button (click)="countLive()">
+            Count live views: {{ liveViews() }}
+          </button>
+        </div>
+
+        @if (manyShown()) {
+          <div class="prompt-many">
+            @for (item of many; track $index) {
+              <div
+                angular-inline-prompt
+                class="prompt-box"
+                [(value)]="item"
+                ariaLabel="Prompt {{ $index + 1 }}"
+              ></div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+</main>

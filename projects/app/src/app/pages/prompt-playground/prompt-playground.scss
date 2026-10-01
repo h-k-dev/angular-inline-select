@@ -1,0 +1,51 @@
+@use '../demo';
+
+// The box is the consumer's: the control styles the lines inside it, and the
+// page decides what kind of field it looks like — here a plain filled field.
+.prompt-box {
+  --iusta-sys-prompt-editor-padding: 0.5rem 0.75rem;
+
+  padding: 0.5rem 0.75rem;
+  min-block-size: calc(2lh + 1rem);
+
+  border-radius: 0.75rem;
+  background: var(--mat-sys-surface-container);
+  box-shadow: inset 0 0 0 1px var(--mat-sys-outline-variant);
+
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface);
+
+  &:focus-visible,
+  &.ProseMirror-focused {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 1px;
+  }
+
+  &[aria-disabled='true'] {
+    opacity: 0.5;
+  }
+}
+
+.prompt-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.prompt-wire {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  background: var(--mat-sys-surface-container-high);
+  font: var(--mat-sys-body-small);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  white-space: pre-wrap;
+}
+
+.prompt-many {
+  display: grid;
+  gap: 0.5rem;
+  max-block-size: 32rem;
+  overflow: auto;
+}

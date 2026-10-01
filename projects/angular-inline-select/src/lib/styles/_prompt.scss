@@ -1,0 +1,54 @@
+///
+/// The prompt editor's editable surface — `m-prompt-input`, at rest and live.
+///
+/// Global, not a component stylesheet: Angular's emulated encapsulation stamps
+/// its attribute onto elements at compile time, and ProseMirror builds its
+/// nodes at runtime — as does the static copy the editor draws at rest — so a
+/// component stylesheet would match nothing inside either. Scoped by
+/// `.iusta-prompt` on the editable root.
+///
+/// Only the inside of the box is styled here — the lines. The box itself
+/// (fill, ring, radius, padding, type) is the consumer's, the way a textarea's
+/// is: the field that hosts a prompt decides what kind of control it looks
+/// like. Typography is inherited for the same reason.
+///
+/// Token chain:
+///   colour     `--iusta-sys-prompt-*` -> `--mat-sys-*` -> hardcoded
+///   geometry   `--iusta-sys-prompt-*` -> hardcoded
+///
+
+@use 'lines';
+
+.iusta-prompt {
+  @include lines.view-baseline('prompt');
+
+  display: block;
+  box-sizing: border-box;
+
+  /* The placeholder is laid against the padding box and has to repeat the
+     padding; reading it back off the element keeps it the consumer's. */
+  --_padding: var(--iusta-sys-prompt-editor-padding, 0);
+
+  &::selection,
+  *::selection {
+    background: var(
+      --iusta-sys-prompt-editor-selection-color,
+      #{oklch(from var(--mat-sys-primary) l c h / 0.25)}
+    );
+  }
+
+  /* At rest the copy is plain text the pointer can select, but it is a field:
+     the caret, not the arrow, says so before the view takes it over. */
+  cursor: text;
+
+  @include lines.line-shapes('prompt');
+
+  /* Every depth one size for now: a heading is a bold line on the body's own
+     line height, so it costs exactly one line unit like any other line.
+     `data-depth` is there for the day the depths are told apart. */
+  > p[data-block='heading'] {
+    font-weight: var(--iusta-sys-prompt-heading-weight, 600);
+  }
+
+  @include lines.placeholder('prompt', var(--_padding));
+}

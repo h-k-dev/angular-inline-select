@@ -9,7 +9,8 @@
     "test": "ng test"
   },
   "private": true,
-  "packageManager": "npm@11.13.0",  "dependencies": {
+  "packageManager": "npm@11.13.0",
+  "dependencies": {
     "@angular/aria": "^22.2.0",
     "@angular/cdk": "^22.2.0",
     "@angular/common": "^22.2.0",
@@ -28,6 +29,14 @@
     "@lezer/highlight": "1.2.3",
     "libphonenumber-js": "^1.13.8",
     "luxon": "^3.7.2",
+    "prosemirror-commands": "^1.7.2",
+    "prosemirror-history": "^1.5.1",
+    "prosemirror-inputrules": "^1.5.1",
+    "prosemirror-keymap": "^1.2.3",
+    "prosemirror-model": "^1.25.12",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-transform": "^1.12.2",
+    "prosemirror-view": "^1.42.6",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },

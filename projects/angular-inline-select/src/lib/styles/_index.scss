@@ -16,9 +16,13 @@
 //                      (`.editable-scrollbar`), --editable-scrollbar-* tokens
 // - editable-json   → the JSON component surfaces (secondary entry point;
 //                      safe to include even if the app never imports it)
+// - prompt          → the prompt editor's lines, at rest and live (secondary
+//                      entry point `prompt`; same: safe to include regardless),
+//                      on the shared line geometry in `lines`
 // =============================================================================
 @use './editable';
 @use './editable-hover-scope';
 @use './editable-dialog';
 @use './editable-scrollbar';
 @use './editable-json';
+@use './prompt';

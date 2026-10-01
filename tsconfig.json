@@ -10,6 +10,7 @@
         "./projects/angular-inline-select/phone-libphonenumber/src/public-api.ts"
       ],
       "angular-inline-select/json": ["./projects/angular-inline-select/json/src/public-api.ts"],
+      "angular-inline-select/prompt": ["./projects/angular-inline-select/prompt/src/public-api.ts"],
       "angular-inline-select/temporal": [
         "./projects/angular-inline-select/temporal/src/public-api.ts"
       ],

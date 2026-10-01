@@ -52,6 +52,7 @@ export const PAGES = [
   { path: 'phone', label: 'Phone' },
   { path: 'temporal', label: 'Temporal' },
   { path: 'json', label: 'JSON' },
+  { path: 'prompt', label: 'Prompt' },
 ] as const;
 
 // -----------------------------------------------------------------------------
@@ -1334,5 +1335,75 @@ export const DOCS: Record<string, SectionDocs> = {
       },
     ],
     tokenGroups: [JSON_SURFACE_TOKENS, CHROME_TOKENS],
+  },
+  prompt: {
+    title: 'Prompt',
+    components: [
+      {
+        name: 'AngularInlinePrompt',
+        selector: 'div[angular-inline-prompt]',
+        summary:
+          'A prompt field: Markdown lines — headings (# to ######, all one size for now), bullets and numbered items, one level of nesting — edited as shapes and stored as the Markdown a language model reads. Numbers are counted, not typed: a list renumbers itself as items come and go. A stored prompt reads back byte for byte, so opening one never rewrites it. Lazy: static lines at rest, drawn from the same schema into the same element, and a ProseMirror view only on the field in use (mouse: on hover; touch: on press; keyboard: on focus) — a page can hold hundreds.',
+        models: [
+          {
+            name: 'value',
+            type: 'string',
+            default: "''",
+            description:
+              'The prompt as stored: Markdown, never HTML. Written on every change, so a consumer committing on blur always reads the latest text.',
+          },
+        ],
+        inputs: [
+          ...FORM_CONTRACT_INPUTS,
+          {
+            name: 'placeholder',
+            type: 'string',
+            default: "''",
+            description: 'Shown while the prompt is empty — the same at rest and while editing.',
+          },
+          ARIA_LABEL_INPUT,
+        ],
+        outputs: [TOUCH_OUTPUT],
+      },
+    ],
+    tokenGroups: [
+      {
+        title: 'Prompt lines',
+        description:
+          'The inside of the box only — the box itself (fill, ring, radius, padding, type) is the consumer’s, the way a textarea’s is. The line geometry is shared with every line editor (`_lines.scss`).',
+        tokens: [
+          {
+            token: '--iusta-sys-prompt-editor-padding',
+            fallback: '0',
+            description: 'The host’s own padding, repeated so the placeholder lines up with the text.',
+          },
+          {
+            token: '--iusta-sys-prompt-editor-paragraph-gap',
+            fallback: '0.5em',
+            description: 'Space between two lines.',
+          },
+          {
+            token: '--iusta-sys-prompt-editor-item-gap',
+            fallback: '0.15em',
+            description: 'Space between two lines of one list — closer than paragraphs.',
+          },
+          {
+            token: '--iusta-sys-prompt-heading-weight',
+            fallback: '600',
+            description: 'A heading’s weight. Every depth is one size and one line unit.',
+          },
+          {
+            token: '--iusta-sys-prompt-editor-placeholder-color',
+            fallback: '--mat-sys-on-surface-variant',
+            description: 'The placeholder text.',
+          },
+          {
+            token: '--iusta-sys-prompt-editor-selection-color',
+            fallback: '--mat-sys-primary at 25%',
+            description: 'Selected text.',
+          },
+        ],
+      },
+    ],
   },
 };

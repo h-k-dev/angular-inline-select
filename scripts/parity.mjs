@@ -38,6 +38,9 @@ const E = 'src/app/content/partials/common/editables';
 const CE = 'src/app/core/editables';
 const DT = 'src/app/core/datetime';
 const SASS = 'src/assets/sass/global/components/iusta';
+const PSB = `${SB}/prompt/src`;
+const PM = 'src/app/core/prose-mirror';
+const PMS = 'src/assets/sass/global/integration/frameworks/prose-mirror';
 
 // [label, sandbox file(s), app file]. Several sandbox files are concatenated in order;
 // `{ inlineStylesOf }` compares a sandbox component's inline `styles` with the app's stylesheet.
@@ -468,6 +471,36 @@ const PAIRS = [
     `${SB}/temporal-mat/src/mat-form-field-adapter.spec.ts`,
     `${CE}/adapters/datetime/inline-mat-form-field.spec.ts`,
   ],
+  // prompt — the line core, the prompt dialect, its control and styles
+  ['prompt/line/extension', `${PSB}/line/extension.ts`, `${PM}/line/extension.ts`],
+  ['prompt/line/schema', `${PSB}/line/schema.ts`, `${PM}/line/schema.ts`],
+  ['prompt/line/editor', `${PSB}/line/editor.ts`, `${PM}/line/editor.ts`],
+  ['prompt/line/line-node', `${PSB}/line/line-node.ts`, `${PM}/line/line-node.ts`],
+  ['prompt/line/numbering', `${PSB}/line/numbering.ts`, `${PM}/line/numbering.ts`],
+  ['prompt/line/nodes/document', `${PSB}/line/nodes/document.ts`, `${PM}/line/nodes/document.ts`],
+  ['prompt/line/nodes/text', `${PSB}/line/nodes/text.ts`, `${PM}/line/nodes/text.ts`],
+  ['prompt/line/nodes/hard-break', `${PSB}/line/nodes/hard-break.ts`, `${PM}/line/nodes/hard-break.ts`],
+  ['prompt/line/extensions/history', `${PSB}/line/extensions/history.ts`, `${PM}/line/extensions/history.ts`],
+  ['prompt/line/extensions/base-keymap', `${PSB}/line/extensions/base-keymap.ts`, `${PM}/line/extensions/base-keymap.ts`],
+  ['prompt/format', `${PSB}/prompt/format.ts`, `${PM}/prompt/format.ts`],
+  ['prompt/format.spec', `${PSB}/prompt/format.spec.ts`, `${PM}/prompt/format.spec.ts`],
+  ['prompt/codec', `${PSB}/prompt/codec.ts`, `${PM}/prompt/codec.ts`],
+  ['prompt/kit', `${PSB}/prompt/kit.ts`, `${PM}/prompt/kit.ts`],
+  ['prompt/render', `${PSB}/prompt/render.ts`, `${PM}/prompt/render.ts`],
+  ['prompt/editor', `${PSB}/prompt/editor.ts`, `${PM}/prompt/editor.ts`],
+  ['prompt/nodes/line', `${PSB}/prompt/nodes/line.ts`, `${PM}/prompt/nodes/line.ts`],
+  [
+    'prompt/control',
+    `${PSB}/angular-inline-prompt/angular-inline-prompt.ts`,
+    'src/app/content/partials/common/prompt-input/prompt-input.ts',
+  ],
+  [
+    'prompt/control.spec',
+    `${PSB}/angular-inline-prompt/angular-inline-prompt.spec.ts`,
+    'src/app/content/partials/common/prompt-input/prompt-input.spec.ts',
+  ],
+  ['styles/_lines', `${SB}/src/lib/styles/_lines.scss`, `${PMS}/_lines.scss`],
+  ['styles/_prompt', `${SB}/src/lib/styles/_prompt.scss`, `${PMS}/_prompt.scss`],
 ];
 
 // App lines kept ON PURPOSE — the one app-layer composition: the mat-form-field adapter as a HOST
@@ -491,6 +524,7 @@ const RENAMES = [
   [/\bangular-inline-time\.(html|scss|ts)\b/g, 'editable-time.$1'],
   [/(['/])calendar\.(html|scss|ts)\b/g, '$1inline-calendar.$2'],
   [/\bmat-form-field-adapter\b/g, 'inline-mat-form-field'],
+  [/\bangular-inline-prompt\.(spec\.ts|ts)\b/g, 'prompt-input.$1'],
   // selectors / element names
   [/\bangular-inline-text\b/g, 'm-editable-text-v2'],
   [/\bangular-inline-number\b/g, 'm-editable-number-v2'],
@@ -498,6 +532,8 @@ const RENAMES = [
   [/\bangular-inline-date\b/g, 'm-editable-date-v2'],
   [/\bangular-inline-duration\b/g, 'm-editable-time-duration'],
   [/\bangular-inline-time\b/g, 'm-editable-time'],
+  [/\bangular-inline-prompt\b/g, 'm-prompt-input'],
+  [/\bangularInlinePrompt\b/g, 'mPromptInput'],
   [/\btemporal-calendar\b/g, 'm-inline-calendar'],
   // classes
   [/\bAngularInlineText\b/g, 'EditableTextV2'],
@@ -506,6 +542,7 @@ const RENAMES = [
   [/\bAngularInlineDate\b/g, 'EditableDateV2'],
   [/\bAngularInlineDuration\b/g, 'EditableTimeDuration'],
   [/\bAngularInlineTime\b/g, 'EditableTime'],
+  [/\bAngularInlinePrompt\b/g, 'PromptInput'],
   [/\bCalendar\b/g, 'InlineCalendar'],
 ];
 
