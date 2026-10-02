@@ -24,12 +24,13 @@ import { EditorState, TextSelection } from 'prosemirror-state';
 import { LineEditor } from '../line/editor';
 import { History } from '../line/extensions/history';
 import { BaseKeymap } from '../line/extensions/base-keymap';
+import { createHeadingPlaceholder } from '../line/extensions/heading-placeholder';
+import { LineEditorIntl } from '../line/intl';
 import { createPromptEditor } from '../prompt/editor';
 import { promptExtensions } from '../prompt/kit';
+import { PROMPT_LINE_GRAMMAR } from '../prompt/nodes/line';
 import { serializePromptDoc } from '../prompt/codec';
 import { renderPrompt } from '../prompt/render';
-
-const EXTENSIONS = [...promptExtensions, History, BaseKeymap];
 
 /**
  * A prompt field: Markdown lines — headings, bullets, numbered items, one
@@ -91,6 +92,18 @@ const EXTENSIONS = [...promptExtensions, History, BaseKeymap];
 export class AngularInlinePrompt implements FormValueControl<string> {
   #destroyRef = inject(DestroyRef);
   #host = inject<ElementRef<HTMLElement>>(ElementRef);
+  #intl = inject(LineEditorIntl);
+
+  /** The dialect, the shared history and keys, and the empty-heading hint in this field's language. */
+  #extensions = [
+    ...promptExtensions,
+    createHeadingPlaceholder({
+      grammar: PROMPT_LINE_GRAMMAR,
+      label: () => this.#intl.headingLabel(),
+    }),
+    History,
+    BaseKeymap,
+  ];
 
   placeholder = input<string>('');
   ariaLabel = input<string>('');
@@ -139,6 +152,15 @@ export class AngularInlinePrompt implements FormValueControl<string> {
     /** A field that can no longer be edited gives its view up. */
     effect(() => {
       if (!this.#canEdit()) untracked(() => this.#unmount());
+    });
+
+    /**
+     * The empty-heading hint is read at redraw time; a language switch changes
+     * it without a transaction, so a live view is asked to redraw.
+     */
+    effect(() => {
+      this.#intl.headingLabel();
+      untracked(() => this.#editor?.view.updateState(this.#editor.view.state));
     });
 
     this.#destroyRef.onDestroy(() => this.#editor?.destroy());
@@ -232,7 +254,7 @@ export class AngularInlinePrompt implements FormValueControl<string> {
 
     const editor = createPromptEditor({
       mount: this.#host.nativeElement,
-      extensions: EXTENSIONS,
+      extensions: this.#extensions,
       state: resumable,
       onUpdate: (current) => this.value.set(current.getText()),
     });

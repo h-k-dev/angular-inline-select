@@ -21,6 +21,8 @@ export * from './line/nodes/text';
 export * from './line/nodes/hard-break';
 export * from './line/extensions/history';
 export * from './line/extensions/base-keymap';
+export * from './line/extensions/heading-placeholder';
+export * from './line/intl';
 
 export * from './prompt/format';
 export * from './prompt/codec';

@@ -44,6 +44,9 @@ export const PROMPT_LINE_GRAMMAR: LineGrammar = {
     const start = counter.isOpen(level) || number === counter.expected(level) ? null : number;
     return { block: 'number', level, start };
   },
+  // A prompt heading keeps its depth, one to six, in `depth`.
+  heading: 'heading',
+  headingDepth: (attrs) => (attrs['depth'] as number | null) ?? 1,
 };
 
 const KINDS: readonly PromptBlockKind[] = ['paragraph', 'heading', 'bullet', 'number'];
@@ -92,10 +95,8 @@ export const PromptLine = defineLineNode({
     ...HEADING_PARSE_RULES,
     { tag: 'p' },
   ],
-  // The depth is kept for the stored `#`s and painted for a stylesheet that
-  // may one day size headings apart; today every depth looks the same.
-  domAttrs: (attrs): Record<string, string> =>
-    attrs['block'] === 'heading' ? { 'data-depth': String(attrs['depth'] ?? 1) } : {},
+  // The depth is drawn as `data-depth` by the line itself (`line-node.ts`),
+  // from the grammar's `headingDepth` — the same attribute every dialect uses.
   // No send: both keys make a new line, the way every text field does.
   splitKeys: ['Enter', 'Shift-Enter'],
   commands: () => ({

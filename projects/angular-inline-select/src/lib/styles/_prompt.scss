@@ -7,10 +7,12 @@
 /// component stylesheet would match nothing inside either. Scoped by
 /// `.iusta-prompt` on the editable root.
 ///
-/// Only the inside of the box is styled here — the lines. The box itself
-/// (fill, ring, radius, padding, type) is the consumer's, the way a textarea's
-/// is: the field that hosts a prompt decides what kind of control it looks
-/// like. Typography is inherited for the same reason.
+/// Only the inside of the box is styled here — the type and the lines. The
+/// box itself (fill, ring, radius, padding) is the consumer's, the way a
+/// textarea's is: the field that hosts a prompt decides what kind of control
+/// it looks like. The type and the rhythm are not the consumer's: they are the
+/// chat composer's (`_lines.scss`), so a prompt and a chat message read and
+/// space alike, each overridable through `--iusta-sys-prompt-*`.
 ///
 /// Token chain:
 ///   colour     `--iusta-sys-prompt-*` -> `--mat-sys-*` -> hardcoded
@@ -41,14 +43,10 @@
      the caret, not the arrow, says so before the view takes it over. */
   cursor: text;
 
+  /* The type, the rhythm, the heading looks and the empty-heading hint are
+     the shared mixins' — the chat composer is drawn by the very same rules. */
+  @include lines.type('prompt');
   @include lines.line-shapes('prompt');
-
-  /* Every depth one size for now: a heading is a bold line on the body's own
-     line height, so it costs exactly one line unit like any other line.
-     `data-depth` is there for the day the depths are told apart. */
-  > p[data-block='heading'] {
-    font-weight: var(--iusta-sys-prompt-heading-weight, 600);
-  }
 
   @include lines.placeholder('prompt', var(--_padding));
 }

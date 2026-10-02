@@ -1,7 +1,8 @@
 ///
 /// What every line editor's surface shares: the rules the ProseMirror view
-/// layer depends on, and the geometry of a line — paragraph gaps, the bullet
-/// and number gutter, the one nesting step, the placeholder.
+/// layer depends on, and the geometry of a line — the rhythm, the heading
+/// looks and their empty hint, the bullet and number gutter, the one nesting
+/// step, the placeholder.
 ///
 /// Mixins rather than a shared class, because each editor scopes by its own
 /// class on the editable root (`.iusta-prompt`, a chat composer's) and reads
@@ -77,6 +78,18 @@
   }
 }
 
+/// The type every line editor writes in — the chat composer's, the one the
+/// prompt field shares, so a prompt and a chat message read alike while they
+/// are typed. The face is inherited (the app's); size, weight, tracking and
+/// colour are Material's body-medium, each overridable through the family's
+/// tokens. The line height is the rhythm's (`line-shapes`), not the type's.
+@mixin type($family) {
+  font-size: var(--iusta-sys-#{$family}-editor-font-size, var(--mat-sys-body-medium-size));
+  font-weight: var(--iusta-sys-#{$family}-editor-font-weight, var(--mat-sys-body-medium-weight));
+  letter-spacing: var(--iusta-sys-#{$family}-editor-tracking, var(--mat-sys-body-medium-tracking));
+  color: var(--iusta-sys-#{$family}-editor-color, var(--mat-sys-on-surface, #1f1f1f));
+}
+
 /// The lines: a paragraph per line, list items drawn from their `data-block`
 /// (see `line/line-node.ts`) — the marker is not in the text, it is drawn
 /// here, the same bullet and number a rendered list shows.
@@ -95,13 +108,97 @@
     font-family: inherit;
   }
 
-  > p + p {
-    margin-block-start: var(--iusta-sys-#{$family}-editor-paragraph-gap, 0.5em);
+  /* ==========================================================================
+     The rhythm — Notion's, copied rather than derived, and the same in every
+     line editor and in the chat bubble that shows what the composer wrote
+     (`chat/body/body.scss`).
+
+     Two units. The line: 1.5 × the font, Notion's — 21px at a 14px body —
+     set here as a length, so every line inherits the same pixel box. The
+     space between elements: a third of that line, Notion's own step, so the
+     gaps below are stated in `lh` and each element resolves them against
+     the line box it inherited, not against its own font size.
+
+     - Prose lines follow each other tight: a line is Notion's soft break, not
+       a new block.
+     - Where the kind changes — prose, list, quote (a dialect that has one) —
+       two spaces.
+     - List items a quarter line apart, a nested one included.
+     - A heading has room on both sides, Notion's own halved and rounded:
+       16px above a title, two spaces above any other heading, 6px below
+       either. Where two headings meet, the one above the lower heading is
+       the gap drawn, as in Notion.
+
+     Every gap is the top margin of the element below it, so nothing doubles
+     and a first line carries none. `--iusta-sys-<family>-line` overrides the
+     line; the steps follow it.
+     ========================================================================== */
+
+  line-height: var(--iusta-sys-#{$family}-line, 1.5em);
+
+  > p + p,
+  > p[data-block] + p[data-block] {
+    margin-block-start: 0;
   }
 
-  /* Two lines of one list sit closer than two paragraphs do. */
-  > p[data-block] + p[data-block] {
-    margin-block-start: var(--iusta-sys-#{$family}-editor-item-gap, 0.15em);
+  > p:not([data-block='quote']) + p[data-block='quote'],
+  > p[data-block='quote'] + p:not([data-block='quote']),
+  > p:not([data-block='bullet'], [data-block='number'])
+    + p:is([data-block='bullet'], [data-block='number']),
+  > p:is([data-block='bullet'], [data-block='number'])
+    + p:not([data-block='bullet'], [data-block='number']) {
+    margin-block-start: calc(2lh / 3);
+  }
+
+  > p:is([data-block='bullet'], [data-block='number'])
+    + p:is([data-block='bullet'], [data-block='number']) {
+    margin-block-start: calc(1lh / 4);
+  }
+
+  /* Below a heading, whatever follows it but another heading. After the rules
+     above, so it wins over them at the same specificity. */
+  > p[data-block='heading'] + p:not([data-block='heading']) {
+    margin-block-start: 0.375rem;
+  }
+
+  /* Above a heading, whatever stands above it. Last, so these win in turn. */
+  > p + p[data-block='heading']:not([data-depth='1']) {
+    margin-block-start: calc(2lh / 3);
+  }
+
+  > p + p[data-block='heading'][data-depth='1'] {
+    margin-block-start: 1rem;
+  }
+
+  /* Two looks for every depth: the first is a title, one size up; any other
+     is a bold line at the body's own size. Both keep the inherited line box,
+     so a heading costs one line like any other — 1rem is as large as that box
+     takes before a wrapped title's ascenders reach the descenders above. A
+     dialect may store more depths (Markdown's six); it is the look that has
+     two levels, not the text. `data-depth` is drawn by the line itself. */
+  > p[data-block='heading'] {
+    font-weight: var(--iusta-sys-#{$family}-heading-weight, 600);
+  }
+
+  > p[data-block='heading'][data-depth='1'] {
+    font-size: var(--iusta-sys-#{$family}-heading-size, 1rem);
+  }
+
+  /* Notion's empty-heading hint (`line/extensions/heading-placeholder.ts`):
+     the line says what it is, in its own face, muted. Floated with no height
+     so the caret stays at the start of the line and the line keeps its box. */
+  > p[data-block='heading'][data-placeholder]:has(
+      > br.ProseMirror-trailingBreak:only-child
+    )::before {
+    content: attr(data-placeholder);
+    float: inline-start;
+    block-size: 0;
+    pointer-events: none;
+    user-select: none;
+    color: var(
+      --iusta-sys-#{$family}-editor-placeholder-color,
+      var(--mat-sys-on-surface-variant, #5f6368)
+    );
   }
 
   > p[data-block='bullet'],
@@ -125,8 +222,10 @@
   }
 
   /* One level of nesting: the line indents once more, and a nested bullet is
-     hollow, as it is in a rendered nested list. */
-  > p[data-block][data-level='1'] {
+     hollow, as it is in a rendered nested list. List lines only: a heading's
+     `data-level` is its depth, and a title must not indent like an item. */
+  > p[data-block='bullet'][data-level='1'],
+  > p[data-block='number'][data-level='1'] {
     padding-inline-start: 3em;
 
     &::before {

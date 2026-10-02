@@ -79,6 +79,18 @@ export interface LineGrammar {
    * characters as typed.
    */
   typedShape(marker: string, state: EditorState, pos: number): Attrs | null;
+  /**
+   * The heading kind. A heading's own marker is an attribute, so its text
+   * starts where a line's would: only another heading marker reshapes it —
+   * `1. ` or `- ` typed there is the title's text (`# 1. Einleitung`).
+   */
+  heading: string;
+  /**
+   * A heading line's depth, 1 for a title — however the dialect stores it.
+   * Drawn as `data-depth`, so one stylesheet sizes every dialect's headings,
+   * and named by the empty-heading hint (`extensions/heading-placeholder.ts`).
+   */
+  headingDepth(attrs: Attrs): number;
 }
 
 const PLAIN: LineAttrs = { block: 'paragraph', number: null, level: 0 };
@@ -132,7 +144,8 @@ function continuation(grammar: LineGrammar, attrs: Attrs): Attrs {
  * The marker rule. WhatsApp's: the space after the marker is the keystroke
  * that fires, the marker is removed, and the line takes its shape. Only at
  * the start of a line, which is what `^` means here — the input-rules plugin
- * matches against the text from the start of the textblock.
+ * matches against the text from the start of the textblock. On a heading line
+ * only another heading marker fires (see {@link LineGrammar.heading}).
  */
 function markerInputRule(grammar: LineGrammar): InputRule {
   return new InputRule(grammar.markerPattern, (state, match, start, end) => {
@@ -141,6 +154,8 @@ function markerInputRule(grammar: LineGrammar): InputRule {
 
     const shape = grammar.typedShape(match[0], state, $start.before());
     if (!shape) return null;
+    if ($start.parent.attrs['block'] === grammar.heading && shape['block'] !== grammar.heading)
+      return null;
 
     return state.tr.delete(start, end).setNodeMarkup($start.before(), undefined, shape);
   });
@@ -425,8 +440,6 @@ export interface LineNodeOptions {
   attrs?: Record<string, AttributeSpec>;
   /** How pasted HTML becomes lines, in priority order. */
   parseDOM: readonly TagParseRule[];
-  /** `data-*` attributes beyond the shared ones, for a shape that carries more than its kind. */
-  domAttrs?: (attrs: Attrs) => Record<string, string>;
   /** The keys that split a line: Shift-Enter where Enter sends, both where it does not. */
   splitKeys: readonly string[];
   /** Named commands — the dialect's toggles. */
@@ -462,7 +475,8 @@ export function defineLineNode(options: LineNodeOptions): NodeExtension {
         if (block !== 'paragraph') attrs['data-block'] = block;
         if (block === grammar.numbered) attrs['data-number'] = String(number ?? 1);
         if (level > 0) attrs['data-level'] = String(level);
-        Object.assign(attrs, options.domAttrs?.(node.attrs));
+        if (block === grammar.heading)
+          attrs['data-depth'] = String(grammar.headingDepth(node.attrs));
         return ['p', attrs, 0];
       },
     },

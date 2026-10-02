@@ -158,11 +158,7 @@ const PAIRS = [
     `${E}/editable-inline/bubble-menu/editable-clear.ts`,
   ],
   // global styles
-  [
-    'styles/_editable',
-    `${SB}/src/lib/styles/_editable.scss`,
-    `${SASS}/_editable.scss`,
-  ],
+  ['styles/_editable', `${SB}/src/lib/styles/_editable.scss`, `${SASS}/_editable.scss`],
   [
     'styles/_hover-scope',
     `${SB}/src/lib/styles/_editable-hover-scope.scss`,
@@ -479,9 +475,32 @@ const PAIRS = [
   ['prompt/line/numbering', `${PSB}/line/numbering.ts`, `${PM}/line/numbering.ts`],
   ['prompt/line/nodes/document', `${PSB}/line/nodes/document.ts`, `${PM}/line/nodes/document.ts`],
   ['prompt/line/nodes/text', `${PSB}/line/nodes/text.ts`, `${PM}/line/nodes/text.ts`],
-  ['prompt/line/nodes/hard-break', `${PSB}/line/nodes/hard-break.ts`, `${PM}/line/nodes/hard-break.ts`],
-  ['prompt/line/extensions/history', `${PSB}/line/extensions/history.ts`, `${PM}/line/extensions/history.ts`],
-  ['prompt/line/extensions/base-keymap', `${PSB}/line/extensions/base-keymap.ts`, `${PM}/line/extensions/base-keymap.ts`],
+  [
+    'prompt/line/nodes/hard-break',
+    `${PSB}/line/nodes/hard-break.ts`,
+    `${PM}/line/nodes/hard-break.ts`,
+  ],
+  [
+    'prompt/line/extensions/history',
+    `${PSB}/line/extensions/history.ts`,
+    `${PM}/line/extensions/history.ts`,
+  ],
+  [
+    'prompt/line/extensions/base-keymap',
+    `${PSB}/line/extensions/base-keymap.ts`,
+    `${PM}/line/extensions/base-keymap.ts`,
+  ],
+  [
+    'prompt/line/extensions/heading-placeholder',
+    `${PSB}/line/extensions/heading-placeholder.ts`,
+    `${PM}/line/extensions/heading-placeholder.ts`,
+  ],
+  [
+    'prompt/line/extensions/heading-placeholder.spec',
+    `${PSB}/line/extensions/heading-placeholder.spec.ts`,
+    `${PM}/line/extensions/heading-placeholder.spec.ts`,
+  ],
+  ['prompt/line/intl', `${PSB}/line/intl.ts`, `${PM}/line/intl.ts`],
   ['prompt/format', `${PSB}/prompt/format.ts`, `${PM}/prompt/format.ts`],
   ['prompt/format.spec', `${PSB}/prompt/format.spec.ts`, `${PM}/prompt/format.spec.ts`],
   ['prompt/codec', `${PSB}/prompt/codec.ts`, `${PM}/prompt/codec.ts`],

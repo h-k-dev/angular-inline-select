@@ -130,6 +130,46 @@ describe('AngularInlinePrompt', () => {
     expect(component.value()).toBe('1. a\n2. neu\n3. b\n4. c');
   });
 
+  /**
+   * The shared heading rules (`line/line-node.ts`), the same as the chat
+   * composer's: a list marker typed into a heading is its text, another
+   * heading marker changes the depth, and an empty heading line says what it
+   * is (`line/extensions/heading-placeholder.ts`).
+   */
+  describe('headings', () => {
+    beforeEach(async () => {
+      await setValue('');
+      host().focus();
+      await fixture.whenStable();
+    });
+
+    it('keeps a list marker typed into a heading as its text', async () => {
+      typeInto('# 1. Einleitung');
+      await fixture.whenStable();
+
+      expect(host().children[0].getAttribute('data-block')).toBe('heading');
+      expect(component.value()).toBe('# 1. Einleitung');
+    });
+
+    it('lets another heading marker change the depth', async () => {
+      typeInto('# ### Abschnitt');
+      await fixture.whenStable();
+
+      expect(host().children[0].getAttribute('data-depth')).toBe('3');
+      expect(component.value()).toBe('### Abschnitt');
+    });
+
+    it('hints at an empty heading by its depth until a word is typed', async () => {
+      typeInto('## ');
+      await fixture.whenStable();
+      expect(host().children[0].getAttribute('data-placeholder')).toBe('Heading 2');
+
+      typeInto('T');
+      await fixture.whenStable();
+      expect(host().children[0].hasAttribute('data-placeholder')).toBe(false);
+    });
+  });
+
   describe('Backspace right after a marker fired', () => {
     beforeEach(async () => {
       await setValue('');
