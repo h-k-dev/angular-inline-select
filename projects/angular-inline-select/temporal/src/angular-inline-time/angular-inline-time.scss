@@ -238,9 +238,10 @@
 
 /* The bare variant retires BOTH painters — the decoration and the empty-state
    border — plus the empty-state dim, which would otherwise fade a field whose
-   chrome belongs to the hosting container. */
-:host(.inline-field-bare) .inline-time__input,
-:host(.inline-field-bare) .inline-time__input:focus {
+   chrome belongs to the hosting container. `:host-context`, not `:host`: a leaf
+   inside a bare composite (date + time) is bare with it. */
+:host-context(.inline-field-bare) .inline-time__input,
+:host-context(.inline-field-bare) .inline-time__input:focus {
   border-bottom-color: transparent;
   text-decoration-line: none;
 
@@ -249,10 +250,10 @@
   margin: 0;
 }
 
-:host(.inline-field-bare) .inline-time__input:placeholder-shown:not(:focus) {
+:host-context(.inline-field-bare) .inline-time__input:placeholder-shown:not(:focus) {
   opacity: 1;
 }
-:host(.inline-field-bare--hide-placeholder) .inline-time__input::placeholder {
+:host-context(.inline-field-bare--hide-placeholder) .inline-time__input::placeholder {
   opacity: 0;
 }
 

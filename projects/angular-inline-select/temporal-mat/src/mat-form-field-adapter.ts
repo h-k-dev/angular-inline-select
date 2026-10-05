@@ -29,7 +29,8 @@ import { INLINE_TEMPORAL_MAT_CONTROL } from 'angular-inline-select/temporal';
 /**
  * Hosts an inline temporal control inside `<mat-form-field>`. It finds the
  * control through `INLINE_TEMPORAL_MAT_CONTROL` (which every temporal
- * control provides on itself), so it mounts either as an attribute —
+ * control provides on itself) and is written as an attribute on THE control
+ * in the form field's content slot —
  *
  * ```html
  * <mat-form-field>
@@ -38,8 +39,10 @@ import { INLINE_TEMPORAL_MAT_CONTROL } from 'angular-inline-select/temporal';
  * </mat-form-field>
  * ```
  *
- * — or as a HOST DIRECTIVE of the control, so consumer templates change
- * nothing. Outside a mat-form-field it is inert.
+ * — never composed as a host directive of a control: a composite (date +
+ * time) is the one control, its leaves are parts, and a leaf carrying its
+ * own adapter would shield its sibling's presses. Outside a mat-form-field
+ * it is inert.
  *
  * Provides `MatFormFieldControl`, derives every member from the control's
  * public signals (label float = focused || !empty, `errorState` = the
@@ -59,9 +62,9 @@ import { INLINE_TEMPORAL_MAT_CONTROL } from 'angular-inline-select/temporal';
     '[attr.id]': 'inMatFormField ? id : null',
 
     // Classes
-    // BARE CHROME only where a container actually draws the chrome — as a
-    // host directive it is MOUNTED EVERYWHERE, so outside a mat-form-field
-    // the control must keep its own dashed underline.
+    // BARE CHROME only where a container actually draws the chrome — the
+    // attribute may sit on a control outside a mat-form-field too, where the
+    // control must keep its own dashed underline.
     '[class.inline-field-bare]': 'inMatFormField',
     '[class.inline-field-bare--hide-placeholder]': 'inMatFormField && !labelIsFloating',
   },
@@ -105,9 +108,8 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
   }
 
   constructor() {
-    // Outside a mat-form-field there is nothing to host — and as a host
-    // directive this runs on EVERY control — so stay truly inert: no render
-    // hook, no effect.
+    // Outside a mat-form-field there is nothing to host — so stay truly
+    // inert: no render hook, no effect.
     const formField = this.#formField;
     if (formField === null) return;
 
@@ -131,6 +133,12 @@ export class InlineMatFormField implements MatFormFieldControl<unknown>, OnDestr
         // is; it only receives a CDK-generic ElementRef through its OPTIONAL
         // `overlayOrigin` contract seam.
         this.#control.overlayOrigin?.set(formField.getConnectedOverlayOrigin());
+
+        // A composite's host is a `role="group"`: the form field's label
+        // names it (`aria-labelledby`), as on `mat-date-range-input`. Read
+        // here, once the projected `<mat-label>` exists; a label-less field
+        // yields null and the control falls back to its own `ariaLabel`.
+        this.#control.labelledBy?.set(formField.getLabelId());
 
         const host = this.#element.nativeElement;
         const container = host.closest('mat-form-field');

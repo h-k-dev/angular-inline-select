@@ -547,8 +547,8 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   /**
    * Whether a HOSTING container renders this field's errors — the
    * mat-form-field adapter sets it — so the error overlay stays closed and
-   * the container's own error area speaks. A `model` so the host directive on
-   * this element can `.set()` it.
+   * the container's own error area speaks. A `model` so the adapter on this
+   * element can `.set()` it.
    */
   externalErrors = model(false);
 

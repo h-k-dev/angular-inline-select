@@ -373,7 +373,7 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
    * element here so the calendar anchors under the WHOLE field, below the
    * underline — never learning what that container is. The control stays
    * mat-ignorant; the type is CDK-generic, not Material. `model` (not
-   * `input`) so a host directive on the same element can `.set()` it
+   * `input`) so the adapter on the same element can `.set()` it
    * programmatically — the same public-writable seam as `editing`.
    */
   overlayOrigin = model<ElementRef<HTMLElement> | HTMLElement | null>(null);

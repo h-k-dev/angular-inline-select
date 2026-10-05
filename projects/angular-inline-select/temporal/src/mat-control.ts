@@ -46,6 +46,13 @@ export interface InlineTemporalMatControl {
    * never learns what hosts it; controls without a panel simply omit it.
    */
   overlayOrigin?: { set(origin: ElementRef<HTMLElement> | HTMLElement | null): void };
+  /**
+   * Present on a COMPOSITE (date + time), whose host is a `role="group"` the
+   * way Material's own `mat-date-range-input` is: the adapter hands the form
+   * field's label id through it, so the `<mat-label>` names the group. A
+   * single control omits it — its one input carries its own name.
+   */
+  labelledBy?: WritableSignal<string | null>;
 }
 
 /** Provided by every temporal control on itself (`useExisting`) — the adapter's one way in. */

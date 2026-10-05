@@ -356,8 +356,9 @@
   color: var(--mat-sys-error, #dc3545);
 }
 
-/* BARE CHROME — the hosting container draws the chrome. */
-:host(.inline-field-bare) .inline-date__input {
+/* BARE CHROME — the hosting container draws the chrome. `:host-context`, not
+   `:host`: a leaf inside a bare composite (date + time) is bare with it. */
+:host-context(.inline-field-bare) .inline-date__input {
   font-family: var(--mat-form-field-container-text-font, var(--mat-sys-body-medium-font));
   font-size: var(--mat-form-field-container-text-size, var(--mat-sys-body-medium-size));
   line-height: var(
@@ -377,17 +378,17 @@
 /* The bare variant retires BOTH painters — the decoration and the empty-state
    border — plus the empty-state dim, which would otherwise fade a field whose
    chrome belongs to the hosting container. */
-:host(.inline-field-bare) .inline-date__input,
-:host(.inline-field-bare) .inline-date__input:focus {
+:host-context(.inline-field-bare) .inline-date__input,
+:host-context(.inline-field-bare) .inline-date__input:focus {
   border-bottom-color: transparent;
   text-decoration-line: none;
 }
 
-:host(.inline-field-bare) .inline-date__input:placeholder-shown:not(:focus) {
+:host-context(.inline-field-bare) .inline-date__input:placeholder-shown:not(:focus) {
   opacity: 1;
 }
 
-:host(.inline-field-bare--hide-placeholder) .inline-date__input::placeholder {
+:host-context(.inline-field-bare--hide-placeholder) .inline-date__input::placeholder {
   opacity: 0;
 }
 

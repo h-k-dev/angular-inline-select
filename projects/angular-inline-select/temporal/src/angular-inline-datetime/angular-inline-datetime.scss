@@ -1,0 +1,14 @@
+:host {
+  display: inline;
+}
+
+.inline-datetime {
+  display: inline-flex;
+  align-items: baseline;
+  // Each leaf's halo reaches `--editable-text-shape-inset` past its box on every
+  // side (_inline-unit.scss) and is its own hit area, so two leaves need TWICE
+  // that between them or the halos overlap — a focused one and a hovered one
+  // show together. The extra 0.25rem keeps two halos reading as two shapes.
+  gap: calc(2 * var(--editable-text-shape-inset, 0.375rem) + 0.25rem);
+  max-width: 100%;
+}

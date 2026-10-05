@@ -18,6 +18,12 @@ describe('TemporalIntl', () => {
     expect(intl.clearLabel('single')).toBe('Clear date'); // defaults to the date label
   });
 
+  it('partLabel names one part of a composite — English lower-cases the noun mid-phrase', () => {
+    const intl = new TemporalIntl();
+    expect(intl.partLabel('Meeting', intl.dateLabel())).toBe('Meeting date');
+    expect(intl.partLabel('Meeting', intl.timeLabel())).toBe('Meeting time');
+  });
+
   it('an override owns the sentence — German keeps its capitalized nouns', () => {
     @Injectable()
     class GermanTemporalIntl extends TemporalIntl {

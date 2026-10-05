@@ -9,6 +9,7 @@ import {
 // Cards — one component per example, each owning its own model/form state.
 import { DateCard } from './date-card/date-card';
 import { TimeCard } from './time-card/time-card';
+import { DatetimeCard } from './datetime-card/datetime-card';
 import { DurationCard } from './duration-card/duration-card';
 import { QuartetCard } from './quartet-card/quartet-card';
 import { QuartetTableCard } from './quartet-table-card/quartet-table-card';
@@ -24,6 +25,7 @@ import { MatBaselineCard } from './mat-baseline-card/mat-baseline-card';
   imports: [
     DateCard,
     TimeCard,
+    DatetimeCard,
     DurationCard,
     QuartetCard,
     QuartetTableCard,

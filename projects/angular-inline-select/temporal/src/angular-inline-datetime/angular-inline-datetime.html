@@ -1,0 +1,41 @@
+<!--
+  ONE instant, two fields: the date leaf moves the day (wall-clock kept),
+  the time leaf sets the wall clock (day kept). Native Tab flows
+  date → time; each leaf brings its own panel, gestures and sessions.
+-->
+<span class="inline-datetime">
+  <angular-inline-date
+    [value]="dateLeafValue()"
+    (valueChange)="handleDateValue($event)"
+    (saved)="$event.changed && handleLeafCommit()"
+    (touch)="handleLeafTouch()"
+    [dayFilter]="dayFilter()"
+    [showCalendar]="showCalendar()"
+    [overlayOrigin]="overlayOrigin()"
+    [locale]="locale()"
+    [zone]="effectiveZone()"
+    [now]="now()"
+    [disabled]="effectiveDisabled()"
+    [readonly]="effectiveReadonly()"
+    [required]="required()"
+    [ariaLabel]="dateAriaLabel()"
+    [clearTemplate]="clearTemplate()"
+  />
+
+  <angular-inline-time
+    [value]="value()"
+    (valueChange)="handleTimeValue($event)"
+    (saved)="$event.changed && handleLeafCommit()"
+    (touch)="handleLeafTouch()"
+    [externalErrors]="externalErrors()"
+    [locale]="locale()"
+    [zone]="effectiveZone()"
+    [now]="now()"
+    [pickerMin]="pickerMin()"
+    [pickerMax]="pickerMax()"
+    [disabled]="effectiveDisabled()"
+    [readonly]="effectiveReadonly()"
+    [ariaLabel]="timeAriaLabel()"
+    [clearTemplate]="clearTemplate()"
+  />
+</span>

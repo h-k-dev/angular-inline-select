@@ -15,6 +15,7 @@
     <div class="example__body example-stack">
       <app-date-card [(locale)]="dateLocale" (emitted)="logEmit($event)" />
       <app-time-card [locale]="dateLocale()" (emitted)="logEmit($event)" />
+      <app-datetime-card [locale]="dateLocale()" (emitted)="logEmit($event)" />
       <app-duration-card (emitted)="logEmit($event)" />
       <app-quartet-card [locale]="dateLocale()" (emitted)="logEmit($event)" />
       <app-quartet-table-card [locale]="dateLocale()" (emitted)="logEmit($event)" />

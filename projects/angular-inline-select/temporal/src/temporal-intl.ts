@@ -89,6 +89,17 @@ export class TemporalIntl {
   }
 
   /**
+   * The accessible name of one PART of a composite field (the datetime's date
+   * and time leaves): the composite's label plus the part's noun. `noun` AS
+   * its label reads (`dateLabel()`, `timeLabel()`); English lower-cases it
+   * mid-phrase ("Meeting date"), an override restructures freely
+   * ("Termin (Datum)").
+   */
+  partLabel(base: string, noun: string): string {
+    return `${base} ${noun.toLowerCase()}`;
+  }
+
+  /**
    * The clear-button accessible name (`'single'` → no side word) — spoken by
    * the stock button AND handed to a consumer's own affordance through the
    * `editableClear` template context, so a custom clear button stays

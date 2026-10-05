@@ -1,0 +1,64 @@
+<div class="example-card" id="datetime-example">
+  <h3 class="example-card__title">Date + time — one instant, two fields</h3>
+  <p class="prose">
+    The datetime composite: a date leaf and a time leaf over ONE UTC instant. A date commit moves
+    the day and keeps the wall clock (midnight when starting empty); a time commit sets the wall
+    clock and keeps the day. Tab flows date → time. All three fields below bind the SAME required
+    model — clear one and leave it: the error shows once the field is touched, the leaves' own rule.
+    In the mat boxes the COMPOSITE is the form field's control (<code>inlineMatFormField</code> on
+    it, never on a leaf): its leaves wear the bare chrome through it, keep their own error overlay
+    closed, and the calendar drops below the box. A click on either leaf lands focus there.
+  </p>
+
+  <table class="model-table">
+    <thead>
+      <tr>
+        <th scope="col">Field</th>
+        <th scope="col">Display (local)</th>
+        <th scope="col">Model (UTC)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row">Inline</th>
+        <td>
+          <angular-inline-datetime
+            [formField]="field"
+            [locale]="locale()"
+            ariaLabel="Meeting"
+            (savedModelChange)="logEmit('datetime.savedModelChange', $event)"
+          />
+        </td>
+        <td>
+          <code>{{ model() ?? 'null' }}</code>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="mat-datetime">
+    <mat-form-field appearance="outline">
+      <mat-label>Meeting</mat-label>
+      <angular-inline-datetime
+        inlineMatFormField
+        [formField]="field"
+        [locale]="locale()"
+        ariaLabel="Meeting (outline)"
+        (savedModelChange)="logEmit('matDatetime.savedModelChange', $event)"
+      />
+      <mat-error>A date and time are required</mat-error>
+    </mat-form-field>
+
+    <mat-form-field appearance="fill">
+      <mat-label>Meeting</mat-label>
+      <angular-inline-datetime
+        inlineMatFormField
+        [formField]="field"
+        [locale]="locale()"
+        ariaLabel="Meeting (fill)"
+        (savedModelChange)="logEmit('matDatetimeFilled.savedModelChange', $event)"
+      />
+      <mat-error>A date and time are required</mat-error>
+    </mat-form-field>
+  </div>
+</div>

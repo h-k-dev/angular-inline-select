@@ -375,6 +375,27 @@ const PAIRS = [
     `${SB}/temporal/src/angular-inline-duration/duration-codec.ts`,
     `${E}/editable-time-duration/duration-codec.ts`,
   ],
+  // temporal: datetime (the composite — date + time leaves, one instant)
+  [
+    'datetime.ts',
+    `${SB}/temporal/src/angular-inline-datetime/angular-inline-datetime.ts`,
+    `${E}/editable-date-time/editable-date-time.ts`,
+  ],
+  [
+    'datetime.html',
+    `${SB}/temporal/src/angular-inline-datetime/angular-inline-datetime.html`,
+    `${E}/editable-date-time/editable-date-time.html`,
+  ],
+  [
+    'datetime.scss',
+    `${SB}/temporal/src/angular-inline-datetime/angular-inline-datetime.scss`,
+    `${E}/editable-date-time/editable-date-time.scss`,
+  ],
+  [
+    'datetime.spec',
+    `${SB}/temporal/src/angular-inline-datetime/angular-inline-datetime.spec.ts`,
+    `${E}/editable-date-time/editable-date-time.spec.ts`,
+  ],
   // temporal: shared
   [
     'temporal/_inline-unit',
@@ -524,19 +545,10 @@ const PAIRS = [
   ['styles/_prompt', `${SB}/src/lib/styles/_prompt.scss`, `${PMS}/_prompt.scss`],
 ];
 
-// App lines kept ON PURPOSE — the one app-layer composition: the mat-form-field adapter as a HOST
-// DIRECTIVE, so app templates never opt in (the sandbox core can't: it must not depend on Material,
-// its users write the `inlineMatFormField` attribute). Stripped from the app side before comparing;
-// the row says so.
-const MAT_HOST = [
-  /^import \{ InlineMatFormField \} from '[^']+';\n/m,
-  /^[ \t]*\/\/ iusta: every temporal field hosts itself[^\n]*\n[ \t]*hostDirectives: \[(?:\s*\/\/ Adapters)?\s*InlineMatFormField,?\s*\],\n/m,
-];
-const DECLARED_EXTRAS = { 'date.ts': MAT_HOST, 'time.ts': MAT_HOST, 'duration.ts': MAT_HOST };
-
 // Sandbox → app names, applied to both sides. Longest first so prefixes never win early.
 const RENAMES = [
   // file names (templateUrl / styleUrl / spec reads)
+  [/\bangular-inline-datetime\.(html|scss|ts)\b/g, 'editable-date-time.$1'],
   [/\bangular-inline-text\.(html|scss|ts)\b/g, 'editable-text-v2.$1'],
   [/\bangular-inline-number\.(html|scss|ts)\b/g, 'editable-number-v2.$1'],
   [/\bangular-inline-phone\.(html|scss|ts)\b/g, 'editable-telephone-number.$1'],
@@ -547,6 +559,7 @@ const RENAMES = [
   [/\bmat-form-field-adapter\b/g, 'inline-mat-form-field'],
   [/\bangular-inline-prompt\.(spec\.ts|ts)\b/g, 'prompt-input.$1'],
   // selectors / element names
+  [/\bangular-inline-datetime\b/g, 'm-editable-date-time'],
   [/\bangular-inline-text\b/g, 'm-editable-text-v2'],
   [/\bangular-inline-number\b/g, 'm-editable-number-v2'],
   [/\bangular-inline-phone\b/g, 'm-editable-telephone-number'],
@@ -557,6 +570,7 @@ const RENAMES = [
   [/\bangularInlinePrompt\b/g, 'mPromptInput'],
   [/\btemporal-calendar\b/g, 'm-inline-calendar'],
   // classes
+  [/\bAngularInlineDateTime\b/g, 'EditableDateTime'],
   [/\bAngularInlineText\b/g, 'EditableTextV2'],
   [/\bAngularInlineNumber\b/g, 'EditableNumberV2'],
   [/\bAngularInlinePhone\b/g, 'EditableTelephoneNumber'],
@@ -640,13 +654,9 @@ try {
     const appRaw = readFileSync(appPath, 'utf8');
     const stale = (appRaw.match(STALE_NAME) ?? []).length;
     const staleNote = stale ? `  (${stale} stale sandbox name${stale > 1 ? 's' : ''} in app)` : '';
-    const extras = DECLARED_EXTRAS[label] ?? [];
-    const declared = extras.filter((re) => re.test(appRaw)).length;
-    const appText = extras.reduce((text, re) => text.replace(re, ''), appRaw);
-    const extraNote = declared ? '  (declared app extra: mat host directive)' : '';
-    const b = await normalise(rename(appText), ext);
+    const b = await normalise(rename(appRaw), ext);
     if (a === b) {
-      rows.push([label, `ok${extraNote}${staleNote}`]);
+      rows.push([label, `ok${staleNote}`]);
       continue;
     }
 

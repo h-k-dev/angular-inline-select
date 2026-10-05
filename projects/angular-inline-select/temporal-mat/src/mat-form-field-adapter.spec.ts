@@ -5,6 +5,7 @@ import { MatFormFieldControl, MatFormFieldModule } from '@angular/material/form-
 
 import {
   AngularInlineDate,
+  AngularInlineDateTime,
   AngularInlineDuration,
   AngularInlineTime,
 } from 'angular-inline-select/temporal';
@@ -215,6 +216,74 @@ describe('InlineMatFormField calendar anchoring', () => {
 });
 
 // =============================================================================
+// A COMPOSITE is a role="group" — the form field's label names it
+// =============================================================================
+
+@Component({
+  imports: [MatFormFieldModule, AngularInlineDateTime, InlineMatFormField, FormField],
+  template: `
+    <mat-form-field>
+      <mat-label>Timestamp</mat-label>
+      <angular-inline-datetime inlineMatFormField [formField]="field" locale="en" />
+    </mat-form-field>
+  `,
+})
+class MatDateTimeHost {
+  model = signal<string | null>(null);
+  field = form(this.model);
+}
+
+@Component({
+  imports: [MatFormFieldModule, AngularInlineDateTime, InlineMatFormField, FormField],
+  template: `
+    <mat-form-field>
+      <angular-inline-datetime
+        inlineMatFormField
+        [formField]="field"
+        locale="en"
+        ariaLabel="Meeting"
+      />
+    </mat-form-field>
+  `,
+})
+class MatUnlabelledDateTimeHost {
+  model = signal<string | null>(null);
+  field = form(this.model);
+}
+
+describe('InlineMatFormField — the composite group (labelledBy seam)', () => {
+  it('hands a composite the form field’s label id; the single leaves have no such seam', async () => {
+    const fixture = TestBed.createComponent(MatDateTimeHost);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement.querySelector('angular-inline-datetime') as HTMLElement;
+    const label = fixture.nativeElement.querySelector('label') as HTMLLabelElement;
+    expect(label.id).not.toBe('');
+    expect(host.getAttribute('role')).toBe('group');
+    expect(host.getAttribute('aria-labelledby')).toBe(label.id);
+
+    const leaf = TestBed.createComponent(MatDateHost);
+    leaf.detectChanges();
+    const control = leaf.debugElement.query((el) => el.name === 'angular-inline-date')!
+      .componentInstance as AngularInlineDate;
+    expect('labelledBy' in control).toBe(false);
+  });
+
+  it('a label-less form field leaves the seam null — the composite’s own ariaLabel names the group', async () => {
+    const fixture = TestBed.createComponent(MatUnlabelledDateTimeHost);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement.querySelector('angular-inline-datetime') as HTMLElement;
+    expect(host.hasAttribute('aria-labelledby')).toBe(false);
+    expect(host.getAttribute('aria-label')).toBe('Meeting');
+  });
+});
+
+// =============================================================================
 // floatLabel="always" — the label floats, so the placeholder must SHOW
 //
 // Material floats the label on `shouldLabelFloat` OR `floatLabel="always"`.
@@ -295,8 +364,8 @@ describe('InlineMatFormField — externalErrors', () => {
 });
 
 // =============================================================================
-// Found through INLINE_TEMPORAL_MAT_CONTROL, so it mounts as an attribute or
-// as a host directive of the control — and is inert outside a mat-form-field
+// Found through INLINE_TEMPORAL_MAT_CONTROL, written as an attribute on the
+// control — and inert outside a mat-form-field
 // =============================================================================
 
 @Component({
