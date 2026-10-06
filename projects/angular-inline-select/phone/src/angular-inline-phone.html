@@ -160,7 +160,7 @@
       (input)="onPickerSearch($any($event.target).value)"
       (keydown)="onPickerKeydown($event)"
     />
-    <div class="country-picker__list" role="listbox" aria-label="Countries" [id]="pickerListId">
+    <div class="country-picker__list editable-scrollbar" role="listbox" aria-label="Countries" [id]="pickerListId">
       @for (option of pickerOptions(); track option.country) {
         <div
           role="option"

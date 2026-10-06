@@ -416,15 +416,26 @@ const CHROME_TOKENS: TokenGroup = {
       description: 'Easing for panel lift, message and bubble enter animations.',
     },
     {
-      token: '--editable-scrollbar-thumb',
-      fallback: 'var(--mat-sys-outline, #9aa0a6)',
+      token: '--scrollbar-thumb-color',
+      fallback: 'oklch(from var(--mat-sys-outline-variant) l c h / 0.1)',
       description:
-        'Thumb color of the quiet scrollbar (50% translucent at rest, opaque on hover). Applied to the library’s scroll containers (slash-menu, JSON editor) and to any consumer element carrying the `editable-scrollbar` class.',
+        'Thumb color while the scroll container is hovered or holds focus (invisible otherwise). Shared with the host app’s `.iusta-scroll` — the `editable-scrollbar` class is a copy of it, applied to the library’s scrollers (slash-menu, text editor, JSON editor, country picker) and to any consumer element carrying the class.',
     },
     {
-      token: '--editable-scrollbar-focus',
-      fallback: 'var(--mat-sys-primary, #6750a4)',
-      description: 'Thumb tint while keyboard focus is on — or inside — the scroll container.',
+      token: '--scrollbar-thumb-hover-color',
+      fallback: 'var(--mat-sys-outline-variant)',
+      description: 'Thumb color while the pointer is on the thumb itself.',
+    },
+    {
+      token: '--scrollbar-track-color',
+      fallback: 'transparent',
+      description: 'Scrollbar track color.',
+    },
+    {
+      token: '--scrollbar-thickness',
+      fallback: '8',
+      description:
+        'Unitless scrollbar width in px; the gutter is reserved (`scrollbar-gutter: stable`). `--mat-sys-scroll-gutter`, when the theme sets it, wins.',
     },
     {
       token: '--editable-bubble-pad',

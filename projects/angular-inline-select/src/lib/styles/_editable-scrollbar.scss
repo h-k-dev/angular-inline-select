@@ -1,85 +1,74 @@
 // =============================================================================
-// editable-scrollbar — quiet, token-driven scrollbar for scroll containers.
+// editable-scrollbar — the app's scroll thumb, for the library's scrollers.
+//
+// A line-for-line copy of iusta-core-frontend's `.iusta-scroll`
+// (src/assets/sass/global/components/iusta/_scroll.scss). Only the class name
+// differs: it reads the SAME tokens, so inside the app every editor scroller
+// skins itself exactly like the app's own — retheme there, and this follows.
+// Keep the body in sync with that file; diff the two when either changes.
+//
+// Tokens (the app's, not --editable-*):
+//   --mat-sys-scroll-gutter        gutter width (app theme; falls back to ↓)
+//   --scrollbar-thickness          unitless px, default 8
+//   --scrollbar-track-color        default transparent
+//   --scrollbar-thumb-color        default outline-variant @ 10%
+//   --scrollbar-thumb-hover-color  default outline-variant
+//   --scrollbar-thumb-min-height   default 40px (declared for parity)
+//
+// Behavior: stable gutter; the thumb is invisible until the container is
+// hovered or holds focus, full strength on the thumb itself.
 //
 // Opt-in: put `editable-scrollbar` on any scroll container. The library's own
-// scrollers (slash-menu, the JSON editor's CodeMirror scroller) are included
-// below. Tokens:
-//   --editable-scrollbar-thumb  (default --mat-sys-outline)
-//   --editable-scrollbar-focus  (default --mat-sys-primary)
-//
-// Behavior: translucent pill thumb in an inset gutter; more opaque while the
-// container is hovered, full strength on the thumb itself; tinted while
-// keyboard focus is on (or inside) the container.
+// scrollers are included below.
 // =============================================================================
 
 @mixin editable-scrollbar {
-  // Resolve the chain ONCE per container; states below read the private var.
-  --_scrollbar-thumb: var(--editable-scrollbar-thumb, var(--mat-sys-outline, #9aa0a6));
-  --_scrollbar-focus: var(--editable-scrollbar-focus, var(--mat-sys-primary, #6750a4));
+  // Single source with `--mat-sys-scroll-gutter` (_theme.scss): anything that
+  // has to mirror this gutter as a start padding reads the theme token, so the
+  // two edges can never drift apart. The fallback covers use outside .iusta-m3.
+  --_scrollbar-size: var(--mat-sys-scroll-gutter, calc(var(--scrollbar-thickness, 8) * 1px));
+  --_scrollbar-track: var(--scrollbar-track-color, transparent);
+  --_scrollbar-thumb: var(--scrollbar-thumb-color, #{oklch(from var(--mat-sys-outline-variant) l c h / 0.1)});
+  --_scrollbar-thumb-min-height: var(--scrollbar-thumb-min-height, 40px);
+  --_scrollbar-thumb-hover: var(--scrollbar-thumb-hover-color, var(--mat-sys-outline-variant));
+
+  --_current-thumb-color: transparent;
+
+  scrollbar-gutter: stable;
+  overscroll-behavior-x: contain;
+
+  @supports (-moz-appearance: none) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--_current-thumb-color) transparent;
+  }
 
   &::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-    background: transparent;
+    width: var(--_scrollbar-size);
+    height: var(--_scrollbar-size);
   }
 
-  &::-webkit-scrollbar-corner {
-    background: transparent;
-  }
+  &::-webkit-scrollbar-track {
+    background: var(--_scrollbar-track);
 
-  /* Inset gutter without knowing the background: transparent border, paint
-     clipped inside it. States below must override background-COLOR only —
-     the `background` shorthand would reset the clip and fill the border. */
-  &::-webkit-scrollbar-thumb {
-    background-color: color-mix(in srgb, var(--_scrollbar-thumb), transparent 50%);
     background-clip: padding-box;
-    border: 2px solid transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--_current-thumb-color);
     border-radius: 1e3px;
   }
 
-  @media (hover) {
-    &:hover::-webkit-scrollbar-thumb {
-      background-color: color-mix(in srgb, var(--_scrollbar-thumb), transparent 25%);
-    }
+  &:hover,
+  &:focus-within {
+    --_current-thumb-color: var(--_scrollbar-thumb);
 
-    &::-webkit-scrollbar-thumb:hover,
-    &::-webkit-scrollbar-thumb:active {
-      background-color: var(--_scrollbar-thumb);
+    &::-webkit-scrollbar-thumb:hover {
+      background-color: var(--_scrollbar-thumb-hover);
     }
   }
 
-  /* Keyboard focus on the container or anywhere inside it tints the thumb.
-     Last so it wins the equal-specificity tie against the hover states. */
-  &:is(:focus-visible, :has(:focus-visible))::-webkit-scrollbar-thumb {
-    background-color: var(--_scrollbar-focus);
-  }
-
-  /* Firefox has no scrollbar pseudo-elements — the standard properties carry
-     the same color story (thin; no pill radius, platform limit). Scoped to
-     Firefox because in Chromium any non-auto standard value would switch OFF
-     the richer ::-webkit painting above. */
-  @supports (-moz-appearance: none) {
-    & {
-      scrollbar-width: thin;
-      scrollbar-color: color-mix(in srgb, var(--_scrollbar-thumb), transparent 50%) transparent;
-      transition: scrollbar-color 0.3s ease;
-    }
-
-    @media (hover) {
-      &:hover {
-        scrollbar-color: var(--_scrollbar-thumb) transparent;
-      }
-    }
-
-    &:is(:focus-visible, :has(:focus-visible)) {
-      scrollbar-color: var(--_scrollbar-focus) transparent;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      & {
-        transition: none;
-      }
-    }
+  @media (prefers-reduced-motion: no-preference) {
+    scroll-behavior: smooth;
   }
 }
 
@@ -89,10 +78,19 @@
 }
 
 // The library's own scroll containers.
-.editable-menu {
+.editable-menu,
+.editable-text__editor {
   @include editable-scrollbar;
 }
 
 .editable-json__editor .cm-scroller {
   @include editable-scrollbar;
+
+  // Library-side deviation: CodeMirror drives its own scrollTop (cursor
+  // following, scrollIntoView) and measures right after writing it — smooth
+  // scrolling makes those reads stale. Instant, like CM expects. Inside the
+  // same query so it lands after (and beats) the mixin's `smooth`.
+  @media (prefers-reduced-motion: no-preference) {
+    scroll-behavior: auto;
+  }
 }

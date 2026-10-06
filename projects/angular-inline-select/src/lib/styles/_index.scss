@@ -12,8 +12,8 @@
 //                      --editable-hover-scope-* tokens
 // - editable-dialog → the reusable modal editing surface (centered card /
 //                      full-screen on touch)
-// - editable-scrollbar → opt-in quiet scrollbar for scroll containers
-//                      (`.editable-scrollbar`), --editable-scrollbar-* tokens
+// - editable-scrollbar → the app's scroll thumb (copy of iusta `.iusta-scroll`)
+//                      (`.editable-scrollbar`), reads the app's --scrollbar-* tokens
 // - editable-json   → the JSON component surfaces (secondary entry point;
 //                      safe to include even if the app never imports it)
 // - prompt          → the prompt editor's lines, at rest and live (secondary
