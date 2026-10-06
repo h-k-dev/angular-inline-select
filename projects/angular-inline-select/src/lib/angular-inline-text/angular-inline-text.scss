@@ -321,6 +321,11 @@
   }
 }
 
+// The line gives up height to the footer once the panel hits its ceiling.
+.editable-panel__line {
+  min-height: 0;
+}
+
 // -----------------------------------------------------------------------------
 // ELEMENT: elevated editing surface (inside .editable-panel)
 //
@@ -337,8 +342,11 @@
   outline: none;
   cursor: text;
 
+  // The ceiling is the panel's: its max-height is the room past the edge the
+  // overlay anchored it on (`panelCeiling`), and the editor scrolls inside
+  // whatever the line is left with.
   min-height: 1.5em;
-  max-height: 60vh;
+  max-height: 100%;
   overflow-y: auto;
 
   // M3 Typography: Body Large

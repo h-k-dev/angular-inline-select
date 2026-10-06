@@ -18,6 +18,7 @@ import {
   provideEditablePanelActions,
 } from './editable-panel-actions';
 import { EditableTextIntl } from './editable-text-intl';
+import { panelCeiling } from './panel-geometry';
 import {
   replayEdit,
   filterChars,
@@ -368,6 +369,15 @@ describe('AngularInlineText — [(value)] binding', () => {
     expect(h.display().textContent).toBe('initial');
     expect(h.editable().editing()).toBe(true);
     expect(h.editor()).not.toBeNull();
+  });
+
+  it('caps the panel once the overlay has placed it, so a long draft scrolls inside it', async () => {
+    await elevate(h);
+
+    // The value is layout (jsdom has none, see `panelCeiling`); the wiring is
+    // the point: placement → ceiling → the panel's max-height.
+    const panel = document.querySelector<HTMLElement>('.editable-panel');
+    expect(panel?.style.maxHeight).toMatch(/^\d+px$/);
   });
 
   it('the first intercepted keystroke is replayed into the draft and the live channel', async () => {
@@ -1285,6 +1295,26 @@ describe('AngularInlineText — single-line newline strip', () => {
     expect(h.host.value()).toBe('a b');
     // The rewrite used to drop the caret entirely.
     expect(getSelectionOffsets(editor)?.start).toBe(3);
+  });
+});
+
+describe('panelCeiling', () => {
+  it('a panel hanging from its top grows down to the bottom margin', () => {
+    expect(panelCeiling({ top: 300, bottom: 400 }, 'top', 800)).toBe(800 - 16 - 300);
+  });
+
+  it('a panel standing on its bottom grows up to the top margin', () => {
+    expect(panelCeiling({ top: 300, bottom: 400 }, 'bottom', 800)).toBe(400 - 16);
+  });
+
+  it('holds wherever the overlay put the pane — fitted or pushed', () => {
+    // A pushed pane is still anchored on its top/bottom edge; only where differs.
+    expect(panelCeiling({ top: 17, bottom: 155 }, 'top', 800, 16)).toBe(767);
+  });
+
+  it('never goes negative, and floors to whole pixels', () => {
+    expect(panelCeiling({ top: 790, bottom: 900 }, 'top', 800)).toBe(0);
+    expect(panelCeiling({ top: 100.6, bottom: 200 }, 'top', 800)).toBe(683);
   });
 });
 

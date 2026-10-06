@@ -20,13 +20,18 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { NgComponentOutlet, NgTemplateOutlet } from '@angular/common';
+import { DOCUMENT, NgComponentOutlet, NgTemplateOutlet } from '@angular/common';
 
 // Forms
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 // CDK
-import { CdkConnectedOverlayConfig, OverlayModule } from '@angular/cdk/overlay';
+import {
+  CdkConnectedOverlay,
+  CdkConnectedOverlayConfig,
+  ConnectedOverlayPositionChange,
+  OverlayModule,
+} from '@angular/cdk/overlay';
 import { A11yModule, _IdGenerator } from '@angular/cdk/a11y';
 
 // Editables
@@ -67,7 +72,13 @@ import {
 import { EditableTextIntl } from './editable-text-intl';
 import { makeSlashMenu } from './slash-menu';
 import { watchContentEnd } from './content-end';
-import { panelPositions, PANEL_PADDING_FALLBACK, resolvePanelPadding } from './panel-geometry';
+import {
+  panelCeiling,
+  panelPositions,
+  PANEL_PADDING_FALLBACK,
+  PANEL_VIEWPORT_MARGIN,
+  resolvePanelPadding,
+} from './panel-geometry';
 import {
   compileCharFilter,
   insertPlainText,
@@ -151,6 +162,9 @@ export class AngularInlineText implements FormValueControl<string> {
 
   /** The slash menu's container — exists only while the menu is open. */
   protected menuContainer = viewChild<ElementRef<HTMLElement>>('menuContainer');
+
+  /** The overlay hosting the panel — its pane is measured where it was placed. */
+  protected panelOverlay = viewChild.required(CdkConnectedOverlay);
 
   // DI-scoped, so the sequence is deterministic across SSR and hydration.
   protected readonly panelId = inject(_IdGenerator).getId('editable-panel-');
@@ -347,11 +361,32 @@ export class AngularInlineText implements FormValueControl<string> {
     positions: panelPositions(this.#panelPadding()),
     hasBackdrop: true,
     backdropClass: 'editable-scrim',
-    viewportMargin: 16,
+    viewportMargin: PANEL_VIEWPORT_MARGIN,
     push: true,
     disableClose: true, // Escape is the panel's (revert semantics)
     disposeOnNavigation: true,
   }));
+
+  #document = inject(DOCUMENT);
+
+  /** How tall the panel may grow from where it was placed (px); null until placed. */
+  protected panelMaxHeight = signal<number | null>(null);
+
+  /**
+   * The overlay placed the panel: cap its height to the room past its anchored
+   * edge. The panel is placed while still small (the draft is seeded after
+   * attach) and never re-placed as it grows, so without the cap a long draft
+   * runs off-screen.
+   */
+  protected handlePanelPlaced(change: ConnectedOverlayPositionChange) {
+    const pane = this.panelOverlay().overlayRef?.overlayElement;
+    if (!pane) return;
+
+    const viewportHeight = this.#document.documentElement.clientHeight;
+    this.panelMaxHeight.set(
+      panelCeiling(pane.getBoundingClientRect(), change.connectionPair.overlayY, viewportHeight),
+    );
+  }
 
   // -- Elevation: display → editor ----------------------------------------------
 

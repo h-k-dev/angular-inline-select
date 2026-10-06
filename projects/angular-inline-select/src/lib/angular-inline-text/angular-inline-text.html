@@ -59,10 +59,12 @@
   (attach)="handlePanelAttach()"
   (detach)="handlePanelDetach()"
   (backdropClick)="handleScrimClick()"
+  (positionChange)="handlePanelPlaced($event)"
 >
   <div
     tabindex="0"
     class="editable-panel"
+    [style.max-height.px]="panelMaxHeight()"
     [animate.enter]="'editable-panel-enter'"
     cdkTrapFocus
     [cdkTrapFocusAutoCapture]="false"

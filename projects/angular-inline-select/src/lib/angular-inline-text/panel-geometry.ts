@@ -8,6 +8,9 @@ import type { ConnectedPosition } from '@angular/cdk/overlay';
  */
 export const PANEL_PADDING_FALLBACK = 16;
 
+/** The gap the panel keeps to the viewport edges: the overlay's `viewportMargin`, and the ceiling's. */
+export const PANEL_VIEWPORT_MARGIN = 16;
+
 /**
  * The panel padding a session lifts with: `--mat-sys-inner-spacing` as the
  * element resolves it (px literals only; anything else is the fallback) — the
@@ -38,4 +41,22 @@ export function panelPositions(paddingX: number): ConnectedPosition[] {
     { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 8 },
     { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -8 },
   ];
+}
+
+/**
+ * The tallest the panel may grow from where the overlay placed it: from its
+ * anchored edge to the far viewport margin — a panel hanging from its top grows
+ * down, one standing on its bottom grows up. Read from the PLACED pane, so it
+ * holds whether the overlay fitted the panel or pushed it on screen (a push
+ * gives up the overlay's own flexible sizing).
+ */
+export function panelCeiling(
+  pane: Pick<DOMRect, 'top' | 'bottom'>,
+  overlayY: ConnectedPosition['overlayY'],
+  viewportHeight: number,
+  margin = PANEL_VIEWPORT_MARGIN,
+): number {
+  const room = overlayY === 'bottom' ? pane.bottom - margin : viewportHeight - margin - pane.top;
+
+  return Math.max(0, Math.floor(room));
 }
