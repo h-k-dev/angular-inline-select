@@ -362,13 +362,15 @@ const CHROME_TOKENS: TokenGroup = {
     },
     {
       token: '--editable-menu-active-background',
-      fallback: 'var(--mat-sys-secondary-container, #d7e3ff)',
-      description: 'Background of the keyboard-active menu option.',
+      fallback:
+        'var(--mat-option-focus-state-layer-color, oklch(from var(--mat-sys-on-surface) l c h / 0.12))',
+      description:
+        'Background of the active menu option — the host app’s listbox token by default, so the menu matches its selects.',
     },
     {
       token: '--editable-menu-active-color',
-      fallback: 'var(--mat-sys-on-secondary-container, #001b3f)',
-      description: 'Text color of the keyboard-active menu option.',
+      fallback: 'inherit',
+      description: 'Text color of the active menu option (unchanged by default).',
     },
     {
       token: '--editable-message-error-color',

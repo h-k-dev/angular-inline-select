@@ -108,14 +108,25 @@
     border-radius: var(--mat-sys-corner-small, 0.4rem);
     cursor: pointer;
 
+    // Hover and the active row can be neighbours: a hairline gap keeps the two
+    // chips apart instead of merging into one block.
+    & + [role='option'] {
+      margin-top: calc(var(--mat-sys-spacing, 0.25rem) / 2);
+    }
+
     // The control mirrors the active option to `aria-activedescendant` and
-    // marks it for styling — keyboard highlight without moving focus.
-    &[data-active='true'] {
-      background: var(
+    // marks it for styling — keyboard highlight without moving focus. Default
+    // is the app's listbox token (iusta aria/_listbox.scss
+    // `--iusta-sys-option-active`): Material's option focus layer, else
+    // on-surface at 12%. The label keeps its color. Pointer hover paints the
+    // same chip as the active/selected row.
+    &[data-active='true'],
+    &:hover {
+      background-color: var(
         --editable-menu-active-background,
-        var(--mat-sys-secondary-container, #d7e3ff)
+        var(--mat-option-focus-state-layer-color, oklch(from var(--mat-sys-on-surface) l c h / 0.12))
       );
-      color: var(--editable-menu-active-color, var(--mat-sys-on-secondary-container, #001b3f));
+      color: var(--editable-menu-active-color, inherit);
     }
   }
 }

@@ -189,9 +189,19 @@ export interface InlinePhoneSaved {
       border-radius: var(--mat-sys-corner-small, 0.4rem);
       cursor: pointer;
     }
-    .country-picker__list [role='option'][data-active='true'] {
-      background: var(--mat-sys-secondary-container, #d7e3ff);
-      color: var(--mat-sys-on-secondary-container, #001b3f);
+    /* Hover and the active row can be neighbours: a hairline gap keeps the two
+       chips apart instead of merging into one block. */
+    .country-picker__list [role='option'] + [role='option'] {
+      margin-top: calc(var(--mat-sys-spacing, 0.25rem) / 2);
+    }
+    .country-picker__list [role='option']:is([data-active='true'], :hover) {
+      /* The app's listbox token (iusta aria/_listbox.scss \`--iusta-sys-option-active\`):
+         Material's option focus layer, else on-surface at 12%. Label color stays.
+         Pointer hover paints the same chip as the active/selected row. */
+      background-color: var(
+        --mat-option-focus-state-layer-color,
+        oklch(from var(--mat-sys-on-surface) l c h / 0.12)
+      );
     }
   `,
   host: {
