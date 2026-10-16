@@ -88,7 +88,7 @@ function countLines(
 
   while (count <= limit) {
     const width = count === 0 ? Math.max(geometry.firstLineWidth, 24) : geometry.lineWidth;
-    const range = layoutNextLineRange(prepared, cursor, width);
+    const range = layoutNextLineRange(prepared, width, cursor);
     if (range === null) return count;
 
     cursor = range.end;
@@ -170,7 +170,7 @@ export function truncateToVisualLines(
           ? Math.max(geometry.lineWidth - ellipsisWidth, 24)
           : geometry.lineWidth;
 
-    const range = layoutNextLineRange(headPrepared, cursor, width);
+    const range = layoutNextLineRange(headPrepared, width, cursor);
     if (range === null) break;
 
     head += materialize(headPrepared, range);
@@ -184,7 +184,7 @@ export function truncateToVisualLines(
   const tailLineTexts: string[] = [];
   let tailCursor = ORIGIN;
   for (;;) {
-    const range = layoutNextLineRange(tailPrepared, tailCursor, geometry.lineWidth);
+    const range = layoutNextLineRange(tailPrepared, geometry.lineWidth, tailCursor);
     if (range === null) break;
 
     tailLineTexts.push(materialize(tailPrepared, range));

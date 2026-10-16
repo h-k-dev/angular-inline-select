@@ -15,7 +15,7 @@
     "@codemirror/commands": "^6.10.0",
     "@codemirror/lint": "^6.9.0",
     "@lezer/highlight": "^1.2.0",
-    "@chenglou/pretext": "^0.0.8",
+    "@chenglou/pretext": "^1.0.0",
     "prosemirror-model": "^1.25.0",
     "prosemirror-state": "^1.4.0",
     "prosemirror-view": "^1.42.0",
