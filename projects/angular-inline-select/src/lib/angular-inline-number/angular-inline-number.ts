@@ -393,6 +393,18 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
   });
 
   /**
+   * A string binding NEITHER reading accepts — a value stored before the field
+   * was a number (`'1.234,5'` under an `en` locale, `'5k'`), or `null`. It is
+   * shown verbatim, never dropped: the idle text wears the parse gate's error
+   * on arrival (an injected invalid value), the editor opens on it, and only a
+   * changed, parseable session replaces it.
+   */
+  protected unreadableValue = computed(() => {
+    const value = this.value();
+    return typeof value === 'string' && value.trim() !== '' && this.numericValue() === null ? value : null;
+  });
+
+  /**
    * Whether an edit session is open. Two-way bindable — also the bridge that
    * freezes the string channel while a session runs.
    */
@@ -400,13 +412,14 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
 
   /**
    * The string channel feeding the inner control. Follows the formatted
-   * model while idle; while a session is open it holds the raw draft, so a
+   * model while idle — or an unreadable stored string as it is (see
+   * `unreadableValue`); while a session is open it holds the raw draft, so a
    * reformat can never rewrite the text under the caret. Committing runs the
    * draft through the codec both ways — `'12.50'` settles and displays as
    * `'12.5'`.
    */
   protected innerValue = linkedSignal<string, string>({
-    source: () => this.activeFormat()(this.numericValue()),
+    source: () => this.unreadableValue() ?? this.activeFormat()(this.numericValue()),
     computation: (source, prev) => (this.editing() ? (prev?.value ?? source) : source),
     // The live channel IS the setter (22.1): every raw write parses, and a
     // parseable draft flows into the model synchronously — no write site
@@ -447,6 +460,12 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
   /** Retype the settled session: strings inside, numbers outside. */
   protected handleInnerSaved(session: InlineTextSaved) {
     const parsed = this.activeParse()(session.value);
+
+    // A discard rolling back to an unreadable stored string (`unreadableValue`):
+    // the live channel moved the model to the draft's last number, and the
+    // rollback text cannot parse back — so the binding gets its string back.
+    if (!session.changed && parsed === undefined && session.value.trim() !== '') this.value.set(session.value);
+
     // The parse gate blocks unparseable commits; the fallback covers discards
     // rolling back to a baseline the current codec cannot read.
     const value = parsed === undefined ? this.numericValue() : parsed;

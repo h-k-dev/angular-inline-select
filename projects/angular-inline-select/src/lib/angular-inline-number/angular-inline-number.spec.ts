@@ -568,6 +568,47 @@ describe('AngularInlineNumber — locale codec', () => {
     expect(h.display().textContent).toBe('7,5');
   });
 
+  it('keeps a stored string NEITHER reading accepts — verbatim, flagged, the editor opening on it', async () => {
+    // Stored while the field was text: German grouping, read under `en`.
+    h.host.value.set('1.234,5');
+    h.fixture.detectChanges();
+
+    expect(h.display().textContent).toBe('1.234,5');
+    expect(h.number().parseFailed()).toBe(true);
+    // An injected invalid value wears the error on arrival.
+    expect(h.display().getAttribute('aria-invalid')).toBe('true');
+
+    // The editor opens on the stored text, the elevating keystroke appended.
+    const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
+    Object.defineProperty(event, 'inputType', { value: 'insertText' });
+    Object.defineProperty(event, 'data', { value: '0' });
+    h.display().dispatchEvent(event);
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+    expect(h.editor()?.textContent).toBe('1.234,50');
+  });
+
+  it('a discard hands an unreadable stored string back; only a parseable commit replaces it', async () => {
+    h.host.value.set('1.234,5');
+    h.fixture.detectChanges();
+
+    // The live channel moves the model to the draft's number…
+    await typeText(h, '99');
+    expect(h.host.value()).toBe(99);
+
+    // …and the discard restores the stored string, not the last draft.
+    (h.inner() as unknown as { cancel(): void }).cancel();
+    h.fixture.detectChanges();
+    expect(h.host.value()).toBe('1.234,5');
+    expect(h.display().textContent).toBe('1.234,5');
+
+    await typeText(h, '1234.5');
+    accept(h);
+    expect(h.host.value()).toBe(1234.5);
+    expect(h.display().textContent).toBe('1,234.5');
+  });
+
   it('applies Intl options — fixed decimals for money', () => {
     h.host.options.set({ minimumFractionDigits: 2, maximumFractionDigits: 2 });
     h.fixture.detectChanges();

@@ -99,7 +99,12 @@ export interface InlinePhoneSaved {
   ],
   templateUrl: './angular-inline-phone.html',
   styles: `
+    /* The flag is the number's LEAD: the editables' lead track for its box, the
+       lead gap before the number (--editable-lead-size, --editable-lead-gap),
+       so the number starts where any value after a leading glyph does. */
     :host {
+      --editable-text-prefix-gap: var(--editable-lead-gap, var(--mat-sys-spacing, 0.25rem));
+
       display: inline;
     }
     .country-name {
@@ -127,11 +132,12 @@ export interface InlinePhoneSaved {
       /*
        * A RESERVED box, not the glyph's own advance: flag widths differ per
        * emoji font (and "DE" letters are wider still), so a late font swap or
-       * the passthrough → engine upgrade would otherwise shift the number.
+       * the passthrough → engine upgrade would otherwise shift the number. The
+       * lead track by default, the 1em flag glyph centred in it.
        */
       display: inline-block;
       flex: none;
-      inline-size: var(--editable-phone-flag-width, 1.35em);
+      inline-size: var(--editable-phone-flag-width, var(--editable-lead-size, calc(var(--mat-sys-spacing, 0.25rem) * 4)));
       text-align: center;
       white-space: nowrap;
       overflow: clip;

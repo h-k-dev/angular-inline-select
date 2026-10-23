@@ -80,8 +80,10 @@
 
   color: var(--editable-text-affix-color, var(--mat-sys-on-surface, inherit));
 
+  // `--editable-text-prefix-gap`: a prefix that is the value's LEAD (the
+  // phone's flag) takes the family lead gap instead of a unit's quarter ch.
   &--prefix {
-    margin-inline-end: 0.25ch;
+    margin-inline-end: var(--editable-text-prefix-gap, 0.25ch);
   }
 
   &--suffix {
