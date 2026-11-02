@@ -465,10 +465,10 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
    * discard) by writing back the baseline's RENDERING — which has no dial
    * prefix to read back. This is the value that rendering stands for.
    */
-  #sessionBaseline: string | null = null;
+  #sessionBaseline = signal<string | null>(null);
 
   protected handleEditingChange(editing: boolean) {
-    if (editing && !this.innerEditing()) this.#sessionBaseline = this.value();
+    if (editing && !this.innerEditing()) this.#sessionBaseline.set(this.value());
     this.innerEditing.set(editing);
   }
 
@@ -502,7 +502,7 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
       // a settle or discard restores it rather than re-reading it prefix-less.
       // (A draft that drops the prefix down to exactly this text still
       // commits without it — `handleInnerSaved` reads the changed session.)
-      const baseline = this.#sessionBaseline;
+      const baseline = this.#sessionBaseline();
       if (this.innerEditing() && raw === this.#renderingOf(baseline)) {
         if (this.value() !== baseline) this.value.set(baseline);
         return;
@@ -523,10 +523,15 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
 
   /**
    * A session opens on the FULL value: the idle display shows the number
-   * only, so the draft gets its dial prefix back as plain text.
+   * only, so the draft gets its dial prefix back as plain text. Read from the
+   * session BASELINE while editing — the inner control also measures "changed"
+   * against it, and the live model may already carry a prefix the user is
+   * only now typing.
    */
   protected draftText = computed(() => {
-    const { prefix, result } = this.#committed();
+    const { prefix, result } = this.innerEditing()
+      ? this.#read(this.#sessionBaseline() ?? '')
+      : this.#committed();
     return prefix && result?.ok ? (number: string) => `${prefix} ${number}` : undefined;
   });
 

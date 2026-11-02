@@ -378,6 +378,20 @@ describe('AngularInlinePhone — dial prefix', () => {
     expect(h.host.saved).toEqual([{ value: '+493012345678' }]);
     expect(prefixText()).toBeNull();
   });
+
+  it('adding a prefix in front of a bare number commits it', async () => {
+    h.host.value.set('+4930123456');
+    h.fixture.detectChanges();
+
+    // The draft opens on the bare rendering; the prefix typed in front of it
+    // makes the draft exactly "prefix + rendering" — still a change.
+    await typeText(h, '#0 +49 30 123456');
+    accept(h);
+
+    expect(h.host.value()).toBe('#0 0049 30 123456');
+    expect(h.host.saved).toEqual([{ value: '#0 0049 30 123456' }]);
+    expect(prefixText()?.textContent).toBe('#0');
+  });
 });
 
 describe('AngularInlinePhone — signal form [formField] binding', () => {
