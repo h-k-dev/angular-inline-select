@@ -46,6 +46,38 @@
         </p>
       </div>
 
+      <div class="example-card" id="phone-dial-prefix-example">
+        <h3 class="example-card__title">Dial prefix</h3>
+        <p class="prose">
+          Via the switchboard:
+          <angular-inline-phone
+            [(value)]="switchboard"
+            defaultCountry="DE"
+            ariaLabel="Phone number dialled via the switchboard"
+          >
+            <ng-template editableActions let-data>
+              @if (data.tel; as tel) {
+                <a mat-icon-button editableAction [href]="tel" aria-label="Call">
+                  <mat-icon>call</mat-icon>
+                </a>
+              }
+            </ng-template>
+          </angular-inline-phone>
+          — keypad codes a PBX or the network reads first (<code>#0 </code> outside line,
+          <code>*31#</code> / <code>#31#</code> show / hide caller ID) are split off before the
+          engine reads the number: muted text while idle, plain text while editing. With a prefix
+          the model keeps the number in <code>00</code> form, never <code>+</code>; the call
+          href escapes <code>#</code> as <code>%23</code> — model:
+          <code>{{ switchboard() ?? '∅' }}</code
+          >.
+        </p>
+        <p class="form-toggles__hint">
+          Try “#0 +43 1 2345678” (stored as <code>#0 0043 1 2345678</code>), “*31#030 12345678”, or
+          “#00049 30 12345678” (blocked — the code needs its space). Delete the prefix to store the
+          bare E.164.
+        </p>
+      </div>
+
       <div class="example-card" id="phone-form-example">
         <h3 class="example-card__title">Signal form + live interpretation</h3>
         <p class="prose">

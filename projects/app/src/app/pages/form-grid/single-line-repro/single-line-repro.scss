@@ -1,0 +1,57 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+// The table scrolls on its own on a phone; the page never does.
+.repro-table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font: var(--mat-sys-body-medium);
+
+  th,
+  td {
+    padding: 6px 12px 6px 0;
+    text-align: start;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  thead th {
+    font: var(--mat-sys-label-medium);
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.repro-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mat-sys-primary);
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+
+  &--leaked {
+    color: var(--mat-sys-error);
+  }
+}
+
+.repro-pending {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.repro-commit {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+
+  &--leaked {
+    color: var(--mat-sys-error);
+  }
+}

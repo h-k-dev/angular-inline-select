@@ -79,6 +79,9 @@ export interface RecordModel {
   cable: number | string | null;
   crew: number | null;
   telephone: string | null;
+  switchboard: string | null;
+  callerId: string | null;
+  hiddenCaller: string | null;
   mobile: string | null;
   email: string;
   billingEmail: string;
@@ -124,6 +127,13 @@ function initialRecord(): RecordModel {
     cable: 48.5,
     crew: 12,
     telephone: '+49301234567',
+    // Dial strings RFC 3966 leaves out of `tel:` — keypad codes before the
+    // number, stored `<prefix> 00<CC> …` (the backend indexer drops a `+`
+    // after a prefix): a PBX outside line, show caller ID, and hide caller
+    // ID ahead of the outside line.
+    switchboard: '#0 0049 30 12345678',
+    callerId: '*31# 0043 1 2345678',
+    hiddenCaller: '#31# #0 0041 44 668 18 00',
     mobile: null,
     email: 'survey@aurora-observatory.example',
     // An INVALID backend email (no `@`) — the form's `email()` rule rejects it
@@ -272,6 +282,13 @@ export class FieldGrid {
       .errors()
       .some((error) => error.kind === 'required'),
   );
+
+  /** The dial-prefix rows — one per legacy keypad-code shape. */
+  protected readonly dialRows = [
+    { field: 'switchboard', label: 'Switchboard' },
+    { field: 'callerId', label: 'Caller ID' },
+    { field: 'hiddenCaller', label: 'Hidden caller' },
+  ] as const;
 
   protected fileNameMissing = computed(() =>
     this.recordForm

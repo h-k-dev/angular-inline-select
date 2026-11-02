@@ -9,4 +9,5 @@
 
 export * from './phone-codec';
 export * from './phone-codec-loader';
+export * from './dial-string';
 export * from './angular-inline-phone';

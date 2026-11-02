@@ -8,6 +8,7 @@ import {
 
 // Pattern
 import { FieldGrid, type FieldGridEmission } from './field-grid/field-grid';
+import { SingleLineRepro } from './single-line-repro/single-line-repro';
 
 /** The fold threshold — the one in field-grid.scss, for the copy above the grid. */
 const FOLD_CH = 40;
@@ -25,7 +26,7 @@ const FOLD_CH = 40;
   templateUrl: './form-grid.html',
   styleUrl: './form-grid.scss',
   changeDetection: ChangeDetectionStrategy.Eager,
-  imports: [FieldGrid],
+  imports: [FieldGrid, SingleLineRepro],
 })
 export class FormGridPage {
   protected readonly foldCh = FOLD_CH;
@@ -35,7 +36,12 @@ export class FormGridPage {
   // ---------------------------------------------------------------------------
   protected emittedEvents = signal<string[]>([]);
 
+  /** The Attachment field's last commit, for the single-line leak repro. */
+  protected fileNameCommit = signal<string | null>(null);
+
   protected logEmit({ name, payload }: FieldGridEmission) {
+    if (name === 'fileName.saved') this.fileNameCommit.set((payload as { value: string }).value);
+
     this.emittedEvents.update((events) =>
       [`${name} → ${JSON.stringify(payload)}`, ...events].slice(0, 8),
     );

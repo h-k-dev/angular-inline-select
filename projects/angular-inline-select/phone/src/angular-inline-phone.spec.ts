@@ -9,7 +9,11 @@ import { AngularInlineText, EditableClear, EditableClearTemplate } from 'angular
 
 import { createLibphonenumberCodec } from 'angular-inline-select/phone-libphonenumber';
 
-import { AngularInlinePhone, type InlinePhoneSaved } from './angular-inline-phone';
+import {
+  AngularInlinePhone,
+  type InlinePhoneActions,
+  type InlinePhoneSaved,
+} from './angular-inline-phone';
 import { PhoneCodecLoader, providePhoneCodec } from './phone-codec-loader';
 
 const codec = createLibphonenumberCodec(metadata, examples);
@@ -258,6 +262,121 @@ describe('AngularInlinePhone — [(value)] binding', () => {
     // Valid: ✓ + the international reading
     await typeText(h, '0171 2345678');
     expect(hintText()).toBe('✓ +49 171 2345678');
+  });
+});
+
+describe('AngularInlinePhone — dial prefix', () => {
+  let h: Harness<PhoneValueHost>;
+
+  const prefixText = () => h.fixture.nativeElement.querySelector('.dial-prefix') as HTMLElement | null;
+  const actions = () => (h.phone() as unknown as { actionsData(): InlinePhoneActions }).actionsData();
+
+  beforeEach(() => {
+    h = setup(PhoneValueHost);
+    h.host.value.set('#0 0049 30 12345678');
+    h.fixture.detectChanges();
+  });
+
+  it('renders the prefix as muted text after the flag, the number on its own', () => {
+    expect(prefixText()?.textContent).toBe('#0');
+    expect(h.display().textContent).toBe('+49 30 12345678');
+    expect(h.phone().country()).toBe('DE');
+  });
+
+  it('hands out the stored value and an href with # escaped', () => {
+    expect(actions()).toMatchObject({
+      value: '#0 0049 30 12345678',
+      dialPrefix: '#0',
+      e164: '+493012345678',
+      tel: 'tel:%230 0049 30 12345678',
+    });
+  });
+
+  it('opens the session on the full dial string — the muted prefix gives way to draft text', async () => {
+    await typeText(h, '#0 0043 1 2345678');
+
+    expect(prefixText()).toBeNull();
+    expect(h.phone().dialPrefix()).toBe('#0');
+    expect(document.querySelector('.editable-panel__message--hint')?.textContent?.trim()).toBe(
+      '✓ #0 · +43 1 2345678',
+    );
+  });
+
+  it('a keystroke on the idle display lands after the same digit in the prefixed draft', async () => {
+    const display = h.display();
+    const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
+    Object.defineProperty(event, 'inputType', { value: 'insertText' });
+    Object.defineProperty(event, 'data', { value: '9' });
+    display.dispatchEvent(event);
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(h.editor()?.textContent).toBe('#0 +49 30 123456789');
+  });
+
+  it.each([
+    ['#0 +43 1 2345678', '#0 0043 1 2345678'],
+    ['#0 030 12345678', '#0 0049 30 12345678'],
+    ['*31#0041 44 668 18 00', '*31# 0041 44 668 18 00'],
+    ['+43 1 2345678', '+4312345678'],
+  ])('commits %j as %j — the prefix keeps the number in 00 form', async (typed, stored) => {
+    await typeText(h, typed);
+    accept(h);
+
+    expect(h.host.value()).toBe(stored);
+  });
+
+  it('a prefix alone, a second PBX code, or one glued to its number, cannot commit', async () => {
+    await typeText(h, '#0 ');
+    expect(h.phone().parseFailed()).toBe(true);
+
+    await typeText(h, '#0 #0 +43 1 2345678');
+    expect(h.phone().parseFailed()).toBe(true);
+
+    await typeText(h, '#00049 30 12345678');
+    accept(h);
+
+    expect(h.inner().editing()).toBe(true);
+    expect(h.host.value()).toBe('#0 0049 30 12345678');
+  });
+
+  it('an unchanged session settles the stored value, prefix included', async () => {
+    await typeText(h, '#0 +49 30 12345678');
+    accept(h);
+
+    expect(h.host.saved).toEqual([]);
+    expect(h.host.sessions).toEqual([{ value: '#0 0049 30 12345678', changed: false }]);
+  });
+
+  it('discarding a draft the live channel already committed restores the prefixed baseline', async () => {
+    await typeText(h, '#0 +49 30 123456789');
+    expect(h.host.value()).toBe('#0 0049 30 123456789'); // live channel moved the model
+
+    (h.inner() as unknown as { cancel(): void }).cancel();
+    h.fixture.detectChanges();
+
+    expect(h.host.value()).toBe('#0 0049 30 12345678');
+    expect(h.host.sessions).toEqual([{ value: '#0 0049 30 12345678', changed: false }]);
+    expect(prefixText()?.textContent).toBe('#0');
+  });
+
+  it('picking a country while idle keeps the prefix', () => {
+    (
+      h.phone() as unknown as { pickCountry(o: { country: string; dialCode: string }): void }
+    ).pickCountry({ country: 'AT', dialCode: '43' });
+    h.fixture.detectChanges();
+
+    expect(h.host.value()).toBe('#0 0043 3012 345678');
+  });
+
+  it('a draft that drops the prefix commits the bare number', async () => {
+    await typeText(h, '+49 30 12345678');
+    accept(h);
+
+    expect(h.host.value()).toBe('+493012345678');
+    expect(h.host.saved).toEqual([{ value: '+493012345678' }]);
+    expect(prefixText()).toBeNull();
   });
 });
 

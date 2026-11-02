@@ -80,10 +80,12 @@ import {
   resolvePanelPadding,
 } from './panel-geometry';
 import {
+  collapseLineBreaks,
   compileCharFilter,
   insertPlainText,
   passDraft,
   SUPPORTS_PLAINTEXT_ONLY,
+  toSingleLine,
 } from './draft-pass';
 import { makeTextErrorState } from './text-error-state';
 
@@ -325,9 +327,15 @@ export class AngularInlineText implements FormValueControl<string> {
     this.#errors.markSessionTouched();
   }
 
-  /** The draft as it would commit (edge-trimmed when `normalizeValue`), and whether it changed. */
+  /**
+   * The draft as it would commit (one line when `isSingleLine`, edge-trimmed
+   * when `normalizeValue`), and whether it changed. The single-line collapse
+   * here is the guarantee: the input paths collapse as the user types, but a
+   * break that slips past them still never commits.
+   */
   normalization = computed((): ValueNormalizationDetails => {
-    const value = this.value() ?? '';
+    const draft = this.value() ?? '';
+    const value = this.isSingleLine() ? toSingleLine(draft) : draft;
     const previous = this.draftBaseline();
 
     if (!this.normalizeValue()) {
@@ -424,7 +432,10 @@ export class AngularInlineText implements FormValueControl<string> {
     setCaretOffset(el, (this.value() ?? '').length);
   }
 
+  /** A display edit as the draft takes it: a single-line field's breaks collapsed, then the filter. */
   #filter(text: string, caret: number) {
+    if (this.isSingleLine()) ({ text, caret } = collapseLineBreaks(text, caret));
+
     const allow = this.#charFilter();
     return allow ? filterChars(text, caret, allow) : { text, caret };
   }
@@ -505,8 +516,8 @@ export class AngularInlineText implements FormValueControl<string> {
     event.preventDefault();
     if (this.disabled() || this.readonly() || this.editing()) return;
 
-    let text = event.clipboardData?.getData('text/plain') ?? '';
-    if (this.isSingleLine()) text = text.replace(/\r?\n+/g, ' ');
+    // Line breaks collapse in `#filter`, with the rest of the draft.
+    const text = event.clipboardData?.getData('text/plain') ?? '';
 
     const { text: committed, selection } = this.openingDraft();
 
@@ -755,7 +766,7 @@ export class AngularInlineText implements FormValueControl<string> {
     if (!el) return;
 
     let text = event.clipboardData?.getData('text/plain') ?? '';
-    if (this.isSingleLine()) text = text.replace(/\r?\n+/g, ' ');
+    if (this.isSingleLine()) text = toSingleLine(text);
     if (!text) return;
 
     insertPlainText(el, text);

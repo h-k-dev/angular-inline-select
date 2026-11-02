@@ -10,6 +10,10 @@ import { FormField, form, required } from '@angular/forms/signals';
 
 // Material
 import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+
+// Editables
+import { EditableAction, EditableActionsTemplate } from 'angular-inline-select';
 
 // No engine here: every phone field shares the app-wide lazy one registered
 // with `providePhoneCodec` in app.config.ts.
@@ -23,12 +27,15 @@ import { AngularInlinePhone } from 'angular-inline-select/phone';
   imports: [
     // Material
     MatButtonModule,
+    MatIconModule,
 
     // Forms
     FormField,
 
     // Components
     AngularInlinePhone,
+    EditableAction,
+    EditableActionsTemplate,
   ],
 })
 export class PhonePlayground {
@@ -41,6 +48,11 @@ export class PhonePlayground {
   // Standalone [(value)] example — any parseable string in, E.164 out
   // ---------------------------------------------------------------------------
   protected hotline = signal<string | null>('+493012345678');
+
+  // ---------------------------------------------------------------------------
+  // Dial prefix example — a PBX outside-line code before the number
+  // ---------------------------------------------------------------------------
+  protected switchboard = signal<string | null>('#0 0049 30 12345678');
 
   // ---------------------------------------------------------------------------
   // Signal form example: E.164 model + schema + live interpretation

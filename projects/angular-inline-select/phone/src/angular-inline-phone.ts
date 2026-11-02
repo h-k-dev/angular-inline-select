@@ -43,16 +43,23 @@ import {
   type PhoneCodec,
   type PhoneCountry,
   type PhoneNumberKind,
+  type PhoneParseResult,
   type PhoneParseWarning,
 } from './phone-codec';
 import { PhoneCodecLoader } from './phone-codec-loader';
+import { joinDialString, splitDialString, telHref } from './dial-string';
 
 /** The `editableActions` payload: everything a house needs to act on a phone number. */
 export interface InlinePhoneActions {
-  /** The committed value — E.164 when it parses, else the raw string an injection kept. */
+  /**
+   * The committed value — E.164, or `<prefix> 00<CC> …` with a dial prefix;
+   * else the raw string an injection kept.
+   */
   value: string | null;
+  /** The dial prefix (`'#0'`), or `''`. */
+  dialPrefix: string;
   e164: string | null;
-  /** A ready `tel:` href, or null when the value does not parse. */
+  /** A ready href (`dialHref` of the value), or null when the value does not parse. */
   tel: string | null;
   country: PhoneCountry | undefined;
   national: string | null;
@@ -61,7 +68,7 @@ export interface InlinePhoneActions {
 
 /** Payload of the `saved` output: one emission per settled edit session. */
 export interface InlinePhoneSaved {
-  /** The value the session settled on — E.164, or `null` for empty. */
+  /** The value the session settled on — E.164 (or the prefixed dial string), or `null` for empty. */
   value: string | null;
   /** Whether the settled value differs from the session baseline. */
   changed: boolean;
@@ -84,6 +91,9 @@ export interface InlinePhoneSaved {
  * - **Flag emoji as detection feedback**: the built-in prefix shows the
  *   detected (or default) country so `+49` vs `+21` reads at a glance —
  *   idle and while editing. A consumer `editablePrefix` overrides it.
+ * - **Dial prefixes** (`#0 `, `*31#`) are split off before the codec reads
+ *   the number: muted text after the flag while idle, plain draft text while
+ *   editing. The value stores them as `<prefix> 00<CC> …` (see `dial-string`).
  */
 @Component({
   selector: 'angular-inline-phone',
@@ -118,6 +128,18 @@ export interface InlinePhoneSaved {
       padding: calc(var(--mat-sys-inner-spacing, 16px) / 4)
         calc(var(--mat-sys-inner-spacing, 16px) / 2);
       color: var(--mat-sys-on-surface-variant, #5f6368);
+    }
+
+    /* The dial prefix: keypad codes, not number digits — muted text in the
+       value's own font, so it starts the text column (after the flag's lead
+       track and gap) and shares the number's baseline. The affix → text gap
+       is the space before the number. */
+    .dial-prefix {
+      color: var(--mat-sys-on-surface-variant, #5f6368);
+      white-space: nowrap;
+    }
+    * + .dial-prefix {
+      margin-inline-start: var(--editable-text-prefix-gap);
     }
 
     /*
@@ -225,9 +247,17 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
 
   /**
    * The committed value channel. Accepts any parseable phone string for
-   * binding convenience; the component only ever writes E.164 or `null`.
+   * binding convenience; the component only ever writes E.164, the
+   * prefixed dial string `<prefix> 00<CC> …`, or `null`.
    */
   value = model<string | null>(null);
+
+  /**
+   * The href the actions payload hands out for a committed value. `tel:` with
+   * `#` escaped by default — swap it for `callto:`, `sip:` or a softphone's
+   * own scheme without touching the component.
+   */
+  dialHref = input<(value: string) => string>(telHref);
 
   /**
    * The engine, bound directly. Optional: left unset, the field shares the
@@ -353,23 +383,24 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
    */
   protected actionsData = computed<InlinePhoneActions>(() => {
     const canonical = this.canonical();
-    const empty: InlinePhoneActions = {
-      value: canonical,
-      e164: null,
-      tel: null,
-      country: this.country(),
-      national: null,
-      international: null,
-    };
-    if (canonical === null) return empty;
-
-    const result = this.engine()!.parse(canonical, this.defaultCountry());
-    if (!result?.ok) return empty;
+    const { prefix, result } = this.#committed();
+    if (canonical === null || !result?.ok) {
+      return {
+        value: canonical,
+        dialPrefix: '',
+        e164: null,
+        tel: null,
+        country: this.country(),
+        national: null,
+        international: null,
+      };
+    }
 
     return {
       value: canonical,
+      dialPrefix: prefix,
       e164: result.e164,
-      tel: `tel:${result.e164}`,
+      tel: this.dialHref()(canonical),
       country: result.country ?? this.country(),
       national: result.national,
       international: result.international,
@@ -381,7 +412,8 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
 
   /**
    * THE consumer commit event — fires once per changed settlement with the
-   * MODEL: `{ value }`, always E.164 or `null` inside, never raw input.
+   * MODEL: `{ value }`, always canonical (E.164, the prefixed dial string) or
+   * `null` inside, never raw input.
    */
   savedModelChange = output<{ value: string | null }>();
 
@@ -392,56 +424,133 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
    */
   saved = output<InlinePhoneSaved>();
 
-  /** The canonical (E.164) reading of the model. */
+  /**
+   * Reads a raw value: the dial prefix split off, the rest through the codec.
+   * A prefix with no number yet is an unfinished draft, never an empty one.
+   */
+  #read(raw: string): { prefix: string; result: PhoneParseResult | null } {
+    const { prefix, number } = splitDialString(raw);
+    const result = this.engine()!.parse(number, this.defaultCountry());
+
+    return { prefix, result: prefix && result === null ? { ok: false, reason: 'too-short' } : result };
+  }
+
+  /** The stored form of a readable number: E.164, or the prefixed `00` dial string. */
+  #canonicalOf(prefix: string, e164: string) {
+    if (!prefix) return e164;
+
+    return joinDialString(prefix, this.engine()!.format(e164, 'international'));
+  }
+
+  /** The committed value, read — nothing to read before the lazy engine lands. */
+  #committed = computed(() =>
+    this.engine() ? this.#read(this.value() ?? '') : { prefix: '', result: null },
+  );
+
+  /** The canonical reading of the model: E.164, or the prefixed dial string. */
   protected canonical = computed<string | null>(() => {
     const value = this.value();
     if (value === null || value === undefined || value === '') return null;
 
-    const result = this.engine()!.parse(value, this.defaultCountry());
-    return result?.ok ? result.e164 : value;
+    const { prefix, result } = this.#committed();
+    return result?.ok ? this.#canonicalOf(prefix, result.e164) : value;
   });
 
   /** Two-way `editing` bridge — freezes the string channel during a session. */
   protected innerEditing = signal(false);
 
   /**
+   * The model when the open session began. The live channel moves `value`
+   * mid-draft, and the inner control settles an unchanged session (or a
+   * discard) by writing back the baseline's RENDERING — which has no dial
+   * prefix to read back. This is the value that rendering stands for.
+   */
+  #sessionBaseline: string | null = null;
+
+  protected handleEditingChange(editing: boolean) {
+    if (editing && !this.innerEditing()) this.#sessionBaseline = this.value();
+    this.innerEditing.set(editing);
+  }
+
+  /** A value as the idle display shows it: the number, formatted — the prefix renders muted in the lead. */
+  #renderingOf(value: string | null) {
+    if (value === null || value === '') return '';
+
+    const { result } = this.#read(value);
+    if (!result?.ok) return value;
+
+    return this.engine()!.format(result.e164, this.displayFormat(), this.defaultCountry());
+  }
+
+  /**
    * The string channel feeding the inner control: the formatted committed
-   * value while idle, the raw draft while a session is open. Commits
-   * round-trip the codec — `'01712345678'` settles as `'+49 171 2345678'`.
+   * NUMBER while idle (its dial prefix renders muted in the lead), the raw draft
+   * while a session is open. Commits round-trip the codec — `'01712345678'`
+   * settles as `'+49 171 2345678'`.
    */
   protected innerValue = linkedSignal<string, string>({
-    source: () => {
-      const canonical = this.canonical();
-      if (canonical === null) return '';
-
-      return this.engine()!.format(canonical, this.displayFormat(), this.defaultCountry());
-    },
+    source: () => this.#renderingOf(this.canonical()),
     computation: (source, prev) => (this.innerEditing() ? (prev?.value ?? source) : source),
     // The live channel IS the setter (22.1): every raw write parses, and a
-    // readable draft flows into the model as E.164 synchronously — direct
-    // writes (the country menu's dial-code seed) go through the same gate
-    // as keystrokes, no site can forget the parse half.
+    // readable draft flows into the model synchronously — direct writes (the
+    // country menu's dial-code seed) go through the same gate as keystrokes,
+    // no site can forget the parse half.
     set: (raw, rawSet) => {
       rawSet(raw);
 
-      const result = this.engine()!.parse(raw, this.defaultCountry());
+      // The baseline's rendering STANDS FOR the baseline, prefix included —
+      // a settle or discard restores it rather than re-reading it prefix-less.
+      // (A draft that drops the prefix down to exactly this text still
+      // commits without it — `handleInnerSaved` reads the changed session.)
+      const baseline = this.#sessionBaseline;
+      if (this.innerEditing() && raw === this.#renderingOf(baseline)) {
+        if (this.value() !== baseline) this.value.set(baseline);
+        return;
+      }
+
+      const { prefix, result } = this.#read(raw);
       if (result === null) {
         if (this.canonical() !== null) this.value.set(null);
         return;
       }
 
-      if (result.ok && result.e164 !== this.canonical()) this.value.set(result.e164);
+      if (!result.ok) return;
+
+      const canonical = this.#canonicalOf(prefix, result.e164);
+      if (canonical !== this.canonical()) this.value.set(canonical);
     },
   });
 
   /**
-   * The engine's live interpretation of the current draft. Public — consumers
-   * render from it, possibly before the lazy engine has landed: `null` then,
-   * same as an empty draft.
+   * A session opens on the FULL value: the idle display shows the number
+   * only, so the draft gets its dial prefix back as plain text.
    */
-  readonly parseResult = computed(() => {
-    const engine = this.engine();
-    return engine ? engine.parse(this.innerValue(), this.defaultCountry()) : null;
+  protected draftText = computed(() => {
+    const { prefix, result } = this.#committed();
+    return prefix && result?.ok ? (number: string) => `${prefix} ${number}` : undefined;
+  });
+
+  /** The live draft, read — prefix and codec result. */
+  #draft = computed(() => (this.engine() ? this.#read(this.innerValue()) : null));
+
+  /**
+   * The engine's live interpretation of the current draft's NUMBER. Public —
+   * consumers render from it, possibly before the lazy engine has landed:
+   * `null` then, same as an empty draft.
+   */
+  readonly parseResult = computed(() => this.#draft()?.result ?? null);
+
+  /** The dial prefix of the draft while editing, of the committed value while idle. */
+  readonly dialPrefix = computed(() =>
+    this.innerEditing() ? (this.#draft()?.prefix ?? '') : this.#committed().prefix,
+  );
+
+  /** The muted lead prefix: idle only — while editing the prefix is draft text. */
+  protected idlePrefix = computed(() => {
+    if (this.innerEditing()) return '';
+
+    const { prefix, result } = this.#committed();
+    return result?.ok ? prefix : '';
   });
 
   /** The parse gate: structurally unreadable input cannot commit. */
@@ -499,15 +608,17 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     const raw = this.innerValue().trim();
     if (!raw) return '';
 
-    const result = this.parseResult();
+    const { prefix, result } = this.#draft()!;
+    const lead = prefix ? `${prefix} · ` : '';
     if (result?.ok) {
       const marker = result.warning ? '⚠' : '✓';
-      return `${marker} ${result.international}`;
+      return `${marker} ${lead}${result.international}`;
     }
 
     // `||`: an empty pretty-print (e.g. no digits at all) falls back to the raw draft
-    const incomplete = this.engine()!.formatIncomplete?.(raw, this.defaultCountry()) || raw;
-    return `… ${incomplete}`;
+    const number = splitDialString(raw).number;
+    const incomplete = this.engine()!.formatIncomplete?.(number, this.defaultCountry()) || number;
+    return `… ${lead}${incomplete}`;
   });
 
   /**
@@ -536,7 +647,7 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
 
   /**
    * Live channel: every keystroke parses — the work lives in `innerValue`'s
-   * custom `set`, so readable drafts flow into the model as E.164 (schema
+   * custom `set`, so readable drafts flow into the model canonical (schema
    * validators see the canonical value mid-draft) while unreadable ones
    * hold the last good value and raise the parse gate.
    */
@@ -544,12 +655,15 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     this.innerValue.set(raw);
   }
 
-  /** Retype the settled session: raw strings inside, E.164 outside. */
+  /** Retype the settled session: raw strings inside, the canonical value outside. */
   protected handleInnerSaved(session: InlineTextSaved) {
-    const result = this.engine()!.parse(session.value, this.defaultCountry());
+    // An unchanged session settles the idle RENDERING (`draftText`), which
+    // has no dial prefix — the model already holds the answer.
+    const { prefix, result } = session.changed ? this.#read(session.value) : this.#committed();
     // The parse gate blocks unreadable commits; the fallback covers discards
     // rolling back to a baseline the current codec cannot read.
-    const value = result === null ? null : result.ok ? result.e164 : this.canonical();
+    const value =
+      result === null ? null : result.ok ? this.#canonicalOf(prefix, result.e164) : this.canonical();
 
     if (session.changed) {
       this.value.set(value);
@@ -734,28 +848,30 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
    */
   protected pickCountry(option: { country: PhoneCountry; dialCode: string }) {
     const base = this.canonical();
-    const parsed = base ? this.engine()!.parse(base, this.defaultCountry()) : null;
+    const { prefix, result: parsed } = this.#committed();
     const nsn = parsed?.ok ? parsed.nationalNumber : undefined;
 
     if (this.innerEditing()) {
-      // Editing: rewrite the live draft, keep the session open.
-      const draft = nsn
+      // Editing: rewrite the live draft's number, keep the session open and
+      // the draft's own dial prefix in front of it.
+      const draftPrefix = this.#draft()?.prefix;
+      const number = nsn
         ? this.engine()!.format(`+${option.dialCode}${nsn}`, this.displayFormat(), option.country)
         : `+${option.dialCode} `;
-      this.handleInnerValue(draft);
+      this.handleInnerValue(draftPrefix ? `${draftPrefix} ${number}` : number);
     } else if (nsn) {
       // Idle with a number: swap the calling code and commit immediately.
-      const e164 = `+${option.dialCode}${nsn}`;
-      if (e164 !== base) {
-        this.value.set(e164);
-        this.savedModelChange.emit({ value: e164 });
-        this.saved.emit({ value: e164, changed: true });
+      const value = this.#canonicalOf(prefix, `+${option.dialCode}${nsn}`);
+      if (value !== base) {
+        this.value.set(value);
+        this.savedModelChange.emit({ value });
+        this.saved.emit({ value, changed: true });
       }
     } else {
       // Idle and empty: nothing to swap — open the editor seeded with the
       // calling code so the user can type the rest.
       this.innerValue.set(`+${option.dialCode} `);
-      this.innerEditing.set(true);
+      this.handleEditingChange(true);
     }
 
     this.closePicker();

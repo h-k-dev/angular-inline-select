@@ -207,6 +207,47 @@
   </div>
 
   <!--
+    Dial prefixes: keypad codes before the number (`#0 ` outside line,
+    `*31#` / `#31#` show / hide caller ID) — muted at the start of the text
+    column, after the flag's lead track, so the rows align with Telephone.
+  -->
+  @for (dial of dialRows; track dial.field) {
+    <div class="field-grid__row" editableHoverScope>
+      <dt class="field-grid__label">{{ dial.label }}</dt>
+      <dd class="field-grid__value">
+        <angular-inline-phone
+          [showClear]="showClear()"
+          [clearTemplate]="confirmClear"
+          #dialPhone
+          [formField]="recordForm[dial.field]"
+          defaultCountry="DE"
+          [ariaLabel]="dial.label"
+          (saved)="logEmit(dial.field + '.saved', $event)"
+        >
+          <ng-template editableActions let-data>
+            @if (data.tel; as tel) {
+              <a
+                mat-icon-button
+                editableAction
+                class="field-grid__action"
+                [href]="tel"
+                aria-label="Call"
+              >
+                <mat-icon>call</mat-icon>
+              </a>
+            }
+          </ng-template>
+          <span editable-error>
+            @if (dialPhone.parseFailed()) {
+              That doesn’t read as a phone number — a prefix like “#0 ” or “*31#” needs a number after it.
+            }
+          </span>
+        </angular-inline-phone>
+      </dd>
+    </div>
+  }
+
+  <!--
     Email: validated by the framework's own `email()` rule — the pragmatic
     middle ground, not RFC 5322. `inputMode` asks mobile keyboards for the
     @-row without changing a thing about the draft.
@@ -463,6 +504,7 @@
       <angular-inline-text
         [showClear]="showClear()"
         [clearTemplate]="confirmClear"
+        data-repro="attachment"
         [formField]="recordForm.fileName"
         [isSingleLine]="true"
         wrapBehavior="noWrap"

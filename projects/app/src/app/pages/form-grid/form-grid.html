@@ -17,6 +17,10 @@
         <app-field-grid (emitted)="logEmit($event)" />
       </div>
 
+      <div class="example-card">
+        <app-single-line-repro [commit]="fileNameCommit()" />
+      </div>
+
       @if (emittedEvents().length > 0) {
         <div class="event-log" role="log" aria-label="Emitted events">
           @for (entry of emittedEvents(); track $index) {

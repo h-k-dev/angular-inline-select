@@ -157,7 +157,7 @@ const ACTIONS_TEMPLATE_INPUT: ApiMember = {
   type: 'TemplateRef<EditableActionsContext<…>> | undefined',
   default: 'undefined',
   description:
-    'The PRIMARY-ACTIONS slot of the hover bubble, stamped before clear: consumer-owned buttons that act ON the value — open the link, call the number. The control renders nothing itself; it hands over DATA typed per control (text { value }, number { value }, phone { value, e164, tel, country, national, international }, date/time { value, side }, duration { value }) and `focus` for the dialog case. Direct consumers use `ng-template[editableActions]` content; put `editableAction` on each button so a press never moves focus off the field. Gates are per slot: actions show whenever the value is non-empty and not mid-edit — readonly and disabled fields keep their actions, unlike clear.',
+    'The PRIMARY-ACTIONS slot of the hover bubble, stamped before clear: consumer-owned buttons that act ON the value — open the link, call the number. The control renders nothing itself; it hands over DATA typed per control (text { value }, number { value }, phone { value, dialPrefix, e164, tel, country, national, international }, date/time { value, side }, duration { value }) and `focus` for the dialog case. Direct consumers use `ng-template[editableActions]` content; put `editableAction` on each button so a press never moves focus off the field. Gates are per slot: actions show whenever the value is non-empty and not mid-edit — readonly and disabled fields keep their actions, unlike clear.',
 };
 
 const ARIA_LABEL_INPUT: ApiMember = {

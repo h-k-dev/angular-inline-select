@@ -19,6 +19,7 @@ import {
 } from './editable-panel-actions';
 import { EditableTextIntl } from './editable-text-intl';
 import { panelCeiling } from './panel-geometry';
+import { collapseLineBreaks, toSingleLine } from './draft-pass';
 import {
   replayEdit,
   filterChars,
@@ -266,6 +267,20 @@ function cancel(h: Harness<unknown>) {
 describe('normalizeString', () => {
   it('trims edge whitespace and preserves interior spacing and line breaks', () => {
     expect(normalizeString('  hello \n  world  ')).toBe('hello \n  world');
+  });
+});
+
+describe('toSingleLine', () => {
+  it('collapses each run of line breaks, of any kind, to one space', () => {
+    expect(toSingleLine('a\r\n\r\nb\rc\u2028\u2029d')).toBe('a b c d');
+  });
+
+  it('leaves tabs and spaces alone', () => {
+    expect(toSingleLine('a\t b')).toBe('a\t b');
+  });
+
+  it('keeps the caret on the same character', () => {
+    expect(collapseLineBreaks('ab\r\ncd', 5)).toEqual({ text: 'ab cd', caret: 4 });
   });
 });
 
@@ -1296,6 +1311,84 @@ describe('AngularInlineText — single-line newline strip', () => {
     // The rewrite used to drop the caret entirely.
     expect(getSelectionOffsets(editor)?.start).toBe(3);
   });
+
+  // ---------------------------------------------------------------------------
+  // Every line terminator, every entry path: the value stays one line
+  // ---------------------------------------------------------------------------
+
+  /** Unicode's mandatory breaks (UAX #14 BK, CR, LF, NL): each one starts a new line. */
+  const BREAKS: [label: string, br: string][] = [
+    ['LF', '\n'],
+    ['CRLF', '\r\n'],
+    ['a lone CR', '\r'],
+    ['VT', '\v'],
+    ['FF', '\f'],
+    ['NEL (U+0085)', '\u0085'],
+    ['LINE SEPARATOR (U+2028)', '\u2028'],
+    ['PARAGRAPH SEPARATOR (U+2029)', '\u2029'],
+  ];
+
+  /** A keystroke on the resting display whose data carries the text (dictation, text replacement, IME). */
+  async function insertOnDisplay(data: string) {
+    const event = new Event('beforeinput', { bubbles: true, cancelable: true }) as InputEvent;
+    Object.defineProperty(event, 'inputType', { value: 'insertText' });
+    Object.defineProperty(event, 'data', { value: data });
+
+    h.display().dispatchEvent(event);
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+  }
+
+  async function pasteOnDisplay(text: string) {
+    const event = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: { getData: () => text } });
+
+    h.display().dispatchEvent(event);
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+  }
+
+  function pressEnter() {
+    h.editor()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    h.fixture.detectChanges();
+  }
+
+  for (const [label, br] of BREAKS) {
+    describe(`a ${label}`, () => {
+      it('typed into the open editor collapses to a space', async () => {
+        await elevate(h);
+
+        const editor = h.editor()!;
+        editor.textContent = `a${br}b`;
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
+        h.fixture.detectChanges();
+
+        expect(h.host.value()).toBe('a b');
+      });
+
+      it('pasted on the resting display collapses to a space', async () => {
+        await pasteOnDisplay(`a${br}b`);
+
+        expect(h.host.value()).toBe('a b');
+      });
+
+      it('in a keystroke on the resting display never reaches the draft', async () => {
+        await insertOnDisplay(`a${br}b`);
+
+        expect(h.host.value()).toBe('a b');
+      });
+
+      it('is never committed by Enter right after the field elevates', async () => {
+        await insertOnDisplay(`a${br}b`);
+        pressEnter();
+
+        expect(h.editable().editing()).toBe(false);
+        expect(h.host.value()).toBe('a b');
+      });
+    });
+  }
 });
 
 describe('panelCeiling', () => {

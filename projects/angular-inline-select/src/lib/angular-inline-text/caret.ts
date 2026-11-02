@@ -173,8 +173,15 @@ export function filterChars(text: string, caret: number, allow: RegExp): Filtere
  * `1.250.000,50` → `1250000,5`). Walks both in step, so the caret lands
  * after the same characters it followed in the source. Characters the draft
  * lacks are skipped; a caret past the draft's end clamps to it.
+ *
+ * The one ADDING rendering: a draft that is `source` behind a lead (a phone's
+ * dial prefix, `+49 30 1` → `#0 +49 30 1`) shifts the caret past the lead.
  */
 export function alignCaret(source: string, draft: string, caret: number): number {
+  if (draft.length > source.length && draft.endsWith(source)) {
+    return draft.length - source.length + Math.min(caret, source.length);
+  }
+
   let j = 0;
   const end = Math.min(caret, source.length);
 

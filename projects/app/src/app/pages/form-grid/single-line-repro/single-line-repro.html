@@ -1,0 +1,58 @@
+<h3 class="example-card__title">Single-line leak repro: the Attachment field</h3>
+<p class="form-toggles__hint">
+  The Attachment field above is <code>[isSingleLine]="true"</code>, so a line break must never reach
+  its value. <strong>Copy</strong> puts <code>report⟨break⟩final</code> on the clipboard: paste it into
+  the field and press Enter. <strong>Type + Enter</strong> sends the same text as one keystroke
+  (what dictation, text replacement or an IME send), then presses Enter as soon as the editor opens.
+</p>
+
+<table class="repro-table">
+  <thead>
+    <tr>
+      <th scope="col">Terminator</th>
+      <th scope="col">Source</th>
+      <th scope="col">Paste by hand</th>
+      <th scope="col">Keystroke</th>
+      <th scope="col">Committed</th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (br of breaks; track br.label) {
+      <tr>
+        <th scope="row">{{ br.label }}</th>
+        <td><code>{{ br.code }}</code></td>
+        <td>
+          <button mat-stroked-button type="button" (click)="copy(br)">
+            {{ copied() === br.label ? 'Copied' : 'Copy' }}
+          </button>
+        </td>
+        <td>
+          <button mat-stroked-button type="button" (click)="typeAndEnter(br)">Type + Enter</button>
+        </td>
+        <td>
+          @let result = results()[br.label];
+          @if (result === 'no-session') {
+            <span class="repro-pending">the editor did not open</span>
+          } @else if (result) {
+            <span class="repro-verdict" [class.repro-verdict--leaked]="result.leaked">
+              <mat-icon aria-hidden="true">{{ result.leaked ? 'error' : 'check_circle' }}</mat-icon>
+              <code>{{ result.shown }}</code>
+            </span>
+          } @else {
+            <span class="repro-pending">—</span>
+          }
+        </td>
+      </tr>
+    }
+  </tbody>
+</table>
+
+<p class="repro-commit" [class.repro-commit--leaked]="commitLeaked()" role="status">
+  Last committed value:
+  @if (commitShown(); as shown) {
+    <code>{{ shown }}</code>
+    {{ commitLeaked() ? '— contains a line break' : '— one line' }}
+  } @else {
+    <span class="repro-pending">nothing committed yet</span>
+  }
+</p>

@@ -36,6 +36,22 @@
   }}</span>
 </ng-template>
 
+<!--
+  The lead: the consumer's prefix or the flag in the lead track, then the
+  dial prefix (idle only) as the start of the text column. The dial prefix is
+  part of the VALUE, so a consumer `editablePrefix` replaces the flag, never it.
+-->
+<ng-template #leadTpl>
+  @if (consumerPrefixTpl(); as consumerPrefix) {
+    <ng-container *ngTemplateOutlet="consumerPrefix" />
+  } @else if (flag()) {
+    <ng-container *ngTemplateOutlet="flagTpl" />
+  }
+  @if (idlePrefix(); as prefix) {
+    <span class="dial-prefix">{{ prefix }}</span>
+  }
+</ng-template>
+
 <!-- Live interpretation preview: ✓/⚠/… + what the engine understood. -->
 <ng-template #previewTpl>{{ preview() }}</ng-template>
 
@@ -83,7 +99,8 @@
   <angular-inline-text
     [value]="innerValue()"
     (valueChange)="handleInnerValue($event)"
-    [(editing)]="innerEditing"
+    [editing]="innerEditing()"
+    (editingChange)="handleEditingChange($event)"
     [isSingleLine]="true"
     [normalizeValue]="true"
     inputMode="tel"
@@ -95,7 +112,8 @@
     [touched]="touched()"
     [placeholder]="effectivePlaceholder()"
     [ariaLabel]="ariaLabel()"
-    [prefixTemplate]="consumerPrefixTpl() ?? (flag() ? flagTpl : undefined)"
+    [draftText]="draftText()"
+    [prefixTemplate]="idlePrefix() || consumerPrefixTpl() || flag() ? leadTpl : undefined"
     [suffixTemplate]="suffixTpl()"
     [clearTemplate]="clearTpl()"
     [showClear]="showClear()"

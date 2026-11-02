@@ -29,6 +29,24 @@ export function compileCharFilter(allow: RegExp | undefined): RegExp | null {
     : allow;
 }
 
+/**
+ * Unicode's mandatory line breaks (UAX #14 BK, CR, LF, NL), a CRLF pair as one,
+ * in runs. LF alone is not enough: a lone CR, U+2028 and U+2029 arrive from
+ * pasted Word/PDF text, dictation and text replacement, and each starts a new
+ * line wherever the value is shown or sent.
+ */
+const LINE_BREAKS = /(?:\r\n|[\n\r\v\f\u0085\u2028\u2029])+/g;
+
+/** A single-line value: every run of line breaks becomes one space. */
+export function toSingleLine(text: string) {
+  return text.replace(LINE_BREAKS, ' ');
+}
+
+/** {@link toSingleLine} with the caret kept on the same character. */
+export function collapseLineBreaks(text: string, caret: number) {
+  return { text: toSingleLine(text), caret: toSingleLine(text.slice(0, caret)).length };
+}
+
 /** A draft after the editor pass, with the caret carried along. */
 export interface DraftPass {
   text: string;
@@ -51,10 +69,12 @@ export function passDraft(
   let at = caret ?? text.length;
   let rewritten = false;
 
-  if (options.singleLine && text.includes('\n')) {
-    text = text.replace(/\n+/g, ' ');
-    at = Math.min(at, text.length);
-    rewritten = true;
+  if (options.singleLine) {
+    const collapsed = collapseLineBreaks(text, at);
+    if (collapsed.text !== text) {
+      ({ text, caret: at } = collapsed);
+      rewritten = true;
+    }
   }
 
   if (options.filter) {
