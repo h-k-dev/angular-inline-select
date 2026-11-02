@@ -253,6 +253,16 @@ const PAIRS = [
     `${E}/editable-telephone-number/phone-codec.ts`,
   ],
   [
+    'phone/dial-string',
+    `${SB}/phone/src/dial-string.ts`,
+    `${E}/editable-telephone-number/dial-string.ts`,
+  ],
+  [
+    'phone/dial-string.spec',
+    `${SB}/phone/src/dial-string.spec.ts`,
+    `${E}/editable-telephone-number/dial-string.spec.ts`,
+  ],
+  [
     'phone/loader',
     `${SB}/phone/src/phone-codec-loader.ts`,
     `${E}/editable-telephone-number/phone-codec-loader.ts`,
