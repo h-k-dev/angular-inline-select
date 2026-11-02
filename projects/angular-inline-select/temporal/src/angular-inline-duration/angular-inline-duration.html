@@ -89,7 +89,7 @@
   [cdkConnectedOverlayPush]="true"
   (overlayOutsideClick)="handleOutsideClick($event)"
 >
-  <div #panel class="inline-duration__panel" (focusout)="handleFocusOut()">
+  <div #panel class="inline-duration__panel" (focusout)="handleFocusOut()" overlayLeave>
     <div class="inline-duration__errors" [hidden]="!errorSlotVisible()">
       @if (parseGateVisible()) {
         <div class="inline-duration__error">{{ parseGateLabel() }}</div>

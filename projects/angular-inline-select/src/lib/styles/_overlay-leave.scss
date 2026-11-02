@@ -1,0 +1,46 @@
+// =============================================================================
+// overlay-leave — THE way an overlay panel leaves (`[overlayLeave]`).
+//
+// After Linear's menus: the panel SETTLES — scale 1 → 0.98 in ~40ms — and
+// fades over the theme's transition duration (0.15s, which is also when Linear
+// drops the node). A scale that small reads as letting go, not as zooming
+// away; the fade carries the exit. Angular's `animate.leave` waits for the
+// longer of the two, then removes the panel.
+//
+// The scale shrinks toward `--anim-origin`, as the enter grows from it: the
+// edge facing the trigger where the panel sets it, else the trigger corner.
+//
+// `pointer-events: none`: a panel on its way out must not take the click
+// aimed at what lies under it — the next field, the row it covered.
+// =============================================================================
+@keyframes overlay-leave-settle {
+  to {
+    transform: scale(0.98);
+  }
+}
+
+@keyframes overlay-leave-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+.overlay-leave {
+  transform-origin: var(--anim-origin, top right);
+  animation:
+    overlay-leave-settle 40ms ease-out both,
+    overlay-leave-fade var(--mat-sys-transition-duration, 0.15s)
+      var(--mat-sys-transition-timing-function, cubic-bezier(0.4, 0, 0.2, 1)) both;
+  pointer-events: none;
+}
+
+[dir='rtl'] .overlay-leave {
+  transform-origin: var(--anim-origin, top left);
+}
+
+// Reduced motion: the fade alone — still a cue that the panel went, no movement.
+@media (prefers-reduced-motion: reduce) {
+  .overlay-leave {
+    animation: overlay-leave-fade var(--mat-sys-transition-duration, 0.15s) linear both;
+  }
+}

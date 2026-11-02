@@ -30,6 +30,7 @@ import {
   EditableSuffix,
   BubbleMenu,
   EditableClearButton,
+  OverlayLeave,
   EditableClearTemplate,
   type BubbleMenuSide,
   type EditableClearContext,
@@ -200,6 +201,7 @@ interface TimeSide extends SideCore<DbDateTime> {
     // Components
     BubbleMenu,
     EditableClearButton,
+    OverlayLeave,
   ],
   templateUrl: './angular-inline-time.html',
   styleUrl: './angular-inline-time.scss',

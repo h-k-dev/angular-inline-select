@@ -10,6 +10,8 @@
 //                      tokens (the text control's own surfaces are component styles)
 // - editable-hover-scope → the container-as-unit surface (`[editableHoverScope]`),
 //                      --editable-hover-scope-* tokens
+// - overlay-leave   → how every overlay panel leaves (`[overlayLeave]`): the
+//                      settle + fade on `.overlay-leave`
 // - editable-dialog → the reusable modal editing surface (centered card /
 //                      full-screen on touch)
 // - editable-scrollbar → the app's scroll thumb (copy of iusta `.iusta-scroll`)
@@ -22,6 +24,7 @@
 // =============================================================================
 @use './editable';
 @use './editable-hover-scope';
+@use './overlay-leave';
 @use './editable-dialog';
 @use './editable-scrollbar';
 @use './editable-json';

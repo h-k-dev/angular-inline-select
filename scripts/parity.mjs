@@ -164,6 +164,11 @@ const PAIRS = [
     `${SB}/src/lib/styles/_editable-hover-scope.scss`,
     `${SASS}/_editable-hover-scope.scss`,
   ],
+  [
+    'styles/_overlay-leave',
+    `${SB}/src/lib/styles/_overlay-leave.scss`,
+    `${SASS}/_overlay-leave.scss`,
+  ],
   // number
   [
     'number.ts',
@@ -210,6 +215,16 @@ const PAIRS = [
     'utils/link-detection',
     `${SB}/src/lib/utils/link-detection/link-detection.ts`,
     `${CE}/link-detection.ts`,
+  ],
+  [
+    'utils/overlay-leave',
+    `${SB}/src/lib/utils/overlay-leave/overlay-leave.ts`,
+    'src/app/core/directives/overlay-leave/overlay-leave.ts',
+  ],
+  [
+    'utils/overlay-leave.spec',
+    `${SB}/src/lib/utils/overlay-leave/overlay-leave.spec.ts`,
+    'src/app/core/directives/overlay-leave/overlay-leave.spec.ts',
   ],
   [
     'utils/link-detection.spec',
@@ -578,6 +593,7 @@ const RENAMES = [
   [/\bangular-inline-time\b/g, 'm-editable-time'],
   [/\bangular-inline-prompt\b/g, 'm-prompt-input'],
   [/\bangularInlinePrompt\b/g, 'mPromptInput'],
+  [/\boverlayLeave\b/g, 'mOverlayLeave'],
   [/\btemporal-calendar\b/g, 'm-inline-calendar'],
   // classes
   [/\bAngularInlineDateTime\b/g, 'EditableDateTime'],
@@ -657,7 +673,9 @@ try {
           sbRaw
             .match(INLINE_STYLES)
             ?.slice(1)
-            .find((x) => x !== undefined) ?? '',
+            .find((x) => x !== undefined)
+            // Cooked, as the stylesheet sees it: a `\`` in the literal is a plain backtick.
+            ?.replace(/\\([\\`$'])/g, '$1') ?? '',
         )
       : sbRaw;
     const a = await normalise(rename(sbText), ext);

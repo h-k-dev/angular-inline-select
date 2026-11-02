@@ -204,7 +204,7 @@
   [cdkConnectedOverlayPush]="true"
   (overlayOutsideClick)="handleOutsideClick($event)"
 >
-  <div #panel class="inline-time__panel" (focusout)="handleFocusOut()">
+  <div #panel class="inline-time__panel" (focusout)="handleFocusOut()" overlayLeave>
     <div class="inline-time__errors" [hidden]="!errorSlotVisible()">
       @if (parseGateVisible()) {
         <div class="inline-time__error">{{ parseGateLabel() }}</div>

@@ -35,6 +35,7 @@ import {
   type EditableClearContext,
   BubbleMenu,
   EditableClearButton,
+  OverlayLeave,
   EditableClearTemplate,
   watchHoverScope,
   type EditableHoverScopePress,
@@ -107,6 +108,7 @@ export interface InlineDurationSaved {
     // Components
     BubbleMenu,
     EditableClearButton,
+    OverlayLeave,
   ],
   templateUrl: './angular-inline-duration.html',
   styleUrl: './angular-inline-duration.scss',

@@ -18,6 +18,8 @@ import {
 // CDK
 import { OverlayModule, type ConnectedPosition } from '@angular/cdk/overlay';
 
+import { OverlayLeave } from '../utils/overlay-leave/overlay-leave';
+
 /** Which edge the bubble grows from — the sibling-aware side of a range pair. */
 export type BubbleMenuSide = 'start' | 'end';
 
@@ -116,6 +118,7 @@ function endOffsetPositions(offset: { x: number; y: number }): ConnectedPosition
   imports: [
     // CDK
     OverlayModule,
+    OverlayLeave,
   ],
   templateUrl: './bubble-menu.html',
   styleUrl: './bubble-menu.scss',

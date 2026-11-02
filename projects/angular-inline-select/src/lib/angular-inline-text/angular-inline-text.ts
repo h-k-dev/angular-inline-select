@@ -49,6 +49,7 @@ import {
   watchHoverScope,
   type EditableHoverScopePress,
 } from '../utils/editable-hover-scope/editable-hover-scope';
+import { OverlayLeave } from '../utils/overlay-leave/overlay-leave';
 import { EditablePrefix, EditableSuffix } from './editable-affix';
 import { EditableHint } from './editable-hint';
 import { EditableMenu } from './editable-menu';
@@ -133,6 +134,7 @@ export function normalizeString(value: string): string {
     // Components
     BubbleMenu,
     EditableClearButton,
+    OverlayLeave,
   ],
   templateUrl: './angular-inline-text.html',
   styleUrl: './angular-inline-text.scss',
@@ -626,8 +628,11 @@ export class AngularInlineText implements FormValueControl<string> {
     this.display().nativeElement.focus();
   }
 
+  /** A press elsewhere: the draft goes, and the focus goes with the press —
+      not back to the display, which would keep the field the active one. */
   protected handleScrimClick() {
-    this.cancel();
+    this.revert();
+    this.editing.set(false);
   }
 
   /** Detach safety net (navigation, destroy): never lose the baseline silently. */

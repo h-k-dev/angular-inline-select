@@ -31,6 +31,7 @@ import { OverlayModule, type ConnectedPosition } from '@angular/cdk/overlay';
 import {
   AngularInlineText,
   EditableClearTemplate,
+  OverlayLeave,
   EditableActionsTemplate,
   EditablePrefix,
   EditableSuffix,
@@ -106,6 +107,7 @@ export interface InlinePhoneSaved {
 
     // Components
     AngularInlineText,
+    OverlayLeave,
   ],
   templateUrl: './angular-inline-phone.html',
   styles: `

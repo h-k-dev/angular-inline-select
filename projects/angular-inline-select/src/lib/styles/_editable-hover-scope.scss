@@ -16,6 +16,13 @@
 // Table rows: pseudo-elements on <tr> are unreliable across engines — paint
 // through `.editable-hover-scope--active` on the cells instead.
 //
+// NOTICE: `[data-notice]` on the scope paints the same shape AT REST, in the
+// primary hue and ringed by a hairline of it (a search answer, say) — the eye
+// finds the whole row, not only its marked words, and the ring keeps it
+// apart from a plain hover. Still one shape: hovering a noticed row deepens
+// the tint instead of stacking the hover wash on it, and neighbouring notices
+// meet at the half gap like two hovers would, so a run of them reads as a band.
+//
 // Theming: var(--editable-hover-scope-<token>, var(--mat-sys-<token>, <fallback>)).
 // =============================================================================
 .editable-hover-scope {
@@ -49,9 +56,32 @@
       transform 0.15s var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
   }
 
-  &--active::after {
+  &--active::after,
+  &[data-notice]::after {
     opacity: 1;
     transform: none;
+  }
+
+  // The primary, thinned, and a hairline ring of it drawn INSIDE the shape
+  // (an inset shadow: no box of its own, so nothing moves) — a quiet "here"
+  // that the marked words, in their own colour, still outshine.
+  &[data-notice]::after {
+    background: var(
+      --editable-hover-scope-notice-color,
+      color-mix(in oklch, var(--mat-sys-primary, #5d78ff) 8%, transparent)
+    );
+    box-shadow: inset 0 0 0 1px
+      var(
+        --editable-hover-scope-notice-outline,
+        color-mix(in oklch, var(--mat-sys-primary, #5d78ff) 40%, transparent)
+      );
+  }
+
+  &--active[data-notice]::after {
+    background: var(
+      --editable-hover-scope-notice-color-strong,
+      color-mix(in oklch, var(--mat-sys-primary, #5d78ff) 14%, transparent)
+    );
   }
 }
 

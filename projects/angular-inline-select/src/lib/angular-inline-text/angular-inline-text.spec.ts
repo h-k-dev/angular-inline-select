@@ -449,6 +449,19 @@ describe('AngularInlineText — [(value)] binding', () => {
     expect(h.host.revertedDrafts).toEqual([]);
   });
 
+  it('a press on the scrim reverts, and the focus goes with the press — not back to the display', async () => {
+    await typeText(h, 'abandoned draft');
+    document.querySelector<HTMLElement>('.editable-scrim')!.click();
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+
+    expect(h.editable().editing()).toBe(false);
+    expect(h.host.value()).toBe('initial');
+    expect(h.host.revertedDrafts).toEqual(['abandoned draft']);
+    expect(h.host.sessions).toEqual([{ value: 'initial', changed: false }]);
+    expect(document.activeElement).not.toBe(h.display());
+  });
+
   it('saved settles a committed session exactly once with changed=true', async () => {
     await typeText(h, '  new   value ');
     accept(h);
