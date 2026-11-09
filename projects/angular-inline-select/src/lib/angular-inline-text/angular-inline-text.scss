@@ -342,9 +342,9 @@
   outline: none;
   cursor: text;
 
-  // The ceiling is the panel's: its max-height is the room past the edge the
-  // overlay anchored it on (`panelCeiling`), and the editor scrolls inside
-  // whatever the line is left with.
+  // The ceiling is the panel's: its max-height is the viewport less its
+  // margins (`panelHeightLimit`), and the editor scrolls inside whatever the
+  // line is left with.
   min-height: 1.5em;
   max-height: 100%;
   overflow-y: auto;

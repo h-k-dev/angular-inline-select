@@ -83,6 +83,52 @@ export function setCaretOffset(root: HTMLElement, offset: number): void {
 }
 
 /**
+ * Scrolls `scroller` so the caret's line shows: centred when it was out of
+ * view, untouched when it already shows. Placing a selection never scrolls on
+ * its own, so a caret set deep in a long draft would sit far below the part of
+ * the editor the user can see.
+ */
+export function revealCaret(scroller: HTMLElement): void {
+  const selection = scroller.ownerDocument.defaultView?.getSelection();
+  if (!selection?.rangeCount) return;
+
+  const caret = caretRect(selection.getRangeAt(0));
+  if (!caret) return;
+
+  const view = scroller.getBoundingClientRect();
+  if (caret.top >= view.top && caret.bottom <= view.bottom) return;
+
+  // A jump, never an animation: under `scroll-behavior: smooth` a draft tens of
+  // thousands of pixels long would race past before the caret arrives.
+  const top =
+    scroller.scrollTop + caret.top - view.top - (scroller.clientHeight - caret.height) / 2;
+  if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ top, behavior: 'instant' });
+  else scroller.scrollTop = top;
+}
+
+/**
+ * The collapsed range's box. Right after a line break a collapsed range can
+ * measure empty (no layout, or jsdom: no measuring at all), so the character
+ * after it stands in for the line.
+ */
+function caretRect(range: Range): DOMRect | null {
+  if (typeof range.getBoundingClientRect !== 'function') return null;
+
+  const box = range.getBoundingClientRect();
+  if (box.height > 0) return box;
+
+  const { startContainer: node, startOffset: offset } = range;
+  if (node.nodeType !== Node.TEXT_NODE || offset >= (node as Text).length) return null;
+
+  const next = node.ownerDocument!.createRange();
+  next.setStart(node, offset);
+  next.setEnd(node, offset + 1);
+
+  const line = next.getBoundingClientRect();
+  return line.height > 0 ? line : null;
+}
+
+/**
  * Applies the intent of an intercepted `beforeinput` event onto `text`.
  * Covers the edits a pristine field can receive from the keyboard; anything
  * exotic returns `null`, which elevates without modifying the draft.

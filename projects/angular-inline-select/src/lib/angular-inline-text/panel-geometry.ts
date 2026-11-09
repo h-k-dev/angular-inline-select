@@ -1,5 +1,5 @@
 // CDK
-import type { ConnectedPosition } from '@angular/cdk/overlay';
+import type { ConnectedPosition, ViewportMargin } from '@angular/cdk/overlay';
 
 /**
  * Default panel padding in px — matches the `--mat-sys-inner-spacing` fallback
@@ -8,8 +8,23 @@ import type { ConnectedPosition } from '@angular/cdk/overlay';
  */
 export const PANEL_PADDING_FALLBACK = 16;
 
-/** The gap the panel keeps to the viewport edges: the overlay's `viewportMargin`, and the ceiling's. */
+/** The gap the panel keeps to every viewport edge. */
 export const PANEL_VIEWPORT_MARGIN = 16;
+
+/**
+ * The overlay's `viewportMargin` that keeps {@link PANEL_VIEWPORT_MARGIN} on
+ * every side. No bottom margin, on purpose: the overlay checks a panel's bottom
+ * edge (page coordinates) against the HEIGHT of the margin-narrowed viewport,
+ * which already gave up the top margin — so the top margin is counted at the
+ * bottom too. A bottom margin on top of it would keep a pushed full-height
+ * panel twice the gap from the bottom and shove it against the top edge.
+ */
+export const PANEL_OVERLAY_MARGIN: ViewportMargin = {
+  top: PANEL_VIEWPORT_MARGIN,
+  bottom: 0,
+  start: PANEL_VIEWPORT_MARGIN,
+  end: PANEL_VIEWPORT_MARGIN,
+};
 
 /**
  * The panel padding a session lifts with: `--mat-sys-inner-spacing` as the
@@ -44,19 +59,31 @@ export function panelPositions(paddingX: number): ConnectedPosition[] {
 }
 
 /**
- * The tallest the panel may grow from where the overlay placed it: from its
- * anchored edge to the far viewport margin — a panel hanging from its top grows
- * down, one standing on its bottom grows up. Read from the PLACED pane, so it
- * holds whether the overlay fitted the panel or pushed it on screen (a push
- * gives up the overlay's own flexible sizing).
+ * The panel's size limit for a session: the viewport less a margin on each
+ * side. Fixed when the session opens and never derived from where the panel
+ * lands — the panel takes its size first (its draft, up to this) and the
+ * overlay only positions that box. Anything this tall still fits on screen, so
+ * a push can always bring it fully into view. `null` (no limit) when there is
+ * no room to measure — a zero-height viewport must not collapse the panel.
  */
-export function panelCeiling(
-  pane: Pick<DOMRect, 'top' | 'bottom'>,
-  overlayY: ConnectedPosition['overlayY'],
+export function panelHeightLimit(
   viewportHeight: number,
   margin = PANEL_VIEWPORT_MARGIN,
-): number {
-  const room = overlayY === 'bottom' ? pane.bottom - margin : viewportHeight - margin - pane.top;
+): number | null {
+  const room = Math.floor(viewportHeight - 2 * margin);
+  return room > 0 ? room : null;
+}
 
-  return Math.max(0, Math.floor(room));
+/**
+ * Whether the placed panel crossed a viewport margin — the only time it is
+ * re-positioned. A panel that grew past the bottom (or top) moves; one that
+ * still fits stays where it is, so typing never makes it jump.
+ */
+export function panelOverflows(
+  pane: Pick<DOMRect, 'top' | 'bottom'>,
+  viewportHeight: number,
+  margin = PANEL_VIEWPORT_MARGIN,
+): boolean {
+  // Whole pixels: a subpixel-placed pane must not count as crossing its own margin.
+  return Math.round(pane.top) < margin || Math.round(pane.bottom) > viewportHeight - margin;
 }

@@ -36,6 +36,23 @@
   [advanceMode]="advanceMode()"
   [onBlocked]="onBlocked()"
 >
+  <!--
+    Long-value repro: a ~50 KB machine-written JSON blob in a multi-line field.
+    Start a session deep in it (the A of the last "MESSAGE") and the editor
+    opens at the top, caret off-screen.
+  -->
+  <div class="field-grid__row" editableHoverScope>
+    <dt class="field-grid__label">beA message (JSON)</dt>
+    <dd class="field-grid__value">
+      <angular-inline-text
+        [formField]="recordForm.message"
+        placeholder="Leer"
+        ariaLabel="beA message (JSON)"
+        (saved)="logEmit('message.saved', $event)"
+      />
+    </dd>
+  </div>
+
   <!-- Text, single line: required, projected error, edge-trimmed on commit. -->
   <div class="field-grid__row" editableHoverScope>
     <dt class="field-grid__label">Project</dt>

@@ -18,7 +18,7 @@ import {
   provideEditablePanelActions,
 } from './editable-panel-actions';
 import { EditableTextIntl } from './editable-text-intl';
-import { panelCeiling } from './panel-geometry';
+import { panelHeightLimit, panelOverflows } from './panel-geometry';
 import { collapseLineBreaks, toSingleLine } from './draft-pass';
 import {
   replayEdit,
@@ -27,6 +27,7 @@ import {
   setCaretOffset,
   alignCaret,
   caretOffsetNearPoint,
+  revealCaret,
 } from './caret';
 
 // =============================================================================
@@ -386,13 +387,61 @@ describe('AngularInlineText — [(value)] binding', () => {
     expect(h.editor()).not.toBeNull();
   });
 
-  it('caps the panel once the overlay has placed it, so a long draft scrolls inside it', async () => {
-    await elevate(h);
+  it('sizes the panel once, to the viewport less its margins — never from where it lands', async () => {
+    // jsdom has no viewport; give it one so the limit is a number.
+    Object.defineProperty(document.documentElement, 'clientHeight', {
+      configurable: true,
+      get: () => 800,
+    });
+    try {
+      await elevate(h);
 
-    // The value is layout (jsdom has none, see `panelCeiling`); the wiring is
-    // the point: placement → ceiling → the panel's max-height.
-    const panel = document.querySelector<HTMLElement>('.editable-panel');
-    expect(panel?.style.maxHeight).toMatch(/^\d+px$/);
+      const panel = document.querySelector<HTMLElement>('.editable-panel');
+      expect(panel?.style.maxHeight).toBe(`${800 - 2 * 16}px`);
+    } finally {
+      delete (document.documentElement as { clientHeight?: number }).clientHeight;
+    }
+  });
+
+  it('Escape hands the caret back where the editor had it, and leaves the page where it is', async () => {
+    await elevate(h); // draft 'initialx'
+    setCaretOffset(h.editor()!, 3);
+    const focus = vi.spyOn(h.display(), 'focus');
+
+    h.editor()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+
+    expect(h.editable().editing()).toBe(false);
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(getSelectionOffsets(h.display())?.start).toBe(3);
+  });
+
+  it('a commit keeps the caret too — after the display re-renders the committed text', async () => {
+    await typeText(h, 'draft text');
+    setCaretOffset(h.editor()!, 5);
+
+    h.editor()!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }),
+    );
+    h.fixture.detectChanges();
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(h.host.value()).toBe('draft text');
+    expect(h.display().textContent).toBe('draft text');
+    expect(getSelectionOffsets(h.display())?.start).toBe(5);
+  });
+
+  it('a press beside the text focuses the display without scrolling the page', () => {
+    const focus = vi.spyOn(h.display(), 'focus');
+    const field = h.display().closest('.editable-text__field')!;
+
+    field.dispatchEvent(
+      new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }),
+    );
+
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
   });
 
   it('the first intercepted keystroke is replayed into the draft and the live channel', async () => {
@@ -1404,23 +1453,108 @@ describe('AngularInlineText — single-line newline strip', () => {
   }
 });
 
-describe('panelCeiling', () => {
-  it('a panel hanging from its top grows down to the bottom margin', () => {
-    expect(panelCeiling({ top: 300, bottom: 400 }, 'top', 800)).toBe(800 - 16 - 300);
+describe('panelHeightLimit', () => {
+  it('is the viewport less a margin on each side', () => {
+    expect(panelHeightLimit(800)).toBe(768);
+    expect(panelHeightLimit(800, 8)).toBe(784);
   });
 
-  it('a panel standing on its bottom grows up to the top margin', () => {
-    expect(panelCeiling({ top: 300, bottom: 400 }, 'bottom', 800)).toBe(400 - 16);
+  it('floors to whole pixels', () => {
+    expect(panelHeightLimit(800.6)).toBe(768);
   });
 
-  it('holds wherever the overlay put the pane — fitted or pushed', () => {
-    // A pushed pane is still anchored on its top/bottom edge; only where differs.
-    expect(panelCeiling({ top: 17, bottom: 155 }, 'top', 800, 16)).toBe(767);
+  it('sets no limit when there is no room to measure', () => {
+    expect(panelHeightLimit(0)).toBeNull();
+    expect(panelHeightLimit(32)).toBeNull();
+  });
+});
+
+describe('panelOverflows', () => {
+  it('a panel inside the margins stays where it is', () => {
+    expect(panelOverflows({ top: 16, bottom: 784 }, 800)).toBe(false);
   });
 
-  it('never goes negative, and floors to whole pixels', () => {
-    expect(panelCeiling({ top: 790, bottom: 900 }, 'top', 800)).toBe(0);
-    expect(panelCeiling({ top: 100.6, bottom: 200 }, 'top', 800)).toBe(683);
+  it('a panel grown past the bottom margin moves', () => {
+    expect(panelOverflows({ top: 600, bottom: 790 }, 800)).toBe(true);
+  });
+
+  it('a panel above the top margin moves', () => {
+    expect(panelOverflows({ top: 4, bottom: 300 }, 800)).toBe(true);
+  });
+
+  it('a subpixel placement on the margin is not a crossing', () => {
+    expect(panelOverflows({ top: 15.6, bottom: 784.4 }, 800)).toBe(false);
+  });
+});
+
+describe('revealCaret', () => {
+  const measure = Object.getOwnPropertyDescriptor(Range.prototype, 'getBoundingClientRect');
+  const unmeasure = () =>
+    measure
+      ? Object.defineProperty(Range.prototype, 'getBoundingClientRect', measure)
+      : delete (Range.prototype as { getBoundingClientRect?: unknown }).getBoundingClientRect;
+
+  /** A 200px-tall scroller whose viewport starts at y=100, and a caret rect jsdom cannot measure itself. */
+  function scrollerWithCaretAt(caretTop: number) {
+    const scroller = document.createElement('div');
+    scroller.textContent = 'draft';
+    document.body.appendChild(scroller);
+
+    let scrollTop = 0;
+    Object.defineProperty(scroller, 'clientHeight', { value: 200 });
+    Object.defineProperty(scroller, 'scrollTop', {
+      get: () => scrollTop,
+      set: (value: number) => (scrollTop = value),
+    });
+    // Whatever the environment ships (jsdom has none; some setups stub a no-op).
+    scroller.scrollTo = ((options: ScrollToOptions) =>
+      (scrollTop = options.top ?? scrollTop)) as typeof scroller.scrollTo;
+    scroller.getBoundingClientRect = () => ({ top: 100, bottom: 300, height: 200 }) as DOMRect;
+
+    Range.prototype.getBoundingClientRect = () =>
+      ({ top: caretTop, bottom: caretTop + 20, height: 20 }) as DOMRect;
+    setCaretOffset(scroller, 2);
+
+    return scroller;
+  }
+
+  afterEach(() => {
+    unmeasure();
+    document.body.replaceChildren();
+  });
+
+  it('centres a caret below the visible part', () => {
+    const scroller = scrollerWithCaretAt(900);
+    revealCaret(scroller);
+
+    expect(scroller.scrollTop).toBe(900 - 100 - (200 - 20) / 2);
+  });
+
+  it('jumps rather than animates, whatever the scroll behaviour', () => {
+    const scroller = scrollerWithCaretAt(900);
+    const scrollTo = vi.fn();
+    scroller.scrollTo = scrollTo;
+    revealCaret(scroller);
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 900 - 100 - (200 - 20) / 2, behavior: 'instant' });
+  });
+
+  it('leaves a caret that already shows alone', () => {
+    const scroller = scrollerWithCaretAt(150);
+    revealCaret(scroller);
+
+    expect(scroller.scrollTop).toBe(0);
+  });
+
+  it('does nothing where nothing can be measured', () => {
+    const scroller = scrollerWithCaretAt(900);
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value: undefined,
+    });
+    revealCaret(scroller);
+
+    expect(scroller.scrollTop).toBe(0);
   });
 });
 

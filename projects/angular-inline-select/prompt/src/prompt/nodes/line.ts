@@ -3,13 +3,8 @@ import { Attrs, TagParseRule } from 'prosemirror-model';
 import { Command } from 'prosemirror-state';
 
 // Editables
-import {
-  counterBefore,
-  defineLineNode,
-  LIST_ITEM_PARSE_RULES,
-  LineGrammar,
-  toggleLine,
-} from '../../line/line-node';
+import { counterBefore, defineLineNode, LIST_ITEM_PARSE_RULES, LineGrammar, toggleLine } from '../../line/line-node';
+import { formatKeys, headingKey } from '../../line/formats';
 import { PROMPT_KINDS, PromptBlockKind, TYPED_MARKER } from '../format';
 
 /**
@@ -73,13 +68,10 @@ const HEADING_PARSE_RULES: TagParseRule[] = [1, 2, 3, 4, 5, 6].map((depth) => ({
   attrs: { block: 'heading', depth },
 }));
 
-/** Google Docs' heading bindings: Mod-Alt and the depth. */
+/** The heading keys (`formats.ts`) for every depth the prompt has. */
 const headingKeys = (): Record<string, Command> =>
   Object.fromEntries(
-    [1, 2, 3, 4, 5, 6].map((depth) => [
-      `Mod-Alt-${depth}`,
-      toggleLine(PROMPT_LINE_GRAMMAR, 'heading', { depth }),
-    ]),
+    [1, 2, 3, 4, 5, 6].map((depth) => [headingKey(depth), toggleLine(PROMPT_LINE_GRAMMAR, 'heading', { depth })]),
   );
 
 export const PromptLine = defineLineNode({
@@ -104,11 +96,10 @@ export const PromptLine = defineLineNode({
     toggleBullet: () => toggleLine(PROMPT_LINE_GRAMMAR, 'bullet'),
     toggleNumber: () => toggleLine(PROMPT_LINE_GRAMMAR, 'number'),
   }),
+  // Every dialect's list keys (`formats.ts`).
   keymap: () => ({
-    // The chat composer's list bindings, Slack's and Google Docs': bullets on
-    // 8 (the asterisk's key), numbers on 7.
-    'Mod-Shift-8': toggleLine(PROMPT_LINE_GRAMMAR, 'bullet'),
-    'Mod-Shift-7': toggleLine(PROMPT_LINE_GRAMMAR, 'number'),
+    ...formatKeys('bullet', toggleLine(PROMPT_LINE_GRAMMAR, 'bullet')),
+    ...formatKeys('number', toggleLine(PROMPT_LINE_GRAMMAR, 'number')),
     ...headingKeys(),
   }),
 });

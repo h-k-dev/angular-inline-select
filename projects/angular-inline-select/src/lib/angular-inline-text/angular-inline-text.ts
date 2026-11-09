@@ -29,7 +29,6 @@ import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 import {
   CdkConnectedOverlay,
   CdkConnectedOverlayConfig,
-  ConnectedOverlayPositionChange,
   OverlayModule,
 } from '@angular/cdk/overlay';
 import { A11yModule, _IdGenerator } from '@angular/cdk/a11y';
@@ -42,6 +41,7 @@ import {
   filterChars,
   alignCaret,
   caretOffsetNearPoint,
+  revealCaret,
   type SelectionOffsets,
 } from './caret';
 import { EDITABLE_SCOPE } from '../utils/editable-scope/editable-scope';
@@ -74,10 +74,11 @@ import { EditableTextIntl } from './editable-text-intl';
 import { makeSlashMenu } from './slash-menu';
 import { watchContentEnd } from './content-end';
 import {
-  panelCeiling,
+  panelHeightLimit,
+  panelOverflows,
   panelPositions,
+  PANEL_OVERLAY_MARGIN,
   PANEL_PADDING_FALLBACK,
-  PANEL_VIEWPORT_MARGIN,
   resolvePanelPadding,
 } from './panel-geometry';
 import {
@@ -371,31 +372,46 @@ export class AngularInlineText implements FormValueControl<string> {
     positions: panelPositions(this.#panelPadding()),
     hasBackdrop: true,
     backdropClass: 'editable-scrim',
-    viewportMargin: PANEL_VIEWPORT_MARGIN,
+    viewportMargin: PANEL_OVERLAY_MARGIN,
     push: true,
     disableClose: true, // Escape is the panel's (revert semantics)
     disposeOnNavigation: true,
   }));
 
   #document = inject(DOCUMENT);
-
-  /** How tall the panel may grow from where it was placed (px); null until placed. */
-  protected panelMaxHeight = signal<number | null>(null);
+  #injector = inject(Injector);
 
   /**
-   * The overlay placed the panel: cap its height to the room past its anchored
-   * edge. The panel is placed while still small (the draft is seeded after
-   * attach) and never re-placed as it grows, so without the cap a long draft
-   * runs off-screen.
+   * How tall the panel may grow (px): the viewport less its margins, fixed
+   * when a session opens. The panel sizes itself once — to its draft, up to
+   * this — and the overlay only ever positions that box, so where the field
+   * sits on screen (or where the caret was set) never changes the size.
    */
-  protected handlePanelPlaced(change: ConnectedOverlayPositionChange) {
-    const pane = this.panelOverlay().overlayRef?.overlayElement;
-    if (!pane) return;
+  protected panelMaxHeight = signal<number | null>(null);
 
-    const viewportHeight = this.#document.documentElement.clientHeight;
-    this.panelMaxHeight.set(
-      panelCeiling(pane.getBoundingClientRect(), change.connectionPair.overlayY, viewportHeight),
-    );
+  /** Watches the open panel's size; re-places it only when growing pushed it past a margin. */
+  #panelSize: ResizeObserver | null = null;
+
+  /**
+   * Places the panel as it is NOW. The overlay measures the pane when it
+   * places it, and its first placement came before the draft was seeded — it
+   * measured an empty editor.
+   */
+  #placePanel() {
+    this.panelOverlay().overlayRef?.updatePosition();
+  }
+
+  /** Typing, the slash menu or a message grows the panel: keep it on screen without moving it needlessly. */
+  #watchPanelSize() {
+    const pane = this.panelOverlay().overlayRef?.overlayElement;
+    if (!pane || typeof ResizeObserver === 'undefined') return;
+
+    this.#panelSize?.disconnect();
+    this.#panelSize = new ResizeObserver(() => {
+      const viewportHeight = this.#document.documentElement.clientHeight;
+      if (panelOverflows(pane.getBoundingClientRect(), viewportHeight)) this.#placePanel();
+    });
+    this.#panelSize.observe(pane);
   }
 
   // -- Elevation: display → editor ----------------------------------------------
@@ -413,6 +429,7 @@ export class AngularInlineText implements FormValueControl<string> {
     const committed = this.previous();
 
     this.#pendingCaret = caret;
+    this.panelMaxHeight.set(panelHeightLimit(this.#document.documentElement.clientHeight));
     this.editing.set(true);
 
     if (seed !== undefined && seed !== committed) {
@@ -555,8 +572,13 @@ export class AngularInlineText implements FormValueControl<string> {
         editorEl.textContent = draft;
       }
 
-      editorEl.focus();
+      // The draft is in, so the panel has its final size: place that box.
+      this.#placePanel();
+      this.#watchPanelSize();
+
+      editorEl.focus({ preventScroll: true });
       setCaretOffset(editorEl, this.#pendingCaret ?? draft.length);
+      revealCaret(editorEl);
       this.#pendingCaret = null;
 
       // A `/` typed on the display opens the menu at once — no `input` fires for the seed.
@@ -620,12 +642,31 @@ export class AngularInlineText implements FormValueControl<string> {
     this.close();
   }
 
-  /** Closes the panel; focus returns to the display for Tab continuity. */
+  /**
+   * Closes the panel; focus returns to the display for Tab continuity — with
+   * the caret where the editor had it, and the page left where it is. A bare
+   * `focus()` puts a contenteditable's caret at its START and scrolls there,
+   * which throws a long field back to its first line.
+   */
   protected close() {
     if (!this.editing()) return;
 
+    const editorEl = this.editor()?.nativeElement;
+    const caret = editorEl ? (getSelectionOffsets(editorEl)?.start ?? null) : null;
     this.editing.set(false);
-    this.display().nativeElement.focus();
+
+    const display = this.display().nativeElement;
+    display.focus({ preventScroll: true });
+    if (caret === null) return;
+
+    // Once now, and again after a commit re-renders the text (that replaces the
+    // node the caret sat in) — unless focus has already moved on (Tab).
+    const placeCaret = () => {
+      if (display.ownerDocument.activeElement !== display) return;
+      setCaretOffset(display, Math.min(caret, display.textContent?.length ?? 0));
+    };
+    placeCaret();
+    afterNextRender(placeCaret, { injector: this.#injector });
   }
 
   /** A press elsewhere: the draft goes, and the focus goes with the press —
@@ -637,6 +678,9 @@ export class AngularInlineText implements FormValueControl<string> {
 
   /** Detach safety net (navigation, destroy): never lose the baseline silently. */
   protected handlePanelDetach() {
+    this.#panelSize?.disconnect();
+    this.#panelSize = null;
+
     if (this.accepted) {
       this.accepted = false;
       return;
@@ -942,8 +986,7 @@ export class AngularInlineText implements FormValueControl<string> {
     if (interactive !== null && this.fieldArea().nativeElement.contains(interactive)) return;
 
     event.preventDefault();
-    display.focus();
-    setCaretOffset(display, caretOffsetNearPoint(display, event.clientX, event.clientY));
+    this.#landCaret(display, event.clientX, event.clientY);
   }
 
   /** The hover scope's forwarded press: the same landing, from outside the unit. */
@@ -951,9 +994,19 @@ export class AngularInlineText implements FormValueControl<string> {
     if (this.editing() || this.disabled() || this.readonly()) return;
 
     const { clientX, clientY } = (event as CustomEvent<EditableHoverScopePress>).detail;
-    const display = this.display().nativeElement;
-    display.focus();
-    setCaretOffset(display, caretOffsetNearPoint(display, clientX, clientY));
+    this.#landCaret(this.display().nativeElement, clientX, clientY);
+  }
+
+  /**
+   * Focuses the display with the caret at the character nearest the press.
+   * Measured BEFORE focusing, and focused without scrolling: a bare `focus()`
+   * scrolls a long field to its first line, and the press point would then
+   * land on whatever text scrolled under it.
+   */
+  #landCaret(display: HTMLElement, x: number, y: number) {
+    const offset = caretOffsetNearPoint(display, x, y);
+    display.focus({ preventScroll: true });
+    setCaretOffset(display, offset);
   }
 
   /** The `[editableHoverScope]` ancestor: its hover arms the bubble, and it paints instead of the field. */

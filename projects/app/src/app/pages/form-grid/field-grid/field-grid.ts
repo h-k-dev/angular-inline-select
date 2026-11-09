@@ -66,6 +66,8 @@ import {
 
 /** The record behind the grid: one model, one signal form, every control. */
 export interface RecordModel {
+  /** A machine-written blob, ~50 KB — the long-value repro (see `longMessageJson`). */
+  message: string;
   project: string;
   summary: string;
   status: string;
@@ -103,6 +105,52 @@ export interface FieldGridEmission {
 
 const SUMMARY_MAX = 160;
 
+/**
+ * A beA send result as a backend writes it: pretty-printed JSON around a whole
+ * HTML inspection sheet, escaped into one string — ~50 KB, so the multi-line
+ * display runs tens of thousands of pixels tall. `"journalType": "MESSAGE"`
+ * sits near the END, far below the fold: start a session there to reproduce
+ * the editor opening at its top with the caret off-screen.
+ */
+function longMessageJson(): string {
+  const css = Array.from(
+    { length: 700 },
+    (_, i) => `.rule-${i} {\n\tpadding: 2pt;\n\tfont-weight: bold;\n\tcolor: #227722;\n}`,
+  ).join('\n');
+  const sheet = [
+    '<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">',
+    '<html>',
+    '<head>',
+    '<title>Inspection sheet from 2026-11-09 12:55:38</title>',
+    '<style type="text/css" media="all">',
+    css,
+    '</style>',
+    '</head>',
+    '<body></body>',
+    '</html>',
+  ].join('\n');
+  const journal = (event: string) =>
+    [
+      '        {',
+      '            "sourceIdentitySafeId": "DE.BRAK_SPT.5d4525e1-ff80-4b32-b651-671acb6d3ca2.a577",',
+      '            "journalType": "MESSAGE",',
+      `            "eventType": "${event}",`,
+      '            "sourceIdentity": "Gerechtigkeit, Rechtsanwältin Dr. Gerda (10117 Berlin)"',
+      '        }',
+    ].join('\n');
+  return [
+    '{',
+    '    "messageReferenceJustice": "",',
+    `    "messageVerificationResult": ${JSON.stringify(sheet)},`,
+    '    "messageJournal": [',
+    [journal('MESSAGE_ZUGANG'), journal('MESSAGE_ZEITPUNKT_ERFOLGREICHER_VERSAND')].join(',\n'),
+    '    ],',
+    '    "messageEebAngefordert": true,',
+    '    "osciSubject": "ALLGEMEINE_NACHRICHT"',
+    '}',
+  ].join('\n');
+}
+
 /** Slash-menu options for the status field — the consumer owns the list. */
 const STATUS_OPTIONS = [
   { id: 'status-todo', label: 'To do', icon: 'radio_button_unchecked' },
@@ -113,6 +161,7 @@ const STATUS_OPTIONS = [
 
 function initialRecord(): RecordModel {
   return {
+    message: longMessageJson(),
     project: 'Aurora',
     summary:
       'A label/value grid that folds to stacked rows when its CONTAINER runs out of room. ' +

@@ -547,6 +547,22 @@ const PAIRS = [
     `${PM}/line/extensions/heading-placeholder.spec.ts`,
   ],
   ['prompt/line/intl', `${PSB}/line/intl.ts`, `${PM}/line/intl.ts`],
+  ['prompt/line/formats', `${PSB}/line/formats.ts`, `${PM}/line/formats.ts`],
+  [
+    'prompt/line/extensions/placeholder',
+    `${PSB}/line/extensions/placeholder.ts`,
+    `${PM}/line/extensions/placeholder.ts`,
+  ],
+  [
+    'prompt/line/extensions/suggestion-menu',
+    `${PSB}/line/extensions/suggestion-menu.ts`,
+    `${PM}/line/extensions/suggestion-menu.ts`,
+  ],
+  [
+    'prompt/line/extensions/suggestion-menu.spec',
+    `${PSB}/line/extensions/suggestion-menu.spec.ts`,
+    `${PM}/line/extensions/suggestion-menu.spec.ts`,
+  ],
   ['prompt/format', `${PSB}/prompt/format.ts`, `${PM}/prompt/format.ts`],
   ['prompt/format.spec', `${PSB}/prompt/format.spec.ts`, `${PM}/prompt/format.spec.ts`],
   ['prompt/codec', `${PSB}/prompt/codec.ts`, `${PM}/prompt/codec.ts`],

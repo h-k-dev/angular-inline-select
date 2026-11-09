@@ -1,10 +1,11 @@
 // 3rd Party
-import { EditorState, Plugin, PluginKey } from 'prosemirror-state';
-import { Decoration, DecorationSet } from 'prosemirror-view';
+import { EditorState, PluginKey } from 'prosemirror-state';
+import { DecorationSet } from 'prosemirror-view';
 
 // Editables
-import { defineExtension, FunctionalExtension } from '../extension';
+import { FunctionalExtension } from '../extension';
 import { LineGrammar } from '../line-node';
+import { PlaceholderHint, createPlaceholder, placeholderDecorations } from './placeholder';
 
 export interface HeadingPlaceholderOptions {
   /** The dialect's grammar: which kind is a heading, and how deep a heading is. */
@@ -18,24 +19,18 @@ export interface HeadingPlaceholderOptions {
 
 export const headingPlaceholderKey = new PluginKey<DecorationSet>('headingPlaceholder');
 
+/** What an empty line says: a heading, its kind and depth — "Heading 1"; any other line, nothing. */
+const headingHint =
+  ({ grammar, label }: HeadingPlaceholderOptions): PlaceholderHint =>
+  (_state, line) =>
+    line.attrs['block'] === grammar.heading ? `${label()} ${grammar.headingDepth(line.attrs)}`.trim() : null;
+
 /**
  * The decorations for a state: the hint on every empty heading line, as a
  * `data-placeholder` attribute the shared stylesheet draws (`_lines.scss`).
  */
-export function headingPlaceholderDecorations(
-  state: EditorState,
-  { grammar, label }: HeadingPlaceholderOptions,
-): DecorationSet {
-  const decorations: Decoration[] = [];
-  const word = label();
-
-  state.doc.forEach((line, offset) => {
-    if (line.attrs['block'] !== grammar.heading || line.content.size > 0) return;
-    const hint = `${word} ${grammar.headingDepth(line.attrs)}`.trim();
-    decorations.push(Decoration.node(offset, offset + line.nodeSize, { 'data-placeholder': hint }));
-  });
-
-  return DecorationSet.create(state.doc, decorations);
+export function headingPlaceholderDecorations(state: EditorState, options: HeadingPlaceholderOptions): DecorationSet {
+  return placeholderDecorations(state, headingHint(options));
 }
 
 /**
@@ -44,18 +39,7 @@ export function headingPlaceholderDecorations(
  * the heading's own face, muted. Without it the only sign the marker took is
  * the caret growing a size, which reads as a glitch rather than a title.
  *
- * Decorations rather than a node attribute, so the document stays the stored
- * text and nothing about the hint can ever be serialized.
+ * The line core's placeholder (`placeholder.ts`), told which lines speak.
  */
 export const createHeadingPlaceholder = (options: HeadingPlaceholderOptions): FunctionalExtension =>
-  defineExtension({
-    name: 'headingPlaceholder',
-    plugins: () => [
-      new Plugin({
-        key: headingPlaceholderKey,
-        props: {
-          decorations: (state) => headingPlaceholderDecorations(state, options),
-        },
-      }),
-    ],
-  });
+  createPlaceholder('headingPlaceholder', headingPlaceholderKey, headingHint(options));
