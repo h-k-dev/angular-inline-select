@@ -9,7 +9,6 @@ import {
   type InlineTextWrapBehavior,
 } from './angular-inline-text';
 import { EditableSuffix } from './editable-affix';
-import { EditableClear, EditableClearTemplate } from '../bubble-menu/editable-clear';
 import { EditableAction, EditableActionsTemplate } from '../bubble-menu/editable-actions';
 import { detectSlashToken } from './editable-menu';
 import {
@@ -18,6 +17,7 @@ import {
   provideEditablePanelActions,
 } from './editable-panel-actions';
 import { EditableTextIntl } from './editable-text-intl';
+import { provideEditableContextMenu } from '../context-menu/editable-context-menu-config';
 import { panelHeightLimit, panelOverflows } from './panel-geometry';
 import { collapseLineBreaks, toSingleLine } from './draft-pass';
 import {
@@ -124,42 +124,25 @@ class FilteredHost {
 }
 
 @Component({
-  imports: [AngularInlineText, EditableClear, EditableClearTemplate],
+  imports: [AngularInlineText],
   template: `
     <angular-inline-text
       [(value)]="value"
       [showClear]="showClear()"
+      [required]="required()"
+      [readonly]="readonly()"
       (saved)="sessions.push($event)"
       (touch)="touchCount = touchCount + 1"
-    >
-      <ng-template editableClear let-clear let-label="label" let-side="side" let-focus="focus">
-        <button
-          editableClear
-          class="confirm-clear"
-          [attr.aria-label]="label"
-          [attr.data-side]="side"
-          (clear)="request(clear, focus)"
-        >
-          ✕
-        </button>
-      </ng-template>
-    </angular-inline-text>
+    />
   `,
 })
-class ConfirmClearHost {
+class ClearHost {
   value = signal('initial');
   showClear = signal(true);
+  required = signal(false);
+  readonly = signal(false);
   sessions: InlineTextSaved[] = [];
   touchCount = 0;
-
-  /** Stands in for a confirmation dialog: capture the callbacks, resolve later. */
-  pending: (() => void) | null = null;
-  restoreFocus: (() => void) | null = null;
-
-  request(clear: () => void, focus: () => void) {
-    this.pending = clear;
-    this.restoreFocus = focus;
-  }
 }
 
 // =============================================================================
@@ -234,21 +217,35 @@ async function typeText(h: Harness<unknown>, text: string) {
   h.fixture.detectChanges();
 }
 
-/** Hovers the field so the clear bubble (a CDK overlay) renders. */
+/** Hovers the field so the actions bubble (a CDK overlay) renders. */
 function hoverField(h: Harness<unknown>) {
   h.display().closest('.editable-text__field')!.dispatchEvent(new MouseEvent('mouseenter'));
   h.fixture.detectChanges();
 }
 
-/** Un-hovers and waits out the bubble's grace timer, as a real pointer would. */
-async function leaveField(h: Harness<unknown>) {
-  h.display().closest('.editable-text__field')!.dispatchEvent(new MouseEvent('mouseleave'));
-  await new Promise((resolve) => setTimeout(resolve, 200));
+/** Right-clicks the field; the event tells whether the control took the gesture. */
+function rightClick(h: Harness<unknown>, target: Element = h.display()): MouseEvent {
+  const event = new MouseEvent('contextmenu', {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 12,
+    clientY: 12,
+  });
+  target.dispatchEvent(event);
   h.fixture.detectChanges();
+  return event;
 }
 
-function bubbleAction(selector: string): HTMLButtonElement | null {
-  return document.querySelector<HTMLButtonElement>(`.editable-bubble ${selector}`);
+function menuRows(): HTMLButtonElement[] {
+  return [...document.querySelectorAll<HTMLButtonElement>('.editable-context-menu__item')];
+}
+
+function pickRow(h: Harness<unknown>, label: string) {
+  menuRows()
+    .find((row) => row.textContent?.trim() === label)!
+    .click();
+  h.fixture.detectChanges();
 }
 
 function accept(h: Harness<unknown>) {
@@ -624,7 +621,7 @@ describe('AngularInlineText — [(value)] binding', () => {
   });
 
   it('clear commits an empty value and marks the field touched', () => {
-    (h.editable() as unknown as { clearValue(event: Event): void }).clearValue(new Event('click'));
+    (h.editable() as unknown as { clearValue(): void }).clearValue();
     h.fixture.detectChanges();
 
     expect(h.host.value()).toBe('');
@@ -843,98 +840,119 @@ describe('AngularInlineText — affix templates', () => {
   });
 });
 
-describe('AngularInlineText — clear affordance', () => {
-  it('showClear false never offers the bubble, template or not — emptying stays the long way', () => {
-    const h = setup(ConfirmClearHost);
-    h.host.showClear.set(false);
-    h.fixture.detectChanges();
-
-    hoverField(h);
-    expect(document.querySelector('.editable-bubble')).toBeNull();
-    expect(bubbleAction('button.confirm-clear')).toBeNull();
-
-    h.host.showClear.set(true);
-    h.fixture.detectChanges();
-    hoverField(h);
-    expect(bubbleAction('button.confirm-clear')).not.toBeNull();
+describe('AngularInlineText — the context menu (Edit + Clear)', () => {
+  afterEach(() => {
+    document
+      .querySelector('.editable-context-menu')
+      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   });
 
-  it('renders the stock button, which clears on click', () => {
-    const h = setup(ValueBindingHost);
-    hoverField(h);
+  it('a right-click offers Edit, then Clear — and takes the gesture', () => {
+    const h = setup(ClearHost);
 
-    const stock = bubbleAction('button.editable-action-clear');
-    expect(stock).not.toBeNull();
-    expect(stock!.getAttribute('aria-label')).toBe('Clear value');
+    const event = rightClick(h);
 
-    stock!.dispatchEvent(new MouseEvent('click'));
-    h.fixture.detectChanges();
-
-    expect(h.host.value()).toBe('');
-    expect(h.host.sessions).toEqual([{ value: '', changed: true }]);
+    expect(event.defaultPrevented).toBe(true);
+    expect(menuRows().map((row) => row.textContent?.trim())).toEqual(['Edit', 'Clear']);
   });
 
-  it('an editableClear template takes the slot over entirely', () => {
-    const h = setup(ConfirmClearHost);
-    hoverField(h);
+  it('Clear commits the empty value, touches the field and closes the menu', () => {
+    const h = setup(ClearHost);
+    rightClick(h);
 
-    const custom = bubbleAction('button.confirm-clear');
-    expect(custom).not.toBeNull();
-    expect(bubbleAction('button.editable-action-clear')).toBeNull();
-
-    // The context labels the button for free; a single-value field has no side.
-    expect(custom!.getAttribute('aria-label')).toBe('Clear value');
-    expect(custom!.getAttribute('data-side')).toBeNull();
-  });
-
-  it("hands the commit over: the consumer's click alone changes nothing", () => {
-    const h = setup(ConfirmClearHost);
-    hoverField(h);
-
-    bubbleAction('button.confirm-clear')!.dispatchEvent(new MouseEvent('click'));
-    h.fixture.detectChanges();
-
-    // THE POINT OF THE SEAM: clearing is a commit, so a confirmation that has
-    // not happened yet must not have reached the bound value, the field's
-    // touched state, or a consumer's persist path.
-    expect(h.host.value()).toBe('initial');
-    expect(h.host.sessions).toEqual([]);
-    expect(h.host.touchCount).toBe(0);
-    expect(typeof h.host.pending).toBe('function');
-  });
-
-  it('the captured callback still clears after the bubble is gone (the dialog case)', async () => {
-    const h = setup(ConfirmClearHost);
-    hoverField(h);
-
-    bubbleAction('button.confirm-clear')!.dispatchEvent(new MouseEvent('click'));
-    h.fixture.detectChanges();
-
-    // A modal takes the pointer away: the hover bubble — and the consumer's
-    // own button with it — is torn down while the dialog is open.
-    await leaveField(h);
-    expect(bubbleAction('button.confirm-clear')).toBeNull();
-
-    h.host.pending!();
-    h.fixture.detectChanges();
+    pickRow(h, 'Clear');
 
     expect(h.host.value()).toBe('');
     expect(h.host.sessions).toEqual([{ value: '', changed: true }]);
     expect(h.host.touchCount).toBe(1);
+    expect(menuRows()).toEqual([]);
   });
 
-  it('the context restores focus to the field a dismissed bubble took away', async () => {
-    const h = setup(ConfirmClearHost);
+  it('Edit opens the session and changes nothing', async () => {
+    const h = setup(ClearHost);
+    rightClick(h);
+
+    pickRow(h, 'Edit');
+    await h.fixture.whenStable();
+    h.fixture.detectChanges();
+
+    expect(h.editable().editing()).toBe(true);
+    expect(h.host.value()).toBe('initial');
+    expect(h.host.sessions).toEqual([]);
+    expect(menuRows()).toEqual([]);
+  });
+
+  it('Escape closes the menu and leaves the value alone', () => {
+    const h = setup(ClearHost);
+    rightClick(h);
+
+    document
+      .querySelector('.editable-context-menu')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    h.fixture.detectChanges();
+
+    expect(menuRows()).toEqual([]);
+    expect(h.host.value()).toBe('initial');
+    expect(h.host.touchCount).toBe(0);
+  });
+
+  it.each([
+    ['showClear is off', (h: Harness<ClearHost>) => h.host.showClear.set(false)],
+    ['the field is required', (h: Harness<ClearHost>) => h.host.required.set(true)],
+    ['the field is readonly', (h: Harness<ClearHost>) => h.host.readonly.set(true)],
+    ['the field is empty', (h: Harness<ClearHost>) => h.host.value.set('')],
+  ])('leaves the gesture to the platform while %s', (_, arrange) => {
+    const h = setup(ClearHost);
+    arrange(h);
+    h.fixture.detectChanges();
+
+    const event = rightClick(h);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(menuRows()).toEqual([]);
+  });
+
+  it('leaves the gesture to the platform while editing', async () => {
+    const h = setup(ClearHost);
+    await elevate(h);
+
+    const event = rightClick(h);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(menuRows()).toEqual([]);
+  });
+
+  it("the right button's press lands no caret when the menu will answer", () => {
+    const h = setup(ClearHost);
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 2 });
+
+    h.display().dispatchEvent(press);
+
+    expect(press.defaultPrevented).toBe(true);
+    expect(document.activeElement).not.toBe(h.display());
+  });
+
+  it('switched off app-wide, nothing is touched: no menu, no preventDefault', () => {
+    TestBed.configureTestingModule({
+      providers: [provideEditableContextMenu(() => ({ enabled: () => false }))],
+    });
+    const h = setup(ClearHost);
+
+    const event = rightClick(h);
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 2 });
+    h.display().dispatchEvent(press);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(press.defaultPrevented).toBe(false);
+    expect(menuRows()).toEqual([]);
+  });
+
+  it('no hover bubble is left behind for a field without actions', () => {
+    const h = setup(ClearHost);
+
     hoverField(h);
 
-    bubbleAction('button.confirm-clear')!.dispatchEvent(new MouseEvent('click'));
-    h.fixture.detectChanges();
-    await leaveField(h);
-
-    // The modal's own restore-focus has nowhere to land — the button it would
-    // restore to died with the bubble. The context puts it back on the field.
-    h.host.restoreFocus!();
-    expect(document.activeElement).toBe(h.display());
+    expect(document.querySelector('.editable-bubble')).toBeNull();
   });
 });
 
@@ -1792,8 +1810,8 @@ describe('AngularInlineText — the interactive unit', () => {
 });
 
 // =============================================================================
-// The primary-actions slot — consumer buttons that act ON the value, before
-// clear, with their own gate
+// The actions slot — consumer buttons that act ON the value, the hover
+// bubble's only content, with their own gate
 // =============================================================================
 
 @Component({
@@ -1816,32 +1834,27 @@ describe('AngularInlineText — primary actions', () => {
   let h: Harness<ActionsHost>;
 
   const open = () => document.querySelector<HTMLAnchorElement>('.editable-bubble .open');
-  const clear = () => document.querySelector('.editable-bubble .editable-action-clear');
   const groups = () => [...document.querySelectorAll('.editable-bubble .editable-bubble__group')];
 
   beforeEach(() => {
     h = setup(ActionsHost);
   });
 
-  it('stamps the consumer template with the payload, BEFORE the clear button', () => {
+  it('stamps the consumer template with the payload — and no clear beside it', () => {
     hoverField(h);
 
     expect(open()?.getAttribute('href')).toBe('https://example.test/');
-    expect(clear()).not.toBeNull();
     expect(groups().map((g) => g.className)).toEqual([
       'editable-bubble__group editable-bubble__actions',
-      'editable-bubble__group editable-bubble__clear',
     ]);
   });
 
-  it('gates are per slot: a readonly field keeps its actions and loses clear', () => {
+  it('a readonly field keeps its actions', () => {
     h.host.readonly.set(true);
     h.fixture.detectChanges();
     hoverField(h);
 
     expect(open()).not.toBeNull();
-    expect(clear()).toBeNull();
-    expect(groups().length).toBe(1);
   });
 
   it('showClear false keeps the actions', () => {
@@ -1850,7 +1863,6 @@ describe('AngularInlineText — primary actions', () => {
     hoverField(h);
 
     expect(open()).not.toBeNull();
-    expect(clear()).toBeNull();
   });
 
   it('an empty value offers nothing to act on', () => {
@@ -1936,6 +1948,25 @@ describe('AngularInlineText — panel keys from the action buttons', () => {
     keydown(discard, { key: 'Enter', metaKey: true });
     await h.fixture.whenStable();
 
+    expect(h.editable().editing()).toBe(false);
+    expect(h.host.value()).toBe('draft');
+    expect(h.host.saved).toEqual([{ value: 'draft' }]);
+  });
+
+  it.each([
+    ['Ctrl+S', { key: 's', code: 'KeyS', ctrlKey: true }],
+    ['Cmd+S (macOS)', { key: 's', code: 'KeyS', metaKey: true }],
+    // Option+S types `ß` on a Mac: matched by key code, and kept out of the draft.
+    ['Alt+S', { key: 'ß', code: 'KeyS', altKey: true }],
+  ])('%s saves the session like Cmd+Enter, and never reaches the browser', async (_chord, init) => {
+    await typeText(h, 'draft');
+    const [discard] = actionButtons();
+
+    discard.focus();
+    const press = keydown(discard, init);
+    await h.fixture.whenStable();
+
+    expect(press.defaultPrevented).toBe(true);
     expect(h.editable().editing()).toBe(false);
     expect(h.host.value()).toBe('draft');
     expect(h.host.saved).toEqual([{ value: 'draft' }]);

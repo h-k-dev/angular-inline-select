@@ -31,12 +31,11 @@ export interface EditableActionsContext<T> {
 }
 
 /**
- * The PRIMARY-ACTIONS slot of the hover bubble — consumer-owned buttons that
- * act ON the value (open the link, call the number, copy the address), stamped
- * BEFORE the clear affordance, separated from it.
+ * The hover bubble's content — consumer-owned buttons that act ON the value
+ * (open the link, call the number, copy the address). The bubble holds
+ * nothing else: clearing lives in the context menu (`EditableContextMenu`).
  *
- * The seam mirrors `editableClear`, with one inversion: the control never
- * renders an action itself. It has no idea what a house does with a phone
+ * The control never renders an action itself. It has no idea what a house does with a phone
  * number; it hands over the DATA (typed per control — see each control's
  * `*Actions` payload type) and the consumer renders the buttons. Several
  * buttons in one template is just several buttons.
@@ -49,17 +48,16 @@ export interface EditableActionsContext<T> {
  * </angular-inline-phone>
  * ```
  *
- * GATES ARE PER SLOT. Clear keeps its policy (never on required / disabled /
- * readonly / empty / editing, plus `showClear`). Actions show whenever the
- * template exists and the value is actionable — non-empty, not mid-edit —
- * and DELIBERATELY ignore required, disabled and readonly: a readonly phone
- * still wants its call button, a required link still wants open. The bubble
- * appears when either slot has something.
+ * Actions show whenever the template exists and the value is actionable —
+ * non-empty, not mid-edit — and DELIBERATELY ignore required, disabled and
+ * readonly (the clear's policy): a readonly phone still wants its call
+ * button, a required link still wants open. Without a template there is no
+ * bubble at all.
  *
  * Composition channel: wrapping controls (number, phone) forward this as the
  * `actionsTemplate` INPUT together with their own typed payload
  * (`actionsData`), since content queries don't pierce re-projection — the
- * same dual channel as the affixes and the clear seam.
+ * same dual channel as the affixes.
  */
 @Directive({
   selector: 'ng-template[editableActions]',

@@ -3,13 +3,18 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { EditableHoverScope } from './editable-hover-scope';
 import { AngularInlineText } from '../../angular-inline-text/angular-inline-text';
+import { EditableActionsTemplate } from '../../bubble-menu/editable-actions';
 
 @Component({
-  imports: [AngularInlineText, EditableHoverScope],
+  imports: [AngularInlineText, EditableHoverScope, EditableActionsTemplate],
   template: `
     <div class="row" editableHoverScope [pressToFocus]="press()">
       <span class="label">Name</span>
-      <span class="cell"><angular-inline-text [(value)]="value" /></span>
+      <span class="cell">
+        <angular-inline-text [(value)]="value">
+          <ng-template editableActions><span class="act"></span></ng-template>
+        </angular-inline-text>
+      </span>
     </div>
   `,
 })
@@ -149,6 +154,58 @@ describe('EditableHoverScope — the container as the interactive unit', () => {
 
     expect(event.defaultPrevented).toBe(false);
     expect(document.activeElement).not.toBe(display());
+  });
+
+  describe('a right-click on the scope’s own space', () => {
+    const rightClick = (target: Element) => {
+      const event = new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        clientX: 500,
+        clientY: 5,
+      });
+      target.dispatchEvent(event);
+      fixture.detectChanges();
+      return event;
+    };
+    const menu = () => document.querySelector<HTMLElement>('.editable-context-menu');
+
+    afterEach(() => {
+      menu()?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+
+    it('opens the one field’s context menu and keeps the platform’s away', () => {
+      const event = rightClick(cell());
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(menu()).not.toBeNull();
+    });
+
+    it('stays the platform’s where the field offers no menu (an empty value)', () => {
+      fixture.componentInstance.value.set('');
+      fixture.detectChanges();
+
+      const event = rightClick(cell());
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(menu()).toBeNull();
+    });
+
+    it('text keeps its right-click: a label is never forwarded', () => {
+      const event = rightClick(label());
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(menu()).toBeNull();
+    });
+
+    it('pressToFocus false opts the scope out', () => {
+      fixture.componentInstance.press.set(false);
+      fixture.detectChanges();
+
+      expect(rightClick(cell()).defaultPrevented).toBe(false);
+      expect(menu()).toBeNull();
+    });
   });
 
   it('never forwards when the scope holds more than one field', () => {

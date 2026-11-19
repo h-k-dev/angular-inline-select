@@ -14,7 +14,7 @@
   Page sub header — the record's own chrome, above the content, spanning the
   full width. The point of it living HERE and not inside an `.example` is the
   screen EDGE: an inline-end aligned editable sits flush against the right of
-  the viewport, so the clear bubble it opens has no room to grow into. There is
+  the viewport, so the actions bubble it opens has no room to grow into. There is
   nowhere for the inline-end position to go, and the slot is narrow enough
   (mobile max) that the value can only ellipsize — the two constraints the
   bubble has to survive together.
@@ -149,8 +149,8 @@
         </div>
 
         <p class="form-toggles__hint">
-          The clear bubble only appears on hover while the field is optional — required fields must not be emptied in
-          one click. Clearing while optional and then toggling Required back on shows the idle error underline; “Mark
+          A right-click offers Edit and Clear only while the field is optional — required fields must not be emptied
+          from a menu. Clearing while optional and then toggling Required back on shows the idle error underline; “Mark
           touched” reveals errors with no interaction, and “Reset field” silently discards an open draft back to the
           baseline.
         </p>

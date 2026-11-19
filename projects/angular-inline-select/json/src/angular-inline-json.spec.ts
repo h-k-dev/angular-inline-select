@@ -2,12 +2,7 @@ import { ApplicationRef, Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { EditorView } from '@codemirror/view';
 
-import {
-  AngularInlineText,
-  EditableClear,
-  EditableClearTemplate,
-  EditableScope,
-} from 'angular-inline-select';
+import { AngularInlineText, EditableScope } from 'angular-inline-select';
 
 import { AngularInlineJson, type InlineJsonSaved } from './angular-inline-json';
 
@@ -322,16 +317,13 @@ describe('AngularInlineJson', () => {
   });
 
   it('clears the value via the clear affordance', () => {
-    // The clear button lives inside BubbleMenu's hover-gated CDK overlay
-    // (only rendered on a real pointer hover, which jsdom never fires) — call
-    // the handler the button's (clear) output wires directly, matching the
-    // established pattern in angular-inline-text.spec.ts.
+    // The handler the context menu's Clear row calls.
     const { fixture, host } = setup();
     host.value.set('{"a":1}');
     fixture.detectChanges();
 
     const instance = fixture.debugElement.children[0].componentInstance as AngularInlineJson;
-    (instance as unknown as { clearValue(event: Event): void }).clearValue(new Event('click'));
+    (instance as unknown as { clearValue(): void }).clearValue();
     fixture.detectChanges();
 
     expect(host.value()).toBe('');
@@ -396,64 +388,57 @@ describe('AngularInlineJson — inside an [editableScope]', () => {
 });
 
 // =============================================================================
-// Clear affordance — the consumer's own button
+// Clear affordance — the context menu
 // =============================================================================
 
 @Component({
-  imports: [AngularInlineJson, EditableClear, EditableClearTemplate],
-  template: `
-    <angular-inline-json [(value)]="value" (saved)="sessions.push($event)">
-      <ng-template editableClear let-clear let-label="label">
-        <button
-          editableClear
-          class="confirm-clear"
-          [attr.aria-label]="label"
-          (clear)="request(clear)"
-        >
-          ✕
-        </button>
-      </ng-template>
-    </angular-inline-json>
-  `,
+  imports: [AngularInlineJson],
+  template: `<angular-inline-json [(value)]="value" (saved)="sessions.push($event)" />`,
 })
 class JsonClearHost {
   value = signal('{"a":1}');
   sessions: InlineJsonSaved[] = [];
+}
 
-  /** Stands in for a confirmation dialog: capture the callback, resolve later. */
-  pending: (() => void) | null = null;
-
-  request(clear: () => void) {
-    this.pending = clear;
-  }
+/** Right-clicks `target`, then picks the context menu row labelled `label`. */
+function pickFromContextMenu(target: Element, label: string) {
+  target.dispatchEvent(
+    new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      clientX: 12,
+      clientY: 12,
+    }),
+  );
+  [...document.querySelectorAll<HTMLButtonElement>('.editable-context-menu__item')]
+    .find((row) => row.textContent?.trim() === label)!
+    .click();
 }
 
 describe('AngularInlineJson — clear affordance', () => {
-  it('stamps the consumer template and hands the commit over', () => {
+  it('a right-click on the field offers Clear, which commits the empty value', () => {
     const fixture = TestBed.createComponent(JsonClearHost);
     fixture.detectChanges();
 
-    fixture.nativeElement
-      .querySelector('.editable-json__field')!
-      .dispatchEvent(new MouseEvent('mouseenter'));
-    fixture.detectChanges();
-
-    const button = document.querySelector<HTMLButtonElement>(
-      '.editable-bubble button.confirm-clear',
-    );
-    expect(button).not.toBeNull();
-    expect(button!.getAttribute('aria-label')).toBe('Clear value');
-
-    button!.dispatchEvent(new MouseEvent('click'));
+    pickFromContextMenu(fixture.nativeElement.querySelector('.editable-json__display'), 'Clear');
     fixture.detectChanges();
 
     const host = fixture.componentInstance;
-    expect(host.value()).toBe('{"a":1}');
-
-    host.pending!();
-    fixture.detectChanges();
-
     expect(host.value()).toBe('');
     expect(host.sessions).toEqual([{ value: '', changed: true }]);
+  });
+
+  it('Edit opens the editing session', () => {
+    const fixture = TestBed.createComponent(JsonClearHost);
+    fixture.detectChanges();
+
+    pickFromContextMenu(fixture.nativeElement.querySelector('.editable-json__display'), 'Edit');
+    fixture.detectChanges();
+
+    const instance = fixture.debugElement.children[0].componentInstance as AngularInlineJson;
+    expect(instance.editing()).toBe(true);
+    instance.editing.set(false);
+    fixture.detectChanges();
   });
 });

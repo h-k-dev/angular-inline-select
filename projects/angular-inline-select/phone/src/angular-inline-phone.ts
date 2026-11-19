@@ -30,12 +30,10 @@ import { OverlayModule, type ConnectedPosition } from '@angular/cdk/overlay';
 // Editables
 import {
   AngularInlineText,
-  EditableClearTemplate,
   OverlayLeave,
   EditableActionsTemplate,
   EditablePrefix,
   EditableSuffix,
-  type EditableClearContext,
   type EditableActionsContext,
   type InlineTextSaved,
 } from 'angular-inline-select';
@@ -161,7 +159,10 @@ export interface InlinePhoneSaved {
        */
       display: inline-block;
       flex: none;
-      inline-size: var(--editable-phone-flag-width, var(--editable-lead-size, calc(var(--mat-sys-spacing, 0.25rem) * 4)));
+      inline-size: var(
+        --editable-phone-flag-width,
+        var(--editable-lead-size, calc(var(--mat-sys-spacing, 0.25rem) * 4))
+      );
       text-align: center;
       white-space: nowrap;
       overflow: clip;
@@ -353,19 +354,11 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
   );
 
   /**
-   * Consumer clear affordance — forwarded verbatim to the inner control,
-   * which owns the bubble. Clearing through its context callback lands here
-   * as a normal settlement (`null`, never a raw draft). Same re-projection
-   * reason as the affixes.
+   * Forwarded to the inner control, which owns the context menu: `false`
+   * never offers its clear. A clear lands here as a normal settlement
+   * (`null`, never a raw draft).
    */
-  clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
-
-  /** Forwarded to the inner control: `false` never offers the hover-bubble clear. */
   showClear = input(true);
-
-  private contentClear = contentChild(EditableClearTemplate);
-
-  protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
 
   /** The primary-actions slot, forwarded to the inner control with THIS payload. */
   actionsTemplate = input<TemplateRef<EditableActionsContext<InlinePhoneActions>> | undefined>(
@@ -434,7 +427,10 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     const { prefix, number } = splitDialString(raw);
     const result = this.engine()!.parse(number, this.defaultCountry());
 
-    return { prefix, result: prefix && result === null ? { ok: false, reason: 'too-short' } : result };
+    return {
+      prefix,
+      result: prefix && result === null ? { ok: false, reason: 'too-short' } : result,
+    };
   }
 
   /** The stored form of a readable number: E.164, or the prefixed `00` dial string. */
@@ -670,7 +666,11 @@ export class AngularInlinePhone implements FormValueControl<string | null> {
     // The parse gate blocks unreadable commits; the fallback covers discards
     // rolling back to a baseline the current codec cannot read.
     const value =
-      result === null ? null : result.ok ? this.#canonicalOf(prefix, result.e164) : this.canonical();
+      result === null
+        ? null
+        : result.ok
+          ? this.#canonicalOf(prefix, result.e164)
+          : this.canonical();
 
     if (session.changed) {
       this.value.set(value);

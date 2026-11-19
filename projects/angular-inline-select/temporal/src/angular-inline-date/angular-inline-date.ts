@@ -18,7 +18,7 @@ import {
   type Signal,
   viewChild,
 } from '@angular/core';
-import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
+import { DOCUMENT, NgComponentOutlet, NgTemplateOutlet } from '@angular/common';
 
 // Forms
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
@@ -32,11 +32,11 @@ import {
   EditablePrefix,
   EditableSuffix,
   BubbleMenu,
-  EditableClearButton,
+  EDITABLE_CLEAR_BUTTON,
+  EDITABLE_CLEAR_BUTTON_CONTEXT,
   OverlayLeave,
-  EditableClearTemplate,
   type BubbleMenuSide,
-  type EditableClearContext,
+  type EditableClearButtonContext,
   watchHoverScope,
   type EditableHoverScopePress,
   EditableActionsTemplate,
@@ -76,7 +76,7 @@ import {
 import {
   makeSideSessionChrome,
   makeClearBubbleVisibility,
-  makeClearContexts,
+  NEVER_EDITING,
   makeShapeMemory,
   makeSideCore,
   sideSize,
@@ -193,6 +193,7 @@ let nextPanelId = 0;
   selector: 'angular-inline-date',
   imports: [
     // Angular
+    NgComponentOutlet,
     NgTemplateOutlet,
 
     // CDK
@@ -202,7 +203,6 @@ let nextPanelId = 0;
     // Components
     Calendar,
     BubbleMenu,
-    EditableClearButton,
     OverlayLeave,
   ],
   templateUrl: './angular-inline-date.html',
@@ -324,11 +324,11 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   ariaLabel = input<string | undefined>(undefined);
 
   /**
-   * Which edge a SINGLE field's clear bubble grows from. Unset, the leaf
-   * ROLE decides (`INLINE_TEMPORAL_BUBBLE_SIDE` — `rangeDay`/`rangeStart`
-   * provide `'start'` so inline-START leaves open outward), else `'end'`.
-   * Range fields ignore this: each side's bubble always opens outward
-   * (start→left, end→right).
+   * Which edge a SINGLE field keeps its clear button on, and its actions
+   * bubble grows from. Unset, the leaf ROLE decides
+   * (`INLINE_TEMPORAL_BUBBLE_SIDE` — `rangeDay`/`rangeStart` provide
+   * `'start'` so inline-START leaves face outward), else `'end'`. Range
+   * fields ignore this: each side faces outward (start→left, end→right).
    */
   clearBubbleSide = input<BubbleMenuSide | undefined>(undefined);
 
@@ -1449,45 +1449,76 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
     return (key === 'start' ? this.startInput() : this.endInput())?.nativeElement;
   }
 
-  // -- Clear affordance (idle hover bubble; per-side for a range) ----------------
+  // -- Clear affordance (a small button in the field; one per side for a range) --
 
   /**
-   * The clear affordance's opt-out. `false` never offers the hover-bubble
-   * clear (stock button or `clearTemplate` alike): the value can still be
-   * emptied, but only the long way — open the editor, delete, save. For
-   * hosts whose house rule is that emptying a field is a deliberate act,
-   * never a one-click shortcut. `true` (the default) keeps the bubble's own
-   * policy (never on required / disabled / readonly / empty / editing).
+   * The clear button's opt-out. `false` never renders it: the value can
+   * still be emptied, but only the long way — open the editor, delete,
+   * save. For hosts whose house rule is that emptying a field is a
+   * deliberate act, never a one-click shortcut. `true` (the default) keeps
+   * the button's own policy (never on required / disabled / readonly /
+   * empty fields, never in filter mode; out of sight while editing).
    */
   showClear = input(true);
 
-  #clearVisibility = makeClearBubbleVisibility({
-    enabled: this.showClear,
+  /**
+   * Whether a side HAS a button — the clear policy less its `editing` term.
+   * The button's room is part of the field's width, so it must not come and
+   * go with the session: focusing a field would move its text under the
+   * pointer. While editing the button only goes out of sight.
+   */
+  #clearOffer = makeClearBubbleVisibility({
+    // Never in filter mode: a filter is emptied in the field itself.
+    enabled: computed(() => this.showClear() && !this.isFilter()),
     required: this.required,
     disabled: this.effectiveDisabled,
     readonly: this.effectiveReadonly,
-    editing: this.editing,
-    // The RAW range: an unresolved injected value still offers its clear.
+    editing: NEVER_EDITING,
     range: this.#rawRange,
   });
 
-  protected clearCanShowSingle = this.#clearVisibility.single;
-  protected clearCanShowStart = this.#clearVisibility.start;
-  protected clearCanShowEnd = this.#clearVisibility.end;
+  /** The button before the first input: a range's start side, or a single field facing inline-start. */
+  protected clearSlotStart = computed(() =>
+    this.twoFields()
+      ? this.#clearOffer.start()
+      : this.#clearOffer.single() && this.effectiveClearBubbleSide() === 'start',
+  );
 
-  /**
-   * Consumer clear affordance — REPLACES the stock button in EVERY bubble
-   * this control stamps (both sides of a range, or the single field). See
-   * {@link EditableClearTemplate}: the context's callback is what makes a
-   * confirm-before-clear possible, since clearing IS the commit.
-   */
-  clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
+  /** The button after the last input: a range's end side, or a single field facing inline-end. */
+  protected clearSlotEnd = computed(() =>
+    this.twoFields()
+      ? this.#clearOffer.end()
+      : this.#clearOffer.single() && this.effectiveClearBubbleSide() === 'end',
+  );
 
-  private contentClear = contentChild(EditableClearTemplate);
+  /** The renderer of the button (`provideEditableClearButton`; a native × by default). */
+  protected readonly clearButton = inject(EDITABLE_CLEAR_BUTTON);
 
-  protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
+  #clearInjectors: Partial<Record<SideKey, Injector>> = {};
 
-  /** The primary-actions slot — stamped once per bubble with that side's payload. */
+  /** What a slot's button is handed — made the first time that slot renders. */
+  protected clearInjector(slot: SideKey) {
+    return (this.#clearInjectors[slot] ??= Injector.create({
+      parent: this.#injector,
+      providers: [{ provide: EDITABLE_CLEAR_BUTTON_CONTEXT, useValue: this.#clearContext(slot) }],
+    }));
+  }
+
+  /** A single field clears its whole value — the start side internally — from whichever slot it uses. */
+  #clearContext(slot: SideKey): EditableClearButtonContext {
+    const ranged = this.twoFields;
+    const intl = this.intl;
+
+    return {
+      clear: () => this.clearSide(ranged() ? slot : 'start'),
+      label: () => intl.clearLabel(ranged() ? slot : 'single', intl.dateLabel()),
+      get side() {
+        return ranged() ? slot : null;
+      },
+    };
+  }
+
+  /** The actions slot — stamped once per bubble with that side's payload. */
   actionsTemplate = input<TemplateRef<EditableActionsContext<InlineDateActions>> | undefined>(
     undefined,
   );
@@ -1519,25 +1550,15 @@ export class AngularInlineDate implements FormValueControl<InlineDateValue> {
   protected actionsContextStart = this.#actionsContexts.start;
   protected actionsContextEnd = this.#actionsContexts.end;
 
-  #clearContexts = makeClearContexts({
-    clear: (key) => this.clearBubble(key),
-    focus: (key) => this.#inputOf(key)?.focus(),
-    label: (side) => this.intl.clearLabel(side, this.intl.dateLabel()),
-  });
-
-  protected clearContextSingle = this.#clearContexts.single;
-  protected clearContextStart = this.#clearContexts.start;
-  protected clearContextEnd = this.#clearContexts.end;
-
   /**
-   * Clears one side from the idle hover bubble — a commit AND an interaction
+   * Clears one side of the idle field — a commit AND an interaction
    * (mat-faithful): it writes `null` into that side (the OTHER side is never
    * nuked, shape-echoed), re-baselines both sides so a later focus can't
    * re-commit a stale draft, marks the field touched, and settles once. In the
    * single shape `key` is `'start'` and the whole value clears.
    */
-  protected clearBubble(key: SideKey) {
-    // Idle-only: the bubble is hidden while editing; guard anyway so a stray
+  protected clearSide(key: SideKey) {
+    // Idle-only: the button is out of sight while editing; guard anyway so a stray
     // clear can't strand a frozen draft mid-session.
     if (this.editing()) return;
 

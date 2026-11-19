@@ -32,11 +32,9 @@ import {
   EditablePrefix,
   EditableSuffix,
   type BubbleMenuSide,
-  type EditableClearContext,
   BubbleMenu,
-  EditableClearButton,
+  EditableContextMenu,
   OverlayLeave,
-  EditableClearTemplate,
   watchHoverScope,
   type EditableHoverScopePress,
   EditableActionsTemplate,
@@ -107,7 +105,6 @@ export interface InlineDurationSaved {
 
     // Components
     BubbleMenu,
-    EditableClearButton,
     OverlayLeave,
   ],
   templateUrl: './angular-inline-duration.html',
@@ -161,7 +158,7 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   ariaLabel = input<string | undefined>(undefined);
 
   /**
-   * Which edge the clear bubble grows from. Unset, the leaf ROLE decides
+   * Which edge the actions bubble grows from. Unset, the leaf ROLE decides
    * (`INLINE_TEMPORAL_BUBBLE_SIDE` — inline-START leaves provide `'start'`
    * so the outer leaves open outward), else `'end'`.
    */
@@ -449,6 +446,12 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
    * caret placement; chrome inside the unit keeps its own handling.
    */
   protected handleUnitMouseDown(event: MouseEvent) {
+    // The right button's press belongs to the context menu: it must not open a session first.
+    if (event.button === 2 && this.clearCanShow() && this.#contextMenu.enabled) {
+      event.preventDefault();
+      return;
+    }
+
     if (this.effectiveDisabled() || this.effectiveReadonly()) return;
     if (!isUnitSpacePress(event, this.field().nativeElement)) return;
 
@@ -621,9 +624,9 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
     this.#panel.toggle();
   }
 
-  // -- Clear affordance (idle hover bubble) --------------------------------------
+  // -- Context menu: Edit + Clear ---------------------------------------------------
 
-  /** The clear bubble may show while idle and non-empty on an unlocked field. */
+  /** A clear may be offered while idle and non-empty on an unlocked field. */
   protected clearCanShow = computed(
     () =>
       this.showClear() &&
@@ -635,28 +638,32 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   );
 
   /**
-   * Consumer clear affordance — REPLACES the stock button inside the bubble.
-   * See {@link EditableClearTemplate}: the context's callback is what makes a
-   * confirm-before-clear possible, since clearing IS the commit. Duration is
-   * always single-valued, so the context's `side` is always `null`.
-   */
-  clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
-
-  /**
-   * The clear affordance's opt-out. `false` never offers the hover-bubble
-   * clear (stock button or `clearTemplate` alike): the value can still be
-   * emptied, but only the long way — open the editor, delete, save. For
-   * hosts whose house rule is that emptying a field is a deliberate act,
-   * never a one-click shortcut. `true` (the default) keeps the bubble's own
-   * policy (never on required / disabled / readonly / empty / editing).
+   * The clear's opt-out. `false` never offers the context menu's clear: the
+   * value can still be emptied, but only the long way — open the editor,
+   * delete, save. For hosts whose house rule is that emptying a field is a
+   * deliberate act, never a shortcut. `true` (the default) keeps the menu's
+   * own policy (never on required / disabled / readonly / empty / editing).
    */
   showClear = input(true);
 
-  private contentClear = contentChild(EditableClearTemplate);
+  #contextMenu = inject(EditableContextMenu);
 
-  protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
+  /**
+   * A right-click on the field (or on its hover scope's space) offers Edit
+   * and Clear — only where a clear may be offered at all; everywhere else
+   * the gesture stays the platform's.
+   */
+  protected handleContextMenu(event: Event) {
+    if (!this.clearCanShow()) return;
 
-  /** The primary-actions slot. */
+    this.#contextMenu.open(event, {
+      anchor: this.field().nativeElement,
+      edit: () => this.focus(),
+      clear: () => this.clearValue(),
+    });
+  }
+
+  /** The actions slot — the hover bubble's content. */
   actionsTemplate = input<TemplateRef<EditableActionsContext<InlineDurationActions>> | undefined>(
     undefined,
   );
@@ -678,25 +685,13 @@ export class AngularInlineDuration implements FormValueControl<number | null> {
   });
   #focusAction = () => this.durationInput()?.nativeElement.focus();
 
-  #clearCallback = () => this.clearBubble();
-
-  #focusCallback = () => this.focus();
-
-  protected clearContext = computed<EditableClearContext>(() => ({
-    $implicit: this.#clearCallback,
-    clear: this.#clearCallback,
-    side: null,
-    label: this.#intl.clearLabel('single', this.#intl.durationLabel()),
-    focus: this.#focusCallback,
-  }));
-
   /**
-   * Clears the field from the idle hover bubble — a commit AND an interaction
-   * (mat-faithful): writes `emptyValue`, marks the field touched, and settles
-   * once so a bound schema (and a range group) sees the clear.
+   * Clears the idle field — a commit AND an interaction (mat-faithful):
+   * writes `emptyValue`, marks the field touched, and settles once so a
+   * bound schema (and a range group) sees the clear.
    */
-  protected clearBubble() {
-    // Idle-only: the bubble is hidden while editing; guard anyway.
+  protected clearValue() {
+    // Idle-only: the menu is never offered while editing; guard anyway.
     if (this.editing() || this.isEmpty()) return;
 
     const empty = this.emptyValue();

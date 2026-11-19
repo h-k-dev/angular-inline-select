@@ -13,7 +13,6 @@ import { FormField, form, required } from '@angular/forms/signals';
 // Editables
 import { AngularInlineDuration, type InlineDurationSaved } from './angular-inline-duration';
 import type { IntervalRounding } from '../interval-rounding';
-import { EditableClear, EditableClearTemplate } from 'angular-inline-select';
 import {
   parseDuration,
   formatDuration,
@@ -219,45 +218,68 @@ describe('the aria-live announcer (visually hidden)', () => {
 // =============================================================================
 
 @Component({
-  imports: [
-    // Components
-    AngularInlineDuration,
-
-    // Directives
-    EditableClear,
-    EditableClearTemplate,
-  ],
-  template: `
-    <angular-inline-duration [(value)]="value" (saved)="sessions.push($event)">
-      <ng-template editableClear let-clear let-label="label" let-side="side">
-        <button
-          editableClear
-          class="confirm-clear"
-          [attr.aria-label]="label"
-          [attr.data-side]="side"
-          (clear)="request(clear)"
-        >
-          ✕
-        </button>
-      </ng-template>
-    </angular-inline-duration>
-  `,
+  imports: [AngularInlineDuration],
+  template: `<angular-inline-duration [(value)]="value" (saved)="sessions.push($event)" />`,
 })
 class DurationClearHost {
   value = signal<number | null>(5400);
   sessions: InlineDurationSaved[] = [];
+}
 
-  /** Stands in for a confirmation dialog: capture the callback, resolve later. */
-  pending: (() => void) | null = null;
+/** Right-clicks `target`; the event tells whether the control took the gesture. */
+function rightClick(target: Element): MouseEvent {
+  const event = new MouseEvent('contextmenu', {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 12,
+    clientY: 12,
+  });
+  target.dispatchEvent(event);
+  return event;
+}
 
-  request(clear: () => void) {
-    this.pending = clear;
-  }
+function menuRows(): HTMLButtonElement[] {
+  return [...document.querySelectorAll<HTMLButtonElement>('.editable-context-menu__item')];
+}
+
+function closeMenu() {
+  document
+    .querySelector('.editable-context-menu')
+    ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 }
 
 describe('AngularInlineDuration — clear affordance', () => {
-  it('stamps the consumer template and hands the commit over', () => {
-    const fixture = TestBed.createComponent(DurationClearHost);
+  let fixture: ComponentFixture<DurationClearHost>;
+
+  const input = () => fixture.nativeElement.querySelector('.inline-duration__input') as HTMLElement;
+
+  beforeEach(() => {
+    fixture = TestBed.createComponent(DurationClearHost);
+    fixture.detectChanges();
+  });
+
+  afterEach(closeMenu);
+
+  it('a right-click offers Edit, then Clear', () => {
+    const event = rightClick(input());
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(menuRows().map((row) => row.textContent?.trim())).toEqual(['Edit', 'Clear']);
+  });
+
+  it('Clear commits the empty value', () => {
+    rightClick(input());
+    menuRows()[1].click();
+    fixture.detectChanges();
+
+    const host = fixture.componentInstance;
+    expect(host.value()).toBeNull();
+    expect(host.sessions).toEqual([{ value: null, changed: true }]);
+  });
+
+  it("an empty field keeps the platform's menu, and shows no hover bubble", () => {
+    fixture.componentInstance.value.set(null);
     fixture.detectChanges();
 
     fixture.nativeElement
@@ -265,25 +287,8 @@ describe('AngularInlineDuration — clear affordance', () => {
       .dispatchEvent(new MouseEvent('mouseenter'));
     fixture.detectChanges();
 
-    const button = document.querySelector<HTMLButtonElement>(
-      '.editable-bubble button.confirm-clear',
-    );
-    expect(button).not.toBeNull();
-    // Single-valued: no side to distinguish, and the label names the field.
-    expect(button!.getAttribute('data-side')).toBeNull();
-    expect(button!.getAttribute('aria-label')).toBe('Clear duration');
-
-    button!.dispatchEvent(new MouseEvent('click'));
-    fixture.detectChanges();
-
-    const host = fixture.componentInstance;
-    expect(host.value()).toBe(5400);
-
-    host.pending!();
-    fixture.detectChanges();
-
-    expect(host.value()).toBeNull();
-    expect(host.sessions).toEqual([{ value: null, changed: true }]);
+    expect(rightClick(input()).defaultPrevented).toBe(false);
+    expect(document.querySelector('.editable-bubble')).toBeNull();
   });
 });
 

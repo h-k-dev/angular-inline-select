@@ -22,11 +22,7 @@ import type { ValidationError } from '@angular/forms/signals';
 import type { ConnectedPosition } from '@angular/cdk/overlay';
 
 // Editables
-import type {
-  EditableClearContext,
-  EditableActionsContext,
-  EditableScopeContract,
-} from 'angular-inline-select';
+import type { EditableActionsContext, EditableScopeContract } from 'angular-inline-select';
 import { INLINE_TEMPORAL_LEAF_STATE } from './leaf-state';
 import { TemporalIntl } from './temporal-intl';
 
@@ -177,6 +173,9 @@ export function makeShapeMemory<V, S>(options: {
   return { shape, twoFields: options.ranged };
 }
 
+/** For a clear affordance that keeps its place through a session — see the date field's button. */
+export const NEVER_EDITING = computed(() => false);
+
 /** The actions slot's guards: none of the clear's house rules apply. */
 export const ACTIONS_GUARDS = {
   required: computed(() => false),
@@ -185,11 +184,11 @@ export const ACTIONS_GUARDS = {
 } as const;
 
 /**
- * The clear-bubble policy: never on required/disabled/readonly fields,
- * never mid-edit, never when the host opted out (`enabled` — the control's
- * `showClear`); the single bubble needs ANY value, a range side its own.
+ * The clear policy: never on required/disabled/readonly fields, never
+ * mid-edit, never when the host opted out (`enabled` — the control's
+ * `showClear`); a single field needs ANY value, a range side its own.
  *
- * Also drives the ACTIONS slot, with the house guards handed in as constant
+ * Also drives the ACTIONS bubble, with the house guards handed in as constant
  * `false` (`ACTIONS_GUARDS`): actions ignore required / disabled / readonly
  * on purpose — a readonly value still opens, calls, copies.
  */
@@ -221,48 +220,29 @@ export function makeClearBubbleVisibility(options: {
 }
 
 /**
- * The `editableClear` template contexts — one per bubble a temporal control
- * can stamp (`single`, `start`, `end`). The control keeps owning WHAT a clear
- * does; this only packages the handover: a side-bound callback, the side, the
- * localized label (also what the STOCK button speaks, so the two can never
- * drift), and focus restoration for the side that was cleared.
- *
- * The callbacks are bound ONCE, outside the computed: a consumer's clear can
- * resolve long after the stamp (a confirmation dialog), and a re-created
- * callback would re-render their button under the pointer for a locale
- * change that has nothing to do with it.
+ * Which side of a range pair a gesture belongs to: the side whose input it
+ * landed on, else the one nearer the point along the inline axis. Without a
+ * point (a keyboard-raised gesture) or without layout it is the start side.
  */
-export function makeClearContexts(options: {
-  clear: (key: SideKey) => void;
-  label: (side: SideKey | 'single') => string;
-  focus: (key: SideKey) => void;
-}): {
-  single: Signal<EditableClearContext>;
-  start: Signal<EditableClearContext>;
-  end: Signal<EditableClearContext>;
-} {
-  const clearStart = () => options.clear('start');
-  const clearEnd = () => options.clear('end');
-  const focusStart = () => options.focus('start');
-  const focusEnd = () => options.focus('end');
+export function sideOfGesture(
+  event: Event,
+  start: HTMLElement | undefined,
+  end: HTMLElement | undefined,
+): SideKey {
+  if (end === undefined || start === undefined) return 'start';
 
-  const context = (
-    clear: () => void,
-    focus: () => void,
-    side: SideKey | null,
-    key: SideKey | 'single',
-  ): Signal<EditableClearContext> =>
-    computed(() => ({ $implicit: clear, clear, side, label: options.label(key), focus }));
+  const target = event.target as Node | null;
+  if (target !== null && end.contains(target)) return 'end';
+  if (target !== null && start.contains(target)) return 'start';
 
-  return {
-    // A single field clears the whole value — which IS the start side
-    // internally (shape-echo), but the consumer is told `null`: there is no
-    // other side to distinguish it from.
-    single: context(clearStart, focusStart, null, 'single'),
-    start: context(clearStart, focusStart, 'start', 'start'),
-    // Focus returns to the side that was cleared, not to the pair's head.
-    end: context(clearEnd, focusEnd, 'end', 'end'),
-  };
+  const x =
+    event instanceof MouseEvent
+      ? event.clientX
+      : (event as CustomEvent<{ clientX?: number } | null>).detail?.clientX;
+  if (typeof x !== 'number') return 'start';
+
+  const gap = (box: DOMRect) => (x < box.left ? box.left - x : x > box.right ? x - box.right : 0);
+  return gap(end.getBoundingClientRect()) < gap(start.getBoundingClientRect()) ? 'end' : 'start';
 }
 
 /**

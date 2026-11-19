@@ -34,6 +34,13 @@ export interface EditableHoverScopePress {
   clientY: number;
 }
 
+/**
+ * The context-menu channel, scope → field: a right-click on the scope's own
+ * space, handed to the one field inside. Cancelable — the field cancels it
+ * when it opened its menu, and the scope then keeps the platform's own away.
+ */
+export const EDITABLE_HOVER_SCOPE_CONTEXT_MENU_EVENT = 'editableScopeContextMenu';
+
 /** Whether an element carries its own (non-whitespace) text — a label, a value, a caption. */
 function bearsText(element: Element): boolean {
   for (const node of element.childNodes) {
@@ -104,6 +111,7 @@ const INTERACTIVE_SELECTOR =
     '(mouseenter)': 'hovered.set(true)',
     '(mouseleave)': 'hovered.set(false)',
     '(mousedown)': 'handleMouseDown($event)',
+    '(contextmenu)': 'handleContextMenu($event)',
   },
 })
 export class EditableHoverScope {
@@ -120,22 +128,44 @@ export class EditableHoverScope {
   protected handleMouseDown(event: MouseEvent) {
     if (!this.pressToFocus() || event.button !== 0 || event.shiftKey) return;
 
-    const target = event.target as Element | null;
-    if (target === null) return;
-    // The field owns presses on itself; chrome owns its own; text keeps its
-    // press (and its selection) — only the scope's SPACE forwards.
-    if (target.closest(`${FIELD_SELECTOR}, ${INTERACTIVE_SELECTOR}`) !== null) return;
-    if (bearsText(target)) return;
-
-    const fields = this.#host.nativeElement.querySelectorAll(FIELD_SELECTOR);
-    if (fields.length !== 1) return;
+    const field = this.#fieldFor(event);
+    if (field === null) return;
 
     event.preventDefault();
-    fields[0].dispatchEvent(
+    field.dispatchEvent(
       new CustomEvent<EditableHoverScopePress>(EDITABLE_HOVER_SCOPE_PRESS_EVENT, {
         detail: { clientX: event.clientX, clientY: event.clientY },
       }),
     );
+  }
+
+  /** A right-click on the scope's space is a right-click on its field (same rule as the press). */
+  protected handleContextMenu(event: MouseEvent) {
+    if (!this.pressToFocus()) return;
+
+    const field = this.#fieldFor(event);
+    if (field === null) return;
+
+    const untouched = field.dispatchEvent(
+      new CustomEvent<EditableHoverScopePress>(EDITABLE_HOVER_SCOPE_CONTEXT_MENU_EVENT, {
+        detail: { clientX: event.clientX, clientY: event.clientY },
+        cancelable: true,
+      }),
+    );
+    if (!untouched) event.preventDefault();
+  }
+
+  /** The one field a gesture on the scope's SPACE belongs to, or null when it is not the scope's to forward. */
+  #fieldFor(event: MouseEvent): Element | null {
+    const target = event.target as Element | null;
+    if (target === null) return null;
+    // The field owns presses on itself; chrome owns its own; text keeps its
+    // press (and its selection) — only the scope's SPACE forwards.
+    if (target.closest(`${FIELD_SELECTOR}, ${INTERACTIVE_SELECTOR}`) !== null) return null;
+    if (bearsText(target)) return null;
+
+    const fields = this.#host.nativeElement.querySelectorAll(FIELD_SELECTOR);
+    return fields.length === 1 ? fields[0] : null;
   }
 }
 

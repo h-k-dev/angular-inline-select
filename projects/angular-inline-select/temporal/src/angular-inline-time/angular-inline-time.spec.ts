@@ -14,7 +14,6 @@ import { FormField, form, required } from '@angular/forms/signals';
 import { AngularInlineTime, type InlineTimeSaved } from './angular-inline-time';
 import { EditablePrefix, EditableSuffix } from 'angular-inline-select';
 import type { IntervalRounding } from '../interval-rounding';
-import { EditableClear, EditableClearTemplate } from 'angular-inline-select';
 import {
   parseTime,
   parseTimeDraft,
@@ -903,74 +902,110 @@ describe('the aria-live announcer (visually hidden)', () => {
 // =============================================================================
 
 @Component({
-  imports: [
-    // Components
-    AngularInlineTime,
-
-    // Directives
-    EditableClear,
-    EditableClearTemplate,
-  ],
+  imports: [AngularInlineTime],
   template: `
-    <angular-inline-time [(value)]="value" [ranged]="true" (saved)="sessions.push($event)">
-      <ng-template editableClear let-clear let-label="label" let-side="side">
-        <button
-          editableClear
-          class="confirm-clear"
-          [attr.aria-label]="label"
-          [attr.data-side]="side"
-          (clear)="request(side, clear)"
-        >
-          ✕
-        </button>
-      </ng-template>
-    </angular-inline-time>
+    <angular-inline-time
+      [(value)]="value"
+      [ranged]="true"
+      [required]="required()"
+      (saved)="sessions.push($event)"
+    />
   `,
 })
 class TimeClearHost {
   value = signal<InlineTimeValue>({ start: at('09:00'), end: at('17:30') });
+  required = signal(false);
   sessions: InlineTimeSaved[] = [];
+}
 
-  /** Stands in for a confirmation dialog: capture the callback, resolve later. */
-  pending = new Map<string, () => void>();
+/** Right-clicks `target`; the event tells whether the control took the gesture. */
+function rightClick(target: Element): MouseEvent {
+  const event = new MouseEvent('contextmenu', {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 12,
+    clientY: 12,
+  });
+  target.dispatchEvent(event);
+  return event;
+}
 
-  request(side: string | null, clear: () => void) {
-    this.pending.set(side ?? 'single', clear);
-  }
+function menuRows(): HTMLButtonElement[] {
+  return [...document.querySelectorAll<HTMLButtonElement>('.editable-context-menu__item')];
+}
+
+function closeMenu() {
+  document
+    .querySelector('.editable-context-menu')
+    ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 }
 
 describe('AngularInlineTime — clear affordance', () => {
-  it('stamps the consumer template per side and hands the commit over', () => {
-    const fixture = TestBed.createComponent(TimeClearHost);
+  let fixture: ComponentFixture<TimeClearHost>;
+
+  const inputs = () =>
+    [...fixture.nativeElement.querySelectorAll('.inline-time__input')] as HTMLInputElement[];
+
+  beforeEach(() => {
+    fixture = TestBed.createComponent(TimeClearHost);
     fixture.detectChanges();
+  });
 
-    const inputs = [
-      ...fixture.nativeElement.querySelectorAll('.inline-time__input'),
-    ] as HTMLElement[];
-    for (const input of inputs) input.dispatchEvent(new MouseEvent('mouseenter'));
-    fixture.detectChanges();
+  afterEach(closeMenu);
 
-    const buttons = [
-      ...document.querySelectorAll<HTMLButtonElement>('.editable-bubble button.confirm-clear'),
-    ];
-    expect(buttons.map((b) => [b.getAttribute('data-side'), b.getAttribute('aria-label')])).toEqual(
-      [
-        ['start', 'Clear start time'],
-        ['end', 'Clear end time'],
-      ],
-    );
+  it("a right-click on a side offers Edit and that side's clear", () => {
+    const event = rightClick(inputs()[1]);
 
-    buttons[0].dispatchEvent(new MouseEvent('click'));
+    expect(event.defaultPrevented).toBe(true);
+    expect(menuRows().map((row) => row.textContent?.trim())).toEqual(['Edit', 'Clear end time']);
+  });
+
+  it('Clear empties the side the gesture landed on, and only that one', () => {
+    rightClick(inputs()[0]);
+    menuRows()[1].click();
     fixture.detectChanges();
 
     const host = fixture.componentInstance;
-    expect(host.value()).toEqual({ start: at('09:00'), end: at('17:30') });
-
-    host.pending.get('start')!();
-    fixture.detectChanges();
-
     expect(host.value()).toEqual({ start: null, end: at('17:30') });
     expect(host.sessions.at(-1)).toMatchObject({ changed: true, side: 'start' });
+    expect(menuRows()).toEqual([]);
+  });
+
+  it('Edit focuses the side the gesture landed on', () => {
+    rightClick(inputs()[1]);
+    menuRows()[0].click();
+    fixture.detectChanges();
+
+    expect(document.activeElement).toBe(inputs()[1]);
+    inputs()[1].blur();
+  });
+
+  it("an empty side keeps the platform's menu", () => {
+    fixture.componentInstance.value.set({ start: at('09:00'), end: null });
+    fixture.detectChanges();
+
+    expect(rightClick(inputs()[1]).defaultPrevented).toBe(false);
+    expect(rightClick(inputs()[0]).defaultPrevented).toBe(true);
+  });
+
+  it('a required field offers no menu, and no hover bubble either', () => {
+    fixture.componentInstance.required.set(true);
+    fixture.detectChanges();
+
+    for (const input of inputs()) input.dispatchEvent(new MouseEvent('mouseenter'));
+    fixture.detectChanges();
+
+    expect(rightClick(inputs()[0]).defaultPrevented).toBe(false);
+    expect(menuRows()).toEqual([]);
+    expect(document.querySelector('.editable-bubble')).toBeNull();
+  });
+
+  it("the right button's press opens no session when the menu will answer", () => {
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 2 });
+    inputs()[0].dispatchEvent(press);
+
+    expect(press.defaultPrevented).toBe(true);
   });
 });
 

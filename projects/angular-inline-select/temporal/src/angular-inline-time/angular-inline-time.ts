@@ -29,11 +29,9 @@ import {
   EditablePrefix,
   EditableSuffix,
   BubbleMenu,
-  EditableClearButton,
+  EditableContextMenu,
   OverlayLeave,
-  EditableClearTemplate,
   type BubbleMenuSide,
-  type EditableClearContext,
   watchHoverScope,
   type EditableHoverScopePress,
   EditableActionsTemplate,
@@ -60,7 +58,7 @@ import { focusInputNearPoint, isUnitSpacePress } from '../inline-unit';
 import {
   makeSideSessionChrome,
   makeClearBubbleVisibility,
-  makeClearContexts,
+  sideOfGesture,
   makeShapeMemory,
   makeSideCore,
   sideSize,
@@ -200,7 +198,6 @@ interface TimeSide extends SideCore<DbDateTime> {
 
     // Components
     BubbleMenu,
-    EditableClearButton,
     OverlayLeave,
   ],
   templateUrl: './angular-inline-time.html',
@@ -279,7 +276,7 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   ariaLabel = input<string | undefined>(undefined);
 
   /**
-   * Which edge a SINGLE field's clear bubble grows from. Unset, the leaf
+   * Which edge a SINGLE field's actions bubble grows from. Unset, the leaf
    * ROLE decides (`INLINE_TEMPORAL_BUBBLE_SIDE` — `rangeDay`/`rangeStart`
    * provide `'start'` so inline-START leaves open outward), else `'end'`.
    * Range fields ignore this: each side's bubble always opens outward
@@ -687,6 +684,12 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
    * caret placement; chrome inside the unit keeps its own handling.
    */
   protected handleUnitMouseDown(event: MouseEvent) {
+    // The right button's press belongs to the context menu: it must not open a session first.
+    if (event.button === 2 && this.#contextMenu.enabled && this.#clearableSideAt(event) !== null) {
+      event.preventDefault();
+      return;
+    }
+
     if (this.effectiveDisabled() || this.effectiveReadonly()) return;
     if (!isUnitSpacePress(event, this.field().nativeElement)) return;
 
@@ -980,15 +983,14 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
     this.#settle(key);
   }
 
-  // -- Clear affordance (idle hover bubble; per-side for a range) --------------
+  // -- Context menu: Edit + Clear (per side for a range) ---------------------------
 
   /**
-   * The clear affordance's opt-out. `false` never offers the hover-bubble
-   * clear (stock button or `clearTemplate` alike): the value can still be
-   * emptied, but only the long way — open the editor, delete, save. For
-   * hosts whose house rule is that emptying a field is a deliberate act,
-   * never a one-click shortcut. `true` (the default) keeps the bubble's own
-   * policy (never on required / disabled / readonly / empty / editing).
+   * The clear's opt-out. `false` never offers the context menu's clear: the
+   * value can still be emptied, but only the long way — open the editor,
+   * delete, save. For hosts whose house rule is that emptying a field is a
+   * deliberate act, never a shortcut. `true` (the default) keeps the menu's
+   * own policy (never on required / disabled / readonly / empty / editing).
    */
   showClear = input(true);
 
@@ -1005,19 +1007,34 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   protected clearCanShowStart = this.#clearVisibility.start;
   protected clearCanShowEnd = this.#clearVisibility.end;
 
+  #contextMenu = inject(EditableContextMenu);
+
+  /** The side a gesture would clear — null where no clear may be offered there. */
+  #clearableSideAt(event: Event): SideKey | null {
+    if (!this.twoFields()) return this.clearCanShowSingle() ? 'start' : null;
+
+    const key = sideOfGesture(event, this.#inputOf('start'), this.#inputOf('end'));
+    return (key === 'start' ? this.clearCanShowStart() : this.clearCanShowEnd()) ? key : null;
+  }
+
   /**
-   * Consumer clear affordance — REPLACES the stock button in EVERY bubble
-   * this control stamps (both sides of a range, or the single field). See
-   * {@link EditableClearTemplate}: the context's callback is what makes a
-   * confirm-before-clear possible, since clearing IS the commit.
+   * A right-click on the field (or on its hover scope's space) offers Edit
+   * and Clear for the side it landed on — only where a clear may be offered
+   * at all; everywhere else the gesture stays the platform's.
    */
-  clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
+  protected handleContextMenu(event: Event) {
+    const key = this.#clearableSideAt(event);
+    if (key === null) return;
 
-  private contentClear = contentChild(EditableClearTemplate);
+    this.#contextMenu.open(event, {
+      anchor: this.field().nativeElement,
+      edit: () => this.#chrome.focusSide(key),
+      clear: () => this.clearSide(key),
+      clearLabel: this.twoFields() ? this.#intl.clearLabel(key, this.#intl.timeLabel()) : undefined,
+    });
+  }
 
-  protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
-
-  /** The primary-actions slot — stamped once per bubble with that side's payload. */
+  /** The actions slot — stamped once per bubble with that side's payload. */
   actionsTemplate = input<TemplateRef<EditableActionsContext<InlineTimeActions>> | undefined>(
     undefined,
   );
@@ -1049,26 +1066,16 @@ export class AngularInlineTime implements FormValueControl<InlineTimeValue> {
   protected actionsContextStart = this.#actionsContexts.start;
   protected actionsContextEnd = this.#actionsContexts.end;
 
-  #clearContexts = makeClearContexts({
-    clear: (key) => this.clearBubble(key),
-    focus: (key) => this.#inputOf(key)?.focus(),
-    label: (side) => this.#intl.clearLabel(side, this.#intl.timeLabel()),
-  });
-
-  protected clearContextSingle = this.#clearContexts.single;
-  protected clearContextStart = this.#clearContexts.start;
-  protected clearContextEnd = this.#clearContexts.end;
-
   /**
-   * Clears one side from the idle hover bubble — a commit AND an interaction
+   * Clears one side of the idle field — a commit AND an interaction
    * (mat-faithful): writes `null` into that side (the OTHER side is never
    * nuked, shape-echoed — half-open ranges are real states), re-baselines
    * both sides so a later focus can't re-commit a stale draft, marks the
    * field touched, and settles once. In the single shape `key` is `'start'`
    * and the whole value clears.
    */
-  protected clearBubble(key: SideKey) {
-    // Idle-only: the bubble is hidden while editing; guard anyway so a stray
+  protected clearSide(key: SideKey) {
+    // Idle-only: the menu is never offered while editing; guard anyway so a stray
     // clear can't strand a frozen draft mid-session.
     if (this.editing()) return;
 

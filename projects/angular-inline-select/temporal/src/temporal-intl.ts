@@ -100,10 +100,10 @@ export class TemporalIntl {
   }
 
   /**
-   * The clear-button accessible name (`'single'` → no side word) — spoken by
-   * the stock button AND handed to a consumer's own affordance through the
-   * `editableClear` template context, so a custom clear button stays
-   * localized for free.
+   * The clear's name (`'single'` → no side word) — the accessible name of the
+   * date field's in-field button (handed to an app's own renderer too, so it
+   * stays localized for free), and the text of a ranged time's Clear row in
+   * the context menu.
    *
    * `noun` is the field being cleared, AS its label reads (each control
    * passes its own — `dateLabel()`, `timeLabel()`, `durationLabel()`); it

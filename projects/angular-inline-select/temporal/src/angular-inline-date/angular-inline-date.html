@@ -10,12 +10,27 @@
   #field
   [class.inline-date--invalid]="errorsVisible()"
   [class.inline-date--scoped]="hasHoverScope()"
+  [class.inline-date--armed]="scopeHover()"
   (mousedown)="handleUnitMouseDown($event)"
   (editableScopePress)="handleScopePress($event)"
 >
   @if (prefixTpl(); as tpl) {
     <span class="inline-date__affix" aria-hidden="true">
       <ng-container [ngTemplateOutlet]="tpl" />
+    </span>
+  }
+
+  <!--
+    The clear button: in the field, beside the value it clears — before the
+    start of a range, after its end, after a single value. It keeps its room
+    through a session and only goes out of sight, so focusing never moves text.
+  -->
+  @if (clearSlotStart()) {
+    <span
+      class="inline-date__clear inline-date__clear--start"
+      [class.inline-date__clear--resting]="editing()"
+    >
+      <ng-container *ngComponentOutlet="clearButton; injector: clearInjector('start')" />
     </span>
   }
 
@@ -77,58 +92,43 @@
       (keydown)="handleInputKeydown('end', $event)"
     />
 
-    <!-- Range: a bubble per side, each opening OUTWARD (start→left, end→right). -->
-    <bubble-menu
-      [origin]="startInput"
-      side="start"
-      [canShow]="clearCanShowStart() || actionsCanShowStart()"
-      [armed]="scopeHover()"
-    >
-      @if (actionsCanShowStart()) {
-        <span class="editable-bubble__group editable-bubble__actions">
-          <ng-container *ngTemplateOutlet="actionsTpl()!; context: actionsContextStart()" />
-        </span>
-      }
-      @if (clearCanShowStart()) {
-        <span class="editable-bubble__group editable-bubble__clear">
-          @if (clearTpl(); as tpl) {
-            <ng-container *ngTemplateOutlet="tpl; context: clearContextStart()" />
-          } @else {
-            <button
-              editableClearButton
-              [attr.aria-label]="clearContextStart().label"
-              (clear)="clearBubble('start')"
-            ></button>
-          }
-        </span>
-      }
-    </bubble-menu>
+    <!-- Range: the consumer's actions in a bubble per side, each opening OUTWARD (start→left, end→right). -->
+    @if (actionsTpl()) {
+      <bubble-menu
+        [origin]="startInput"
+        side="start"
+        [canShow]="actionsCanShowStart()"
+        [armed]="scopeHover()"
+      >
+        @if (actionsCanShowStart()) {
+          <span class="editable-bubble__group editable-bubble__actions">
+            <ng-container *ngTemplateOutlet="actionsTpl()!; context: actionsContextStart()" />
+          </span>
+        }
+      </bubble-menu>
 
-    <bubble-menu
-      [origin]="endInput"
-      side="end"
-      [canShow]="clearCanShowEnd() || actionsCanShowEnd()"
-      [armed]="scopeHover()"
+      <bubble-menu
+        [origin]="endInput"
+        side="end"
+        [canShow]="actionsCanShowEnd()"
+        [armed]="scopeHover()"
+      >
+        @if (actionsCanShowEnd()) {
+          <span class="editable-bubble__group editable-bubble__actions">
+            <ng-container *ngTemplateOutlet="actionsTpl()!; context: actionsContextEnd()" />
+          </span>
+        }
+      </bubble-menu>
+    }
+  }
+
+  @if (clearSlotEnd()) {
+    <span
+      class="inline-date__clear inline-date__clear--end"
+      [class.inline-date__clear--resting]="editing()"
     >
-      @if (actionsCanShowEnd()) {
-        <span class="editable-bubble__group editable-bubble__actions">
-          <ng-container *ngTemplateOutlet="actionsTpl()!; context: actionsContextEnd()" />
-        </span>
-      }
-      @if (clearCanShowEnd()) {
-        <span class="editable-bubble__group editable-bubble__clear">
-          @if (clearTpl(); as tpl) {
-            <ng-container *ngTemplateOutlet="tpl; context: clearContextEnd()" />
-          } @else {
-            <button
-              editableClearButton
-              [attr.aria-label]="clearContextEnd().label"
-              (clear)="clearBubble('end')"
-            ></button>
-          }
-        </span>
-      }
-    </bubble-menu>
+      <ng-container *ngComponentOutlet="clearButton; injector: clearInjector('end')" />
+    </span>
   }
 
   @if (consumerSuffixTpl(); as tpl) {
@@ -160,30 +160,17 @@
   <span class="inline-date__sr" aria-live="polite">{{ revertNotice() }}</span>
 </span>
 
-<!-- Single field: one bubble anchored to the whole field, clearing the value. -->
-@if (!twoFields()) {
+<!-- Single field: the consumer's actions in one bubble anchored to the whole field. -->
+@if (!twoFields() && actionsTpl()) {
   <bubble-menu
     [origin]="field"
     [side]="effectiveClearBubbleSide()"
-    [canShow]="clearCanShowSingle() || actionsCanShowSingle()"
+    [canShow]="actionsCanShowSingle()"
     [armed]="scopeHover()"
   >
     @if (actionsCanShowSingle()) {
       <span class="editable-bubble__group editable-bubble__actions">
         <ng-container *ngTemplateOutlet="actionsTpl()!; context: actionsContextSingle()" />
-      </span>
-    }
-    @if (clearCanShowSingle()) {
-      <span class="editable-bubble__group editable-bubble__clear">
-        @if (clearTpl(); as tpl) {
-          <ng-container *ngTemplateOutlet="tpl; context: clearContextSingle()" />
-        } @else {
-          <button
-            editableClearButton
-            [attr.aria-label]="clearContextSingle().label"
-            (clear)="clearBubble('start')"
-          ></button>
-        }
       </span>
     }
   </bubble-menu>

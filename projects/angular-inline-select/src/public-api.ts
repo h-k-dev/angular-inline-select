@@ -12,6 +12,9 @@ export * from './lib/angular-inline-text/editable-text-intl';
 export * from './lib/bubble-menu/bubble-menu';
 export * from './lib/bubble-menu/editable-clear';
 export * from './lib/bubble-menu/editable-actions';
+export * from './lib/context-menu/editable-context-menu';
+export * from './lib/context-menu/editable-context-menu-config';
+export * from './lib/context-menu/editable-context-menu-session';
 // Shared utilities — control-agnostic building blocks any control may use.
 export * from './lib/utils/editable-scope/editable-scope';
 export * from './lib/utils/editable-hover-scope/editable-hover-scope';

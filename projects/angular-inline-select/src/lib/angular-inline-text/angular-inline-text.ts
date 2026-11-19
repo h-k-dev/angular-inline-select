@@ -54,11 +54,7 @@ import { EditablePrefix, EditableSuffix } from './editable-affix';
 import { EditableHint } from './editable-hint';
 import { EditableMenu } from './editable-menu';
 import { BubbleMenu } from '../bubble-menu/bubble-menu';
-import {
-  EditableClearButton,
-  EditableClearTemplate,
-  type EditableClearContext,
-} from '../bubble-menu/editable-clear';
+import { EditableContextMenu } from '../context-menu/editable-context-menu';
 import {
   EditableActionsTemplate,
   type EditableActionsContext,
@@ -134,7 +130,6 @@ export function normalizeString(value: string): string {
 
     // Components
     BubbleMenu,
-    EditableClearButton,
     OverlayLeave,
   ],
   templateUrl: './angular-inline-text.html',
@@ -836,6 +831,16 @@ export class AngularInlineText implements FormValueControl<string> {
     this.accept();
   }
 
+  /**
+   * The editors' save chord (Ctrl+S / ⌘S / Alt+S) commits like ⌘Enter. Taken
+   * from the browser either way: no "Save page as…", and on a Mac Option+S
+   * would otherwise type `ß` into the draft — hence Alt+S by key code.
+   */
+  protected handleSaveShortcut(event: Event) {
+    event.preventDefault();
+    this.accept();
+  }
+
   /** External draft writes (clear, programmatic) → the open editor, never clobbering typing. */
   syncEditor = effect(() => {
     const value = this.value() ?? '';
@@ -883,16 +888,9 @@ export class AngularInlineText implements FormValueControl<string> {
     parent: inject(Injector),
   });
 
-  // -- The bubble: actions + clear --------------------------------------------------
+  // -- The bubble: the consumer's actions -------------------------------------------
 
-  /** Replaces the stock clear button. Input or `ng-template[editableClear]` (see `EditableClearTemplate`). */
-  clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
-
-  private contentClear = contentChild(EditableClearTemplate);
-
-  protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
-
-  /** Buttons acting ON the value, before clear. Input or `ng-template[editableActions]`. */
+  /** Buttons acting ON the value. Input or `ng-template[editableActions]`. */
   actionsTemplate = input<TemplateRef<EditableActionsContext<unknown>> | undefined>(undefined);
 
   /** A wrapping control's payload instead of `{ value }` (the number's number, the phone's E.164). */
@@ -915,21 +913,22 @@ export class AngularInlineText implements FormValueControl<string> {
     () => this.actionsTpl() !== undefined && !this.isEmpty() && !this.editing(),
   );
 
-  protected readonly clearLabel = 'Clear value';
+  /** The bubble anchors right after the final word (see `watchContentEnd`) — measured only where one can show. */
+  protected bubbleContentOffset = watchContentEnd({
+    element: () => this.fieldArea().nativeElement,
+    empty: () => this.isEmpty() || this.actionsTpl() === undefined,
+    track: () => {
+      this.displayText();
+      this.wrapMode();
+    },
+  });
 
-  /** Stable, so a clear confirmed asynchronously still calls into a live control. */
-  protected readonly clearContext: EditableClearContext = {
-    $implicit: () => this.clearValue(),
-    clear: () => this.clearValue(),
-    side: null,
-    label: this.clearLabel,
-    focus: () => this.focus(),
-  };
+  // -- The context menu: Edit + Clear ------------------------------------------------
 
-  /** `false` never offers the one-click clear — emptying stays a deliberate edit. */
+  /** `false` never offers the menu's clear — emptying stays a deliberate edit. */
   showClear = input(true);
 
-  /** Never on empty, required, locked or editing fields (hover is the bubble's own business). */
+  /** Never on empty, required, locked or editing fields. */
   protected clearCanShow = computed(
     () =>
       this.showClear() &&
@@ -940,24 +939,26 @@ export class AngularInlineText implements FormValueControl<string> {
       !this.editing(),
   );
 
-  protected bubbleMenuCanShow = computed(() => this.clearCanShow() || this.actionsCanShow());
+  #contextMenu = inject(EditableContextMenu);
 
-  /** The bubble anchors right after the final word (see `watchContentEnd`). */
-  protected clearContentOffset = watchContentEnd({
-    element: () => this.fieldArea().nativeElement,
-    empty: () => this.isEmpty(),
-    track: () => {
-      this.displayText();
-      this.wrapMode();
-    },
-  });
+  /**
+   * A right-click on the field (or on its hover scope's space) offers Edit
+   * and Clear — only where a clear may be offered at all. Everywhere else
+   * (required, locked, empty, mid-edit, `showClear` off, the menu switched
+   * off) the gesture stays the platform's.
+   */
+  protected handleContextMenu(event: Event) {
+    if (!this.clearCanShow()) return;
+
+    this.#contextMenu.open(event, {
+      anchor: this.fieldArea().nativeElement,
+      edit: () => this.elevate((this.value() ?? '').length),
+      clear: () => this.clearValue(),
+    });
+  }
 
   /** Clear is a commit AND an interaction: commits `''` and marks the field touched. */
-  protected clearValue(event?: Event) {
-    // No event when a consumer's own button calls through the context (maybe after a dialog).
-    event?.preventDefault();
-    event?.stopPropagation();
-
+  protected clearValue() {
     // Idle-only; committing '' mid-session would strand the frozen baseline.
     if (this.editing()) return;
 
@@ -975,6 +976,12 @@ export class AngularInlineText implements FormValueControl<string> {
    * Presses on the text and on chrome keep their own behaviour.
    */
   protected handleFieldMouseDown(event: MouseEvent) {
+    // The right button's press belongs to the context menu: it must not land a caret first.
+    if (event.button === 2 && this.clearCanShow() && this.#contextMenu.enabled) {
+      event.preventDefault();
+      return;
+    }
+
     if (event.button !== 0 || event.shiftKey) return;
     if (this.editing() || this.disabled() || this.readonly()) return;
 

@@ -45,7 +45,6 @@ import { EditableErrorTemplate } from '../../../../../../angular-inline-select/j
 import { AngularInlineJson } from '../../../../../../angular-inline-select/json/src/angular-inline-json';
 
 // The page's own clear affordance — one button for every field in the grid.
-import { ConfirmClearButton } from '../confirm-clear/confirm-clear-button';
 import {
   EditableAction,
   EditableActionsTemplate,
@@ -252,7 +251,6 @@ function initialRecord(): RecordModel {
     EditableScope,
 
     // The page's clear affordance
-    ConfirmClearButton,
     EditableAction,
     EditableActionsTemplate,
   ],

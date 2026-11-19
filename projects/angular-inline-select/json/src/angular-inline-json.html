@@ -4,7 +4,7 @@
   a lossy, truncated summary of a huge value, so there is no caret position to
   type into. Click, Enter, or Space elevates into the real editor below.
 -->
-<span #fieldArea class="editable-json__field">
+<span #fieldArea class="editable-json__field" (contextmenu)="handleContextMenu($event)">
   @if (prefixTpl(); as prefix) {
     <span class="editable-text__affix editable-text__affix--prefix" aria-hidden="true">
       <ng-container *ngTemplateOutlet="prefix" />
@@ -43,16 +43,3 @@
   template. Consumer error content arrives through the errorTemplate channel
   (ng-template[editableError]) since projection cannot reach a portal.
 -->
-
-<!-- Floating clear affordance — anchored to the in-flow field area. -->
-<bubble-menu [origin]="fieldArea" [canShow]="bubbleMenuCanShow()">
-  @if (clearTpl(); as tpl) {
-    <ng-container *ngTemplateOutlet="tpl; context: clearContext" />
-  } @else {
-    <button
-      editableClearButton
-      [attr.aria-label]="clearLabel"
-      (clear)="clearValue($event)"
-    ></button>
-  }
-</bubble-menu>

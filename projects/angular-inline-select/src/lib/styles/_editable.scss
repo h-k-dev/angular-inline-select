@@ -126,7 +126,10 @@
     &:hover {
       background-color: var(
         --editable-menu-active-background,
-        var(--mat-option-focus-state-layer-color, oklch(from var(--mat-sys-on-surface) l c h / 0.12))
+        var(
+          --mat-option-focus-state-layer-color,
+          oklch(from var(--mat-sys-on-surface) l c h / 0.12)
+        )
       );
       color: var(--editable-menu-active-color, inherit);
     }
@@ -308,8 +311,131 @@
   }
 }
 
-.editable-action-clear {
-  height: calc(var(--mat-sys-spacing, 0.25rem) * 6);
+// -----------------------------------------------------------------------------
+// CLEAR BUTTON: the stock in-field clear (the date field's) — a bare × the
+// size of a select's caret slot. An app swaps the renderer for its own button
+// (`provideEditableClearButton`); the room it sits in belongs to the field.
+// -----------------------------------------------------------------------------
+.editable-clear-button {
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  inline-size: var(--editable-clear-button-size, calc(var(--mat-sys-spacing, 0.25rem) * 5));
+  block-size: var(--editable-clear-button-size, calc(var(--mat-sys-spacing, 0.25rem) * 5));
+  padding: 0;
+
+  border: 0 solid;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--mat-sys-on-surface-variant, #5f6368);
+  cursor: pointer;
+
+  font: inherit;
+  font-size: calc(var(--mat-sys-spacing, 0.25rem) * 4);
+  line-height: 1;
+
+  &:hover {
+    background: color-mix(in oklab, var(--mat-sys-on-surface, #1f1f1f) 8%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary, #4285f4);
+    outline-offset: 1px;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// CONTEXT MENU: Edit / Clear on a right-click (CDK overlay, opened at the
+// pointer). Global for the same reason as the action buttons — the panel
+// renders in the overlay container. The `--mat-sys-menu-*` knobs are the
+// app's menu tokens, so the panel takes the look of the app's other menus.
+// -----------------------------------------------------------------------------
+.editable-context-menu {
+  --_editable-menu-radius: var(--mat-sys-menu-panel-radius, var(--mat-sys-corner-medium, 0.75rem));
+  --_editable-menu-inset: var(--mat-sys-menu-inset, 4px);
+
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--mat-sys-spacing, 0.25rem) / 2);
+  inline-size: max-content;
+  min-inline-size: var(--mat-sys-menu-min-inline-size, 20ch);
+  padding: var(--_editable-menu-inset);
+
+  border: 0.5px solid var(--mat-sys-outline-variant, #c4c7c5);
+  border-radius: var(--_editable-menu-radius);
+  outline: 0;
+  background-color: var(--mat-menu-container-color, var(--mat-sys-surface-container, #fff));
+  box-shadow:
+    var(--mat-sys-ring-shadow, 0 0 0 0 transparent),
+    var(--mat-sys-outer-shadow, 0 4px 16px rgb(0 0 0 / 0.16));
+
+  color: var(--mat-menu-item-label-text-color, var(--mat-sys-on-surface, #1f1f1f));
+  font: var(--mat-sys-label-large, 500 0.875rem / 1.25rem system-ui);
+  text-align: start;
+}
+
+.editable-context-menu__item {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--icon-label-gap, calc(var(--mat-sys-spacing, 0.25rem) * 2));
+  inline-size: 100%;
+  min-block-size: var(--mat-sys-menu-item-min-height, 2.25rem);
+  padding: calc(var(--mat-sys-spacing, 0.25rem) * 1.5) calc(var(--mat-sys-spacing, 0.25rem) * 3);
+
+  border: 0 solid;
+  // Concentric with the panel: its radius less the band between them.
+  border-radius: max(0px, calc(var(--_editable-menu-radius) - var(--_editable-menu-inset)));
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+
+  font: inherit;
+  text-align: inherit;
+  user-select: none;
+
+  // No background fade: the row being left would still be lit while the next
+  // one lights, so a move between rows flickered. The highlight switches at once.
+
+  &[data-active='true'],
+  &:active {
+    background: var(
+      --mat-sys-menu-item-active-background,
+      color-mix(in oklab, var(--mat-sys-on-surface, #1f1f1f) 8%, transparent)
+    );
+  }
+}
+
+// The row that empties the field: the danger tone on ink and on its wash.
+.editable-context-menu__item--danger {
+  color: var(--mat-sys-danger, var(--mat-sys-error, #ba1a1a));
+
+  &[data-active='true'],
+  &:active {
+    background: oklab(from var(--mat-sys-danger, var(--mat-sys-error, #ba1a1a)) l a b / 0.08);
+  }
+}
+
+// The leading icon — a ligature in the app's icon font (`iconFontClass`). The
+// box is fixed so the labels start on one axis whatever the glyph's advance;
+// under the menu's class so it outranks the font class's own size.
+.editable-context-menu .editable-context-menu__icon {
+  flex: none;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  font-size: 1.25rem;
+  line-height: 1;
+  opacity: 0.875;
+}
+
+.editable-context-menu__label {
+  flex: 1;
+}
+
+.editable-context-menu-enter {
+  animation: editable-bubble-enter 0.15s var(--editable-ease-emphasized, cubic-bezier(0, 0, 0.2, 1));
 }
 
 @keyframes editable-bubble-enter {
@@ -330,7 +456,8 @@
   .editable-panel-enter,
   .editable-panel__message,
   .editable-panel [editable-error],
-  .editable-bubble {
+  .editable-bubble,
+  .editable-context-menu-enter {
     animation: none;
   }
 }

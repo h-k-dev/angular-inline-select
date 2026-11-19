@@ -226,6 +226,36 @@
   color: var(--editable-text-affix-color, var(--mat-sys-on-surface, inherit));
 }
 
+// The clear button's room, beside the value it clears. As wide and as tall as
+// the button, and centred on the line; the block margins then take back what
+// it stands taller than the text by, so the room is part of the field's WIDTH
+// and of nothing else — no row grows by it. Out of sight until the pointer is
+// on the field (or on its hover scope), and for as long as a session is open.
+.inline-date__clear {
+  --_clear-size: var(--editable-clear-button-size, calc(var(--mat-sys-spacing, 0.25rem) * 5));
+
+  display: inline-grid;
+  place-items: center;
+  align-self: center;
+  flex: none;
+  inline-size: var(--_clear-size);
+  block-size: var(--_clear-size);
+  margin-block: calc((1em - var(--_clear-size)) / 2);
+
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--mat-sys-transition-duration, 0.15s)
+    var(--mat-sys-transition-timing-function, ease);
+}
+
+.inline-date:hover,
+.inline-date--armed {
+  .inline-date__clear:not(.inline-date__clear--resting) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 .inline-date__trigger {
   font: inherit;
   line-height: 1;

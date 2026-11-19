@@ -815,6 +815,39 @@ context type and the directive), then the seven call-sites:
 control if/when it lands. Watch for iusta's own `TemporalIntl` copy — the
 `clearLabel` signature moved.
 
+## Shipped — clear leaves the hover bubble — 2026-11-16
+
+**The ask.** Users kept clearing fields by accident: the floating clear pill
+appeared beside the value on hover, right where the pointer was heading.
+
+**What changed.** The hover bubble no longer carries a clear. It is the
+consumer's ACTIONS slot only (`editableActions`); a field without an actions
+template has no bubble at all.
+
+- **Context menu** (`EditableContextMenu`, `src/lib/context-menu/`): a
+  right-click on a field — or on the space of its `editableHoverScope` —
+  opens ONE page-wide menu at the pointer with **Edit** and **Clear**. Text,
+  number, phone, JSON, time and duration; a ranged time clears the side the
+  gesture landed on. The field still decides WHETHER: the menu is offered
+  exactly where the bubble's clear was (`showClear`, never on required /
+  disabled / readonly / empty / editing). Everywhere else the gesture stays
+  the platform's.
+- **App-wide switch** — `provideEditableContextMenu(() => ({ enabled }))`.
+  While `enabled()` says no (an app's "is mobile"), `open` returns before
+  doing anything: no overlay, no `preventDefault`. A touch user empties a
+  field by editing it.
+- **The date field keeps a button**, in the field beside the value it clears:
+  before the start of a range, after its end, after a single value
+  (`clearBubbleSide` / the leaf role picks the edge). The renderer is a slot
+  (`provideEditableClearButton`, stock: a native ×) so an app can use its own
+  icon button.
+- **Dropped**: `ng-template[editableClear]` / `clearTemplate` /
+  `EditableClearContext` / `editableClearButton`, and the Form Grid's
+  confirm-before-clear demo with them. `[editableClear]` (the bare button
+  behavior) stays.
+- Labels: `EditableTextIntl.editLabel` / `clearLabel` / `contextMenuLabel`
+  replace `clearButtonLabel`.
+
 ## Shipped — the interactive unit + the hover scope — 2026-09-16
 
 **The ask.** The clear bubble was hard to reach: it armed on `mouseenter`

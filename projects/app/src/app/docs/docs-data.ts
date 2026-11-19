@@ -76,7 +76,7 @@ const FORM_CONTRACT_INPUTS: ApiMember[] = [
     type: 'boolean',
     default: 'false',
     description:
-      'Form Value Contract: marks the field required (also hides the clear bubble — a guaranteed-doomed clear stays unavailable).',
+      'Form Value Contract: marks the field required (also withholds the clear — a guaranteed-doomed clear stays unavailable).',
   },
   {
     name: 'errors',
@@ -130,34 +130,22 @@ const AFFIX_INPUTS: ApiMember[] = [
   },
 ];
 
-/**
- * The clear seam — one input, every variant. Range controls (date, time)
- * stamp the template once per side.
- */
-const CLEAR_TEMPLATE_INPUT: ApiMember = {
-  name: 'clearTemplate',
-  type: 'TemplateRef<EditableClearContext> | undefined',
-  default: 'undefined',
-  description:
-    'Replaces the stock clear button inside the hover bubble; direct consumers use `ng-template[editableClear]` content instead. The context — { $implicit: clear, clear, side, label, focus } — hands over the clear CALLBACK, so a consumer can confirm in a dialog first and commit only on yes (clearing is a commit: it writes, touches, and emits saved in one go); focus puts the keyboard back on the field once the dialog closes. See the Form Grid pattern for one button serving every field.',
-};
-
-/** The clear seam's opt-out — beside `clearTemplate` on every variant. */
+/** The clear's opt-out — on every variant. */
 const SHOW_CLEAR_INPUT: ApiMember = {
   name: 'showClear',
   type: 'boolean',
   default: 'true',
   description:
-    'Opt-out of the hover-bubble clear (stock button and `clearTemplate` alike). `false` never offers it: the value can still be emptied the long way — open, delete, save — for hosts whose rule is that emptying a field is a deliberate act, never a one-click shortcut. The bubble’s own policy (never on required / disabled / readonly / empty / editing) applies on top of `true`.',
+    'Opt-out of the clear: the Clear row of the context menu a right-click on the field opens (Edit / Clear), and on the date field the small clear button beside each value. `false` never offers it: the value can still be emptied the long way — open, delete, save — for hosts whose rule is that emptying a field is a deliberate act, never a shortcut. The clear’s own policy (never on required / disabled / readonly / empty / editing) applies on top of `true`. The menu itself is switched app-wide with `provideEditableContextMenu` (e.g. off on mobile), the date button’s renderer with `provideEditableClearButton`.',
 };
 
-/** The primary-actions slot — beside the clear seam on every variant. */
+/** The actions slot — on every variant. */
 const ACTIONS_TEMPLATE_INPUT: ApiMember = {
   name: 'actionsTemplate',
   type: 'TemplateRef<EditableActionsContext<…>> | undefined',
   default: 'undefined',
   description:
-    'The PRIMARY-ACTIONS slot of the hover bubble, stamped before clear: consumer-owned buttons that act ON the value — open the link, call the number. The control renders nothing itself; it hands over DATA typed per control (text { value }, number { value }, phone { value, dialPrefix, e164, tel, country, national, international }, date/time { value, side }, duration { value }) and `focus` for the dialog case. Direct consumers use `ng-template[editableActions]` content; put `editableAction` on each button so a press never moves focus off the field. Gates are per slot: actions show whenever the value is non-empty and not mid-edit — readonly and disabled fields keep their actions, unlike clear.',
+    'The hover bubble’s content: consumer-owned buttons that act ON the value — open the link, call the number. The control renders nothing itself; it hands over DATA typed per control (text { value }, number { value }, phone { value, dialPrefix, e164, tel, country, national, international }, date/time { value, side }, duration { value }) and `focus` for the dialog case. Direct consumers use `ng-template[editableActions]` content; put `editableAction` on each button so a press never moves focus off the field. Actions show whenever the value is non-empty and not mid-edit — readonly and disabled fields keep their actions, unlike clear. Without a template there is no bubble.',
 };
 
 const ARIA_LABEL_INPUT: ApiMember = {
@@ -206,7 +194,8 @@ const TEXT_SURFACE_TOKENS: TokenGroup = {
     {
       token: '--editable-text-underline-focus-indicator-color',
       fallback: 'var(--mat-sys-primary, #428bca)',
-      description: 'Color of the solid focus underline — separate from the resting color, so hiding the resting line never hides focus.',
+      description:
+        'Color of the solid focus underline — separate from the resting color, so hiding the resting line never hides focus.',
     },
     {
       token: '--editable-text-color',
@@ -448,7 +437,8 @@ const CHROME_TOKENS: TokenGroup = {
     {
       token: '--editable-bubble-animation-duration',
       fallback: '0.15s',
-      description: 'Duration of the floating bubble’s enter animation (reduced motion turns it off).',
+      description:
+        'Duration of the floating bubble’s enter animation (reduced motion turns it off).',
     },
     {
       token: '--editable-text-action-background',
@@ -579,7 +569,8 @@ const JSON_SURFACE_TOKENS: TokenGroup = {
     {
       token: '--editable-text-underline-focus-indicator-color',
       fallback: 'var(--mat-sys-primary, #428bca)',
-      description: 'Color of the solid focus underline — separate from the resting color, so hiding the resting line never hides focus.',
+      description:
+        'Color of the solid focus underline — separate from the resting color, so hiding the resting line never hides focus.',
     },
     {
       token: '--editable-text-color',
@@ -725,7 +716,6 @@ export const DOCS: Record<string, SectionDocs> = {
               'Opt-in character filter, tested against one character at a time. Rejected characters never reach the draft, so the bound field never observes them. Covers keystrokes and paste on both surfaces; drop and IME only once the panel is open (on the resting display neither delivers text at all — the payload is discarded and the field elevates empty-handed). On the resting display a keystroke the filter erases does not even open the editor: only a mutation elevates. Rejection is silent and unannounced. Filters, does not validate.',
           },
           ...AFFIX_INPUTS,
-          CLEAR_TEMPLATE_INPUT,
           SHOW_CLEAR_INPUT,
           ACTIONS_TEMPLATE_INPUT,
           {
@@ -824,7 +814,6 @@ export const DOCS: Record<string, SectionDocs> = {
               'Number → display string for the in-flow text. Unset, it derives from decimalSeparator.',
           },
           ...AFFIX_INPUTS,
-          CLEAR_TEMPLATE_INPUT,
           SHOW_CLEAR_INPUT,
           ACTIONS_TEMPLATE_INPUT,
         ],
@@ -916,7 +905,6 @@ export const DOCS: Record<string, SectionDocs> = {
           },
           ARIA_LABEL_INPUT,
           ...AFFIX_INPUTS,
-          CLEAR_TEMPLATE_INPUT,
           SHOW_CLEAR_INPUT,
           ACTIONS_TEMPLATE_INPUT,
         ],
@@ -992,7 +980,7 @@ export const DOCS: Record<string, SectionDocs> = {
             type: 'BubbleMenuSide | undefined',
             default: 'undefined',
             description:
-              "Which edge the clear bubble grows from. Unset, the leaf role decides ('start' for inline-start leaves), else 'end'.",
+              "Which edge the actions bubble grows from — and, on the date field, which edge a single value keeps its clear button on. Unset, the leaf role decides ('start' for inline-start leaves), else 'end'.",
           },
           {
             name: 'locale',
@@ -1025,7 +1013,6 @@ export const DOCS: Record<string, SectionDocs> = {
             description: 'Clock source — injectable for tests and fixed-time demos.',
           },
           ...AFFIX_INPUTS,
-          CLEAR_TEMPLATE_INPUT,
           SHOW_CLEAR_INPUT,
           ACTIONS_TEMPLATE_INPUT,
         ],
@@ -1076,7 +1063,8 @@ export const DOCS: Record<string, SectionDocs> = {
             name: 'placeholder',
             type: 'string | undefined',
             default: 'undefined',
-            description: "Placeholder override. Unset, the format's own shape: 'HH:MM' (or 'HH:MM:SS').",
+            description:
+              "Placeholder override. Unset, the format's own shape: 'HH:MM' (or 'HH:MM:SS').",
           },
           {
             name: 'endPlaceholder',
@@ -1090,7 +1078,7 @@ export const DOCS: Record<string, SectionDocs> = {
             type: 'BubbleMenuSide | undefined',
             default: 'undefined',
             description:
-              "Which edge the clear bubble grows from. Unset, the leaf role decides ('start' for inline-start leaves), else 'end'.",
+              "Which edge the actions bubble grows from — and, on the date field, which edge a single value keeps its clear button on. Unset, the leaf role decides ('start' for inline-start leaves), else 'end'.",
           },
           {
             name: 'locale',
@@ -1121,7 +1109,8 @@ export const DOCS: Record<string, SectionDocs> = {
             name: 'intervalRounding',
             type: "'ceil' | 'round' | 'floor'",
             default: "'ceil'",
-            description: 'How the length lands on the `intervalStep` grid — up (billing), nearest, or down.',
+            description:
+              'How the length lands on the `intervalStep` grid — up (billing), nearest, or down.',
           },
           {
             name: 'pickerMin',
@@ -1148,7 +1137,6 @@ export const DOCS: Record<string, SectionDocs> = {
             description: 'Clock source — injectable for tests and fixed-time demos.',
           },
           ...AFFIX_INPUTS,
-          CLEAR_TEMPLATE_INPUT,
           SHOW_CLEAR_INPUT,
           ACTIONS_TEMPLATE_INPUT,
         ],
@@ -1185,7 +1173,8 @@ export const DOCS: Record<string, SectionDocs> = {
             name: 'placeholder',
             type: 'string | undefined',
             default: 'undefined',
-            description: "Placeholder override. Unset, the format's own shape: 'HH:MM', 'HH:MM:SS' or 'MM:SS'.",
+            description:
+              "Placeholder override. Unset, the format's own shape: 'HH:MM', 'HH:MM:SS' or 'MM:SS'.",
           },
           ARIA_LABEL_INPUT,
           {
@@ -1193,7 +1182,7 @@ export const DOCS: Record<string, SectionDocs> = {
             type: 'BubbleMenuSide | undefined',
             default: 'undefined',
             description:
-              "Which edge the clear bubble grows from. Unset, the leaf role decides ('start' for inline-start leaves), else 'end'.",
+              "Which edge the actions bubble grows from — and, on the date field, which edge a single value keeps its clear button on. Unset, the leaf role decides ('start' for inline-start leaves), else 'end'.",
           },
           {
             name: 'format',
@@ -1213,10 +1202,10 @@ export const DOCS: Record<string, SectionDocs> = {
             name: 'intervalRounding',
             type: "'ceil' | 'round' | 'floor'",
             default: "'ceil'",
-            description: 'How the length lands on the `intervalStep` grid — up (billing), nearest, or down.',
+            description:
+              'How the length lands on the `intervalStep` grid — up (billing), nearest, or down.',
           },
           ...AFFIX_INPUTS,
-          CLEAR_TEMPLATE_INPUT,
           SHOW_CLEAR_INPUT,
           ACTIONS_TEMPLATE_INPUT,
         ],
@@ -1326,7 +1315,6 @@ export const DOCS: Record<string, SectionDocs> = {
               'Consumer error content (the mat-error analogue) as a TEMPLATE — the session UI renders in a portaled dialog component where element projection cannot reach. Content sugar: `ng-template[editableError]`. Takes over the error slot entirely; without it the control renders message-carrying errors itself.',
           },
           ...AFFIX_INPUTS,
-          CLEAR_TEMPLATE_INPUT,
           SHOW_CLEAR_INPUT,
           ACTIONS_TEMPLATE_INPUT,
         ],
@@ -1388,7 +1376,8 @@ export const DOCS: Record<string, SectionDocs> = {
           {
             token: '--iusta-sys-prompt-editor-padding',
             fallback: '0',
-            description: 'The host’s own padding, repeated so the placeholder lines up with the text.',
+            description:
+              'The host’s own padding, repeated so the placeholder lines up with the text.',
           },
           {
             token: '--iusta-sys-prompt-editor-paragraph-gap',

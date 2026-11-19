@@ -153,6 +153,36 @@ const PAIRS = [
     `${E}/editable-inline/bubble-menu/editable-actions.ts`,
   ],
   [
+    'context-menu',
+    `${SB}/src/lib/context-menu/editable-context-menu.ts`,
+    `${E}/editable-inline/context-menu/editable-context-menu.ts`,
+  ],
+  [
+    'context-menu/config',
+    `${SB}/src/lib/context-menu/editable-context-menu-config.ts`,
+    `${E}/editable-inline/context-menu/editable-context-menu-config.ts`,
+  ],
+  [
+    'context-menu/session',
+    `${SB}/src/lib/context-menu/editable-context-menu-session.ts`,
+    `${E}/editable-inline/context-menu/editable-context-menu-session.ts`,
+  ],
+  [
+    'context-menu/panel.ts',
+    `${SB}/src/lib/context-menu/editable-context-menu-panel.ts`,
+    `${E}/editable-inline/context-menu/editable-context-menu-panel.ts`,
+  ],
+  [
+    'context-menu/panel.html',
+    `${SB}/src/lib/context-menu/editable-context-menu-panel.html`,
+    `${E}/editable-inline/context-menu/editable-context-menu-panel.html`,
+  ],
+  [
+    'context-menu.spec',
+    `${SB}/src/lib/context-menu/editable-context-menu.spec.ts`,
+    `${E}/editable-inline/context-menu/editable-context-menu.spec.ts`,
+  ],
+  [
     'bubble/clear',
     `${SB}/src/lib/bubble-menu/editable-clear.ts`,
     `${E}/editable-inline/bubble-menu/editable-clear.ts`,

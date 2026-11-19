@@ -2,6 +2,7 @@
 import {
   Component,
   Directive,
+  inject,
   type Type,
 
   // Signals
@@ -17,10 +18,11 @@ import { FormField, form } from '@angular/forms/signals';
 import { AngularInlineDate, type InlineDateSaved } from './angular-inline-date';
 import { EditablePrefix, EditableSuffix } from 'angular-inline-select';
 import {
+  EDITABLE_CLEAR_BUTTON_CONTEXT,
   EditableClear,
-  EditableClearTemplate,
   EditableHoverScope,
   EditableActionsTemplate,
+  provideEditableClearButton,
 } from 'angular-inline-select';
 import {
   parseDateInput,
@@ -279,53 +281,44 @@ class DateShapeHost {
 }
 
 @Component({
-  imports: [
-    // Components
-    AngularInlineDate,
-
-    // Directives
-    EditableClear,
-    EditableClearTemplate,
-  ],
+  imports: [AngularInlineDate],
   template: `
     <angular-inline-date
       [(value)]="value"
       [ranged]="ranged()"
       [showClear]="showClear()"
+      [required]="required()"
       locale="en"
       [now]="now"
       (saved)="sessions.push($event)"
-    >
-      <ng-template editableClear let-clear let-label="label" let-side="side" let-focus="focus">
-        <button
-          editableClear
-          class="confirm-clear"
-          [attr.aria-label]="label"
-          [attr.data-side]="side"
-          (clear)="request(side, clear, focus)"
-        >
-          ✕
-        </button>
-      </ng-template>
-    </angular-inline-date>
+    />
   `,
 })
 class DateClearHost {
   value = signal<InlineDateValue>(null);
   ranged = signal(false);
   showClear = signal(true);
+  required = signal(false);
   now = () => NOW;
 
   sessions: InlineDateSaved[] = [];
+}
 
-  /** Stands in for a confirmation dialog: capture the callbacks, resolve later. */
-  pending = new Map<string, () => void>();
-  restoreFocus = new Map<string, () => void>();
-
-  request(side: string | null, clear: () => void, focus: () => void) {
-    this.pending.set(side ?? 'single', clear);
-    this.restoreFocus.set(side ?? 'single', focus);
-  }
+/** An app's own clear button — what `provideEditableClearButton` swaps in. */
+@Component({
+  imports: [EditableClear],
+  template: `
+    <button
+      editableClear
+      class="house-clear"
+      [attr.aria-label]="context.label()"
+      [attr.data-side]="context.side"
+      (clear)="context.clear()"
+    ></button>
+  `,
+})
+class HouseClearButton {
+  protected context = inject(EDITABLE_CLEAR_BUTTON_CONTEXT);
 }
 
 interface Harness<T> {
@@ -1041,95 +1034,127 @@ describe('the aria-live announcer (visually hidden)', () => {
 describe('AngularInlineDate — clear affordance', () => {
   let h: Harness<DateClearHost>;
 
+  const unit = () => h.fixture.nativeElement.querySelector('.inline-date') as HTMLElement;
+  const buttons = () =>
+    [...unit().querySelectorAll('.editable-clear-button')] as HTMLButtonElement[];
+
   beforeEach(() => {
     h = setupHost(DateClearHost);
   });
 
-  /** Hovers an element so its clear bubble (a CDK overlay) renders. */
-  function hover(origin: Element) {
-    origin.dispatchEvent(new MouseEvent('mouseenter'));
-    h.fixture.detectChanges();
-  }
-
-  function customButtons(): HTMLButtonElement[] {
-    return [
-      ...document.querySelectorAll<HTMLButtonElement>('.editable-bubble button.confirm-clear'),
-    ];
-  }
-
-  it('showClear false never offers a bubble, template or not — on either side', () => {
-    h.host.ranged.set(true);
-    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
-    h.host.showClear.set(false);
+  it('a single field keeps one button after its value, and it clears the whole value', () => {
+    h.host.value.set('2026-05-12');
     h.fixture.detectChanges();
 
-    hover(h.start());
-    hover(h.end()!);
-    expect(customButtons()).toEqual([]);
-    expect(document.querySelector('.editable-bubble')).toBeNull();
+    const [button] = buttons();
+    expect(buttons().length).toBe(1);
+    expect(button.getAttribute('aria-label')).toBe('Clear date');
+    expect(
+      h.start().compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    button.click();
+    h.fixture.detectChanges();
+
+    expect(h.host.value()).toBeNull();
+    expect(h.host.sessions.at(-1)).toMatchObject({ changed: true });
+    expect(buttons()).toEqual([]);
   });
 
-  it('stamps the consumer template per side, each labelled and side-tagged', () => {
+  it('a range keeps one per side, facing outward: before the start, after the end', () => {
     h.host.ranged.set(true);
     h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
     h.fixture.detectChanges();
 
-    hover(h.start());
-    hover(h.end()!);
-
-    const sides = customButtons().map((b) => [
-      b.getAttribute('data-side'),
-      b.getAttribute('aria-label'),
+    const [start, end] = buttons();
+    expect(buttons().map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Clear start date',
+      'Clear end date',
     ]);
-    expect(sides).toEqual([
-      ['start', 'Clear start date'],
-      ['end', 'Clear end date'],
-    ]);
-    expect(document.querySelector('.editable-bubble button.editable-action-clear')).toBeNull();
+    expect(
+      start.compareDocumentPosition(h.start()) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(h.end()!.compareDocumentPosition(end) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('the handed-over callback is side-bound: the other side is NEVER nuked', () => {
+  it("a side's button clears that side: the other is NEVER nuked", () => {
     h.host.ranged.set(true);
     h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
     h.fixture.detectChanges();
 
-    hover(h.end()!);
-    customButtons()[0].dispatchEvent(new MouseEvent('click'));
-    h.fixture.detectChanges();
-
-    // Nothing committed yet — the consumer is still deciding (dialog open).
-    expect(h.host.value()).toEqual({ start: '2026-05-12', end: '2026-05-15' });
-    expect(h.host.sessions).toEqual([]);
-
-    h.host.pending.get('end')!();
+    buttons()[1].click();
     h.fixture.detectChanges();
 
     expect(h.host.value()).toEqual({ start: '2026-05-12', end: null });
     expect(h.host.sessions.at(-1)).toMatchObject({ changed: true });
-
-    // Focus returns to the side that was cleared, not to the pair's head.
-    h.host.restoreFocus.get('end')!();
-    expect(document.activeElement).toBe(h.end());
+    // The emptied side has nothing left to clear.
+    expect(buttons().map((b) => b.getAttribute('aria-label'))).toEqual(['Clear start date']);
   });
 
-  it('a single field reports no side and clears the whole value', () => {
+  it('a press on the button never opens the session', () => {
     h.host.value.set('2026-05-12');
     h.fixture.detectChanges();
 
-    hover(h.fixture.nativeElement.querySelector('.inline-date'));
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 });
+    buttons()[0].dispatchEvent(press);
 
-    const button = customButtons()[0];
-    expect(button.getAttribute('data-side')).toBeNull();
-    expect(button.getAttribute('aria-label')).toBe('Clear date');
+    expect(press.defaultPrevented).toBe(true);
+    expect(document.activeElement).not.toBe(h.start());
+  });
 
-    button.dispatchEvent(new MouseEvent('click'));
+  it('keeps its room through a session and only goes out of sight', () => {
+    h.host.value.set('2026-05-12');
     h.fixture.detectChanges();
-    expect(h.host.value()).toEqual('2026-05-12');
+    const slot = () => unit().querySelector('.inline-date__clear')!;
+    expect(slot().classList.contains('inline-date__clear--resting')).toBe(false);
 
-    h.host.pending.get('single')!();
+    focusInput(h, h.start());
+
+    expect(slot().classList.contains('inline-date__clear--resting')).toBe(true);
+  });
+
+  it.each([
+    ['showClear is off', (host: DateClearHost) => host.showClear.set(false)],
+    ['the field is required', (host: DateClearHost) => host.required.set(true)],
+    ['the field is empty', (host: DateClearHost) => host.value.set({ start: null, end: null })],
+  ])('renders no button while %s — on either side', (_, arrange) => {
+    h.host.ranged.set(true);
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
+    arrange(h.host);
     h.fixture.detectChanges();
 
-    expect(h.host.value()).toBeNull();
+    expect(unit().querySelector('.inline-date__clear')).toBeNull();
+  });
+
+  it("a right-click stays the platform's: the date field has no context menu", () => {
+    h.host.value.set('2026-05-12');
+    h.fixture.detectChanges();
+
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 });
+    h.start().dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(document.querySelector('.editable-context-menu')).toBeNull();
+  });
+
+  it("renders an app's own button (provideEditableClearButton), side-told", () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideEditableClearButton(HouseClearButton)] });
+    h = setupHost(DateClearHost);
+    h.host.ranged.set(true);
+    h.host.value.set({ start: '2026-05-12', end: '2026-05-15' });
+    h.fixture.detectChanges();
+
+    const house = [...unit().querySelectorAll('.house-clear')] as HTMLButtonElement[];
+    expect(house.map((b) => [b.getAttribute('data-side'), b.getAttribute('aria-label')])).toEqual([
+      ['start', 'Clear start date'],
+      ['end', 'Clear end date'],
+    ]);
+    expect(buttons()).toEqual([]);
+
+    house[0].click();
+    h.fixture.detectChanges();
+    expect(h.host.value()).toEqual({ start: null, end: '2026-05-15' });
   });
 });
 
@@ -1352,18 +1377,17 @@ describe('AngularInlineDate — the interactive unit', () => {
       fixture.detectChanges();
     });
 
-    it('marks itself scoped and arms its bubble on the scope’s hover', async () => {
+    it('marks itself scoped and shows its clear button on the scope’s hover', () => {
       expect(unit().classList.contains('inline-date--scoped')).toBe(true);
-      expect(document.querySelector('.editable-bubble')).toBeNull();
+      expect(unit().classList.contains('inline-date--armed')).toBe(false);
 
       row().dispatchEvent(new MouseEvent('mouseenter'));
       fixture.detectChanges();
-      expect(document.querySelector('.editable-bubble')).not.toBeNull();
+      expect(unit().classList.contains('inline-date--armed')).toBe(true);
 
       row().dispatchEvent(new MouseEvent('mouseleave'));
-      await new Promise((resolve) => setTimeout(resolve, 200));
       fixture.detectChanges();
-      expect(document.querySelector('.editable-bubble')).toBeNull();
+      expect(unit().classList.contains('inline-date--armed')).toBe(false);
     });
 
     it('a press on the row’s space is forwarded into the input', () => {
@@ -1446,7 +1470,6 @@ describe('AngularInlineDate — primary actions', () => {
     h.fixture.detectChanges();
     expect(act()?.getAttribute('data-side')).toBe('start');
     expect(act()?.getAttribute('data-value')).toBe('2026-05-12');
-    expect(document.querySelector('.editable-bubble .editable-action-clear')).toBeNull();
 
     h.start().dispatchEvent(new MouseEvent('mouseleave'));
     await new Promise((resolve) => setTimeout(resolve, 200));
@@ -1802,6 +1825,15 @@ describe('AngularInlineDate — filter mode', () => {
 
     expect(h.host.filter()).toBeNull();
     expect(h.host.clauses).toEqual([undefined]);
+    await blurAway(h);
+  });
+
+  it('keeps no clear button: a filter is emptied in the field itself', async () => {
+    const h = setupHost(FilterHost);
+    h.host.filter.set({ start: '2026-05-12', end: '2026-05-15' });
+    h.fixture.detectChanges();
+
+    expect(h.fixture.nativeElement.querySelector('.inline-date__clear')).toBeNull();
     await blurAway(h);
   });
 

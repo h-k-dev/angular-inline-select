@@ -26,13 +26,10 @@ import { NgTemplateOutlet } from '@angular/common';
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 // Editables
-// Shared chrome — generic (dialog service/actions/affixes/clear bubble), not text-specific.
+// Shared chrome — generic (dialog service/actions/affixes/context menu), not text-specific.
 import {
-  BubbleMenu,
   EDITABLE_SCOPE,
-  EditableClearButton,
-  EditableClearTemplate,
-  type EditableClearContext,
+  EditableContextMenu,
   EditableDialog,
   EditableDialogRef,
   EditablePrefix,
@@ -79,10 +76,6 @@ export interface InlineJsonSaved {
   imports: [
     // Angular
     NgTemplateOutlet,
-
-    // Components
-    BubbleMenu,
-    EditableClearButton,
   ],
   templateUrl: './angular-inline-json.html',
   styleUrl: './angular-inline-json.scss',
@@ -625,42 +618,18 @@ export class AngularInlineJson implements FormValueControl<string> {
   }
 
   // ---------------------------------------------------------------------------
-  // Clear affordance (the floating bubble lives in BubbleMenu)
+  // Context menu: Edit + Clear
   // ---------------------------------------------------------------------------
   /**
-   * Consumer clear affordance — REPLACES the stock button inside the bubble.
-   * See {@link EditableClearTemplate}: the context callback is what makes a
-   * confirm-before-clear possible (clearing IS the commit).
-   */
-  clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
-
-  private contentClear = contentChild(EditableClearTemplate);
-
-  protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
-
-  /** The stock accessible name — the context's `label`, and the default button's. */
-  protected readonly clearLabel = 'Clear value';
-
-  /** Stable context object — an async confirmation calls into a live control. */
-  protected readonly clearContext: EditableClearContext = {
-    $implicit: () => this.clearValue(),
-    clear: () => this.clearValue(),
-    side: null,
-    label: this.clearLabel,
-    focus: () => this.focus(),
-  };
-
-  /**
-   * The clear affordance's opt-out. `false` never offers the hover-bubble
-   * clear (stock button or `clearTemplate` alike): the value can still be
-   * emptied, but only the long way — open the editor, delete, save. For
-   * hosts whose house rule is that emptying a field is a deliberate act,
-   * never a one-click shortcut. `true` (the default) keeps the bubble's own
-   * policy (never on required / disabled / readonly / empty / editing).
+   * The clear's opt-out. `false` never offers the context menu's clear: the
+   * value can still be emptied, but only the long way — open the editor,
+   * delete, save. For hosts whose house rule is that emptying a field is a
+   * deliberate act, never a shortcut. `true` (the default) keeps the menu's
+   * own policy (never on required / disabled / readonly / empty / editing).
    */
   showClear = input(true);
 
-  protected bubbleMenuCanShow = computed(
+  protected clearCanShow = computed(
     () =>
       this.showClear() &&
       !this.required() &&
@@ -670,11 +639,20 @@ export class AngularInlineJson implements FormValueControl<string> {
       !this.editing(),
   );
 
-  protected clearValue(event?: Event) {
-    // Absent when a consumer's own affordance calls through the template
-    // context — possibly long after its click (a confirmation dialog).
-    event?.preventDefault();
-    event?.stopPropagation();
+  #contextMenu = inject(EditableContextMenu);
+
+  /** A right-click on the field offers Edit and Clear — only where a clear may be offered. */
+  protected handleContextMenu(event: Event) {
+    if (!this.clearCanShow()) return;
+
+    this.#contextMenu.open(event, {
+      anchor: this.fieldArea().nativeElement,
+      edit: () => this.editing.set(true),
+      clear: () => this.clearValue(),
+    });
+  }
+
+  protected clearValue() {
     if (this.editing()) return;
 
     this.value.set('');

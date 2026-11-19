@@ -9,8 +9,8 @@ import {
 /**
  * The editables' localizable CHROME — the fixed UI strings spoken around the
  * value: the text panel's stock Save / Discard actions and dirty hint, and
- * the stock clear button every editable's hover bubble shows. The value
- * itself is never translated.
+ * the rows of the context menu every editable opens on a right-click. The
+ * value itself is never translated.
  *
  * One `providedIn: 'root'` override point, signal-backed so a runtime locale
  * switch re-renders every panel. The `MatPaginatorIntl` / `TemporalIntl`
@@ -33,6 +33,12 @@ export class EditableTextIntl {
   /** The panel hint while the draft differs from the committed value. */
   readonly unsavedChangesLabel = signal('Unsaved changes');
 
-  /** The stock clear button's visible label (`editableClearButton`, in every editable's bubble). */
-  readonly clearButtonLabel = signal('clear');
+  /** The context menu's accessible name. */
+  readonly contextMenuLabel = signal('Field actions');
+
+  /** The context menu row that opens the field's edit session. */
+  readonly editLabel = signal('Edit');
+
+  /** The context menu row that empties the field. */
+  readonly clearLabel = signal('Clear');
 }

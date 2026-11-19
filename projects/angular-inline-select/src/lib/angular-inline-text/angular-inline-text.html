@@ -15,7 +15,9 @@
   class="editable-text__field editable-unit"
   [class.editable-text__field--no-wrap]="wrapMode() === 'noWrap'"
   (mousedown)="handleFieldMouseDown($event)"
+  (contextmenu)="handleContextMenu($event)"
   (editableScopePress)="handleScopePress($event)"
+  (editableScopeContextMenu)="handleContextMenu($event)"
 >
   @if (prefixTpl(); as prefix) {
     <span class="editable-text__affix editable-text__affix--prefix" aria-hidden="true">
@@ -72,6 +74,9 @@
     (keydown.escape)="handleEscape($event)"
     (keydown.control.enter)="handleSubmitShortcut()"
     (keydown.meta.enter)="handleSubmitShortcut()"
+    (keydown.control.s)="handleSaveShortcut($event)"
+    (keydown.meta.s)="handleSaveShortcut($event)"
+    (keydown.code.alt.keys)="handleSaveShortcut($event)"
     (keydown.tab)="handleTabKey($event, 1)"
     (keydown.shift.tab)="handleTabKey($event, -1)"
   >
@@ -192,31 +197,16 @@
   </div>
 </ng-template>
 
-<!-- Floating clear affordance — anchored to the in-flow field area (after the suffix, not the text) -->
-<bubble-menu
-  [origin]="fieldArea"
-  [contentOffset]="clearContentOffset()"
-  [canShow]="bubbleMenuCanShow()"
-  [armed]="scopeHover()"
->
-  <!-- Two slots, two gates: the consumer's PRIMARY ACTIONS first, clear last. -->
-  @if (actionsCanShow()) {
+<!-- The consumer's actions on the value — a hover bubble anchored after the final word. No template, no bubble. -->
+@if (actionsTpl(); as actions) {
+  <bubble-menu
+    [origin]="fieldArea"
+    [contentOffset]="bubbleContentOffset()"
+    [canShow]="actionsCanShow()"
+    [armed]="scopeHover()"
+  >
     <span class="editable-bubble__group editable-bubble__actions">
-      <ng-container *ngTemplateOutlet="actionsTpl()!; context: actionsContext()" />
+      <ng-container *ngTemplateOutlet="actions; context: actionsContext()" />
     </span>
-  }
-
-  @if (clearCanShow()) {
-    <span class="editable-bubble__group editable-bubble__clear">
-      @if (clearTpl(); as tpl) {
-        <ng-container *ngTemplateOutlet="tpl; context: clearContext" />
-      } @else {
-        <button
-          editableClearButton
-          [attr.aria-label]="clearLabel"
-          (clear)="clearValue($event)"
-        ></button>
-      }
-    </span>
-  }
-</bubble-menu>
+  </bubble-menu>
+}

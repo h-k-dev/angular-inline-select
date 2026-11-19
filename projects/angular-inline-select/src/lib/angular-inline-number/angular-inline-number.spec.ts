@@ -12,7 +12,6 @@ import {
 } from './angular-inline-number';
 import { AngularInlineText } from '../angular-inline-text/angular-inline-text';
 import { EditableSuffix } from '../angular-inline-text/editable-affix';
-import { EditableClear, EditableClearTemplate } from '../bubble-menu/editable-clear';
 
 // =============================================================================
 // Hosts — one per binding mode
@@ -98,31 +97,12 @@ class NumberLocaleHost {
 }
 
 @Component({
-  imports: [AngularInlineNumber, EditableClear, EditableClearTemplate],
-  template: `
-    <angular-inline-number [(value)]="value" (saved)="sessions.push($event)">
-      <ng-template editableClear let-clear let-label="label">
-        <button
-          editableClear
-          class="confirm-clear"
-          [attr.aria-label]="label"
-          (clear)="request(clear)"
-        >
-          ✕
-        </button>
-      </ng-template>
-    </angular-inline-number>
-  `,
+  imports: [AngularInlineNumber],
+  template: `<angular-inline-number [(value)]="value" (saved)="sessions.push($event)" />`,
 })
 class NumberClearHost {
   value = signal<number | string | null>(42);
   sessions: InlineNumberSaved[] = [];
-
-  pending: (() => void) | null = null;
-
-  request(clear: () => void) {
-    this.pending = clear;
-  }
 }
 
 // =============================================================================
@@ -498,31 +478,31 @@ describe('AngularInlineNumber — restrictInput', () => {
   });
 });
 
+/** Right-clicks `target`, then picks the context menu row labelled `label`. */
+function pickFromContextMenu(target: Element, label: string) {
+  target.dispatchEvent(
+    new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      clientX: 12,
+      clientY: 12,
+    }),
+  );
+  [...document.querySelectorAll<HTMLButtonElement>('.editable-context-menu__item')]
+    .find((row) => row.textContent?.trim() === label)!
+    .click();
+}
+
 describe('AngularInlineNumber — clear affordance', () => {
-  it("forwards the consumer's clear template into the inner control's bubble", () => {
+  it("the inner control's context menu clears THROUGH the wrapper", () => {
     const h = setup(NumberClearHost);
 
-    // Content queries don't pierce re-projection — the wrapper re-declares the
-    // slot and forwards a TemplateRef, exactly like the affixes.
-    h.display().closest('.editable-text__field')!.dispatchEvent(new MouseEvent('mouseenter'));
+    pickFromContextMenu(h.display(), 'Clear');
     h.fixture.detectChanges();
 
-    const custom = document.querySelector<HTMLButtonElement>(
-      '.editable-bubble button.confirm-clear',
-    );
-    expect(custom).not.toBeNull();
-    expect(custom!.getAttribute('aria-label')).toBe('Clear value');
-    expect(document.querySelector('.editable-bubble button.editable-action-clear')).toBeNull();
-
-    custom!.dispatchEvent(new MouseEvent('click'));
-    h.fixture.detectChanges();
-    expect(h.host.value()).toBe(42);
-
-    // The confirmed clear settles through the wrapper as a NUMBER contract
-    // commit: null, never the inner control's empty string.
-    h.host.pending!();
-    h.fixture.detectChanges();
-
+    // The clear settles through the wrapper as a NUMBER contract commit:
+    // null, never the inner control's empty string.
     expect(h.host.value()).toBeNull();
     expect(h.host.sessions).toEqual([{ value: null, changed: true }]);
   });

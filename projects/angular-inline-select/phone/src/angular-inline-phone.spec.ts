@@ -5,7 +5,7 @@ import { FormField, form, required } from '@angular/forms/signals';
 import metadata from 'libphonenumber-js/metadata.min.json';
 import examples from 'libphonenumber-js/examples.mobile.json';
 
-import { AngularInlineText, EditableClear, EditableClearTemplate } from 'angular-inline-select';
+import { AngularInlineText } from 'angular-inline-select';
 
 import { createLibphonenumberCodec } from 'angular-inline-select/phone-libphonenumber';
 
@@ -268,8 +268,10 @@ describe('AngularInlinePhone — [(value)] binding', () => {
 describe('AngularInlinePhone — dial prefix', () => {
   let h: Harness<PhoneValueHost>;
 
-  const prefixText = () => h.fixture.nativeElement.querySelector('.dial-prefix') as HTMLElement | null;
-  const actions = () => (h.phone() as unknown as { actionsData(): InlinePhoneActions }).actionsData();
+  const prefixText = () =>
+    h.fixture.nativeElement.querySelector('.dial-prefix') as HTMLElement | null;
+  const actions = () =>
+    (h.phone() as unknown as { actionsData(): InlinePhoneActions }).actionsData();
 
   beforeEach(() => {
     h = setup(PhoneValueHost);
@@ -516,71 +518,53 @@ describe('AngularInlinePhone — shared lazy engine', () => {
 });
 
 // =============================================================================
-// Clear affordance — forwarded into the inner control's bubble
+// Clear affordance — the inner control's context menu
 // =============================================================================
 
 @Component({
-  imports: [AngularInlinePhone, EditableClear, EditableClearTemplate],
+  imports: [AngularInlinePhone],
   template: `
     <angular-inline-phone
       [(value)]="value"
       [codec]="codec"
       defaultCountry="DE"
       (saved)="sessions.push($event)"
-    >
-      <ng-template editableClear let-clear let-label="label">
-        <button
-          editableClear
-          class="confirm-clear"
-          [attr.aria-label]="label"
-          (clear)="request(clear)"
-        >
-          ✕
-        </button>
-      </ng-template>
-    </angular-inline-phone>
+    />
   `,
 })
 class PhoneClearHost {
   codec = codec;
   value = signal<string | null>('+491712345678');
   sessions: InlinePhoneSaved[] = [];
+}
 
-  /** Stands in for a confirmation dialog: capture the callback, resolve later. */
-  pending: (() => void) | null = null;
-
-  request(clear: () => void) {
-    this.pending = clear;
-  }
+/** Right-clicks `target`, then picks the context menu row labelled `label`. */
+function pickFromContextMenu(target: Element, label: string) {
+  target.dispatchEvent(
+    new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      clientX: 12,
+      clientY: 12,
+    }),
+  );
+  [...document.querySelectorAll<HTMLButtonElement>('.editable-context-menu__item')]
+    .find((row) => row.textContent?.trim() === label)!
+    .click();
 }
 
 describe('AngularInlinePhone — clear affordance', () => {
-  it("forwards the consumer's clear template into the inner control's bubble", () => {
+  it("the inner control's context menu clears THROUGH the wrapper", () => {
     const fixture = TestBed.createComponent(PhoneClearHost);
     fixture.detectChanges();
 
-    fixture.nativeElement
-      .querySelector('.editable-text__field')!
-      .dispatchEvent(new MouseEvent('mouseenter'));
+    pickFromContextMenu(fixture.nativeElement.querySelector('.editable-text__display'), 'Clear');
     fixture.detectChanges();
 
-    const button = document.querySelector<HTMLButtonElement>(
-      '.editable-bubble button.confirm-clear',
-    );
-    expect(button).not.toBeNull();
-    expect(document.querySelector('.editable-bubble button.editable-action-clear')).toBeNull();
-
-    button!.dispatchEvent(new MouseEvent('click'));
-    fixture.detectChanges();
-
+    // The clear settles through the wrapper as the PHONE contract's empty:
+    // null, never the inner control's empty string.
     const host = fixture.componentInstance;
-    expect(host.value()).toBe('+491712345678');
-
-    // The confirmed clear settles through the wrapper as the PHONE contract's
-    // empty: null, never the inner control's empty string.
-    host.pending!();
-    fixture.detectChanges();
-
     expect(host.value()).toBeNull();
     expect(host.sessions).toEqual([{ value: null, changed: true }]);
   });

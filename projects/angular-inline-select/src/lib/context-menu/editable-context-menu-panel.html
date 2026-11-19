@@ -1,0 +1,35 @@
+<!-- mousedown is swallowed so a press on a row never moves focus off the menu before the click lands. -->
+<div
+  #menu
+  class="editable-context-menu"
+  role="menu"
+  tabindex="-1"
+  [attr.aria-label]="intl.contextMenuLabel()"
+  [attr.aria-activedescendant]="active() < 0 ? null : menuId + '-' + rows[active()].id"
+  [animate.enter]="'editable-context-menu-enter'"
+  (keydown)="handleKeydown($event)"
+  (mousedown)="$event.preventDefault()"
+  (contextmenu)="$event.preventDefault()"
+  (pointerleave)="active.set(-1)"
+>
+  @for (row of rows; track row.id; let index = $index) {
+    <button
+      type="button"
+      role="menuitem"
+      tabindex="-1"
+      class="editable-context-menu__item"
+      [class.editable-context-menu__item--danger]="row.danger"
+      [id]="menuId + '-' + row.id"
+      [attr.data-active]="active() === index"
+      (pointerenter)="active.set(index)"
+      (click)="pick(index)"
+    >
+      @if (iconFontClass) {
+        <span class="editable-context-menu__icon" [class]="iconFontClass" aria-hidden="true">{{
+          row.icon
+        }}</span>
+      }
+      <span class="editable-context-menu__label">{{ row.label() }}</span>
+    </button>
+  }
+</div>

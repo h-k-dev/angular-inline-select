@@ -98,7 +98,7 @@ main {
 
 // Full-bleed on purpose. No `max-width`, no centring, and only a hair of inline
 // padding — the slot's right edge has to land flush against the viewport's, so
-// the inline-end clear bubble genuinely runs out of room.
+// the inline-end actions bubble genuinely runs out of room.
 .subheader {
   display: flex;
   flex-direction: column;

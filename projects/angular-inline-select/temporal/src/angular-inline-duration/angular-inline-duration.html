@@ -12,7 +12,9 @@
   [class.inline-duration--invalid]="errorsVisible()"
   [class.inline-duration--scoped]="hasHoverScope()"
   (mousedown)="handleUnitMouseDown($event)"
+  (contextmenu)="handleContextMenu($event)"
   (editableScopePress)="handleScopePress($event)"
+  (editableScopeContextMenu)="handleContextMenu($event)"
 >
   @if (prefixTpl(); as tpl) {
     <span class="inline-duration__affix" aria-hidden="true">
@@ -53,32 +55,19 @@
   <span class="inline-duration__sr" aria-live="polite">{{ revertNotice() }}</span>
 </span>
 
-<!-- Floating clear affordance — anchored to the whole field. -->
-<bubble-menu
-  [origin]="field"
-  [side]="effectiveClearBubbleSide()"
-  [canShow]="clearCanShow() || actionsCanShow()"
-  [armed]="scopeHover()"
->
-  @if (actionsCanShow()) {
+<!-- The consumer's actions on the value — a hover bubble anchored to the whole field. No template, no bubble. -->
+@if (actionsTpl(); as actions) {
+  <bubble-menu
+    [origin]="field"
+    [side]="effectiveClearBubbleSide()"
+    [canShow]="actionsCanShow()"
+    [armed]="scopeHover()"
+  >
     <span class="editable-bubble__group editable-bubble__actions">
-      <ng-container *ngTemplateOutlet="actionsTpl()!; context: actionsContext()" />
+      <ng-container *ngTemplateOutlet="actions; context: actionsContext()" />
     </span>
-  }
-  @if (clearCanShow()) {
-    <span class="editable-bubble__group editable-bubble__clear">
-      @if (clearTpl(); as tpl) {
-        <ng-container *ngTemplateOutlet="tpl; context: clearContext()" />
-      } @else {
-        <button
-          editableClearButton
-          [attr.aria-label]="clearContext().label"
-          (clear)="clearBubble()"
-        ></button>
-      }
-    </span>
-  }
-</bubble-menu>
+  </bubble-menu>
+}
 
 <ng-template
   cdkConnectedOverlay

@@ -3,7 +3,6 @@ import {
   Component,
   type ElementRef,
   inject,
-  type TemplateRef,
 
   // Signals
   computed,
@@ -17,7 +16,6 @@ import {
 import { FormValueControl, type ValidationError } from '@angular/forms/signals';
 
 // Editables
-import { type EditableClearContext } from 'angular-inline-select';
 import { AngularInlineDate } from '../angular-inline-date/angular-inline-date';
 import { AngularInlineTime } from '../angular-inline-time/angular-inline-time';
 import { INLINE_TEMPORAL_MAT_CONTROL } from '../mat-control';
@@ -114,13 +112,6 @@ export class AngularInlineDateTime implements FormValueControl<DbDateTime | null
     const base = this.ariaLabel();
     return base === undefined ? noun : this.#intl.partLabel(base, noun);
   }
-
-  /**
-   * Consumer clear affordance — forwarded to BOTH leaves, which own their own
-   * bubbles. Each leaf stamps it with its own context, so one template serves
-   * the pair (the labels say which: "Clear date" / "Clear time").
-   */
-  clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
 
   /** Locale override for both leaves. */
   locale = input<string | string[] | undefined>(undefined);

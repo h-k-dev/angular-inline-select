@@ -22,7 +22,6 @@ import {
   type InlineTextSaved,
 } from '../angular-inline-text/angular-inline-text';
 import { EditablePrefix, EditableSuffix } from '../angular-inline-text/editable-affix';
-import { EditableClearTemplate, type EditableClearContext } from '../bubble-menu/editable-clear';
 import {
   EditableActionsTemplate,
   type EditableActionsContext,
@@ -205,21 +204,11 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
   protected suffixTpl = computed(() => this.suffixTemplate() ?? this.contentSuffix()?.templateRef);
 
   /**
-   * Consumer clear affordance — forwarded verbatim to the inner control,
-   * which owns the bubble (and whose context callback clears THROUGH this
-   * wrapper: the empty commit arrives here as a normal settlement, `null` —
-   * never the inner control's empty string). Same re-projection reason as the
-   * affixes: input for composition, `ng-template[editableClear]` content for
-   * direct use.
+   * Forwarded to the inner control, which owns the context menu: `false`
+   * never offers its clear. A clear arrives here as a normal settlement,
+   * `null` — never the inner control's empty string.
    */
-  clearTemplate = input<TemplateRef<EditableClearContext> | undefined>(undefined);
-
-  /** Forwarded to the inner control: `false` never offers the hover-bubble clear. */
   showClear = input(true);
-
-  private contentClear = contentChild(EditableClearTemplate);
-
-  protected clearTpl = computed(() => this.clearTemplate() ?? this.contentClear()?.templateRef);
 
   /** The primary-actions slot, forwarded to the inner control with THIS payload. */
   actionsTemplate = input<TemplateRef<EditableActionsContext<InlineNumberActions>> | undefined>(
@@ -401,7 +390,9 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
    */
   protected unreadableValue = computed(() => {
     const value = this.value();
-    return typeof value === 'string' && value.trim() !== '' && this.numericValue() === null ? value : null;
+    return typeof value === 'string' && value.trim() !== '' && this.numericValue() === null
+      ? value
+      : null;
   });
 
   /**
@@ -464,7 +455,8 @@ export class AngularInlineNumber implements FormValueControl<number | string | n
     // A discard rolling back to an unreadable stored string (`unreadableValue`):
     // the live channel moved the model to the draft's last number, and the
     // rollback text cannot parse back — so the binding gets its string back.
-    if (!session.changed && parsed === undefined && session.value.trim() !== '') this.value.set(session.value);
+    if (!session.changed && parsed === undefined && session.value.trim() !== '')
+      this.value.set(session.value);
 
     // The parse gate blocks unparseable commits; the fallback covers discards
     // rolling back to a baseline the current codec cannot read.
