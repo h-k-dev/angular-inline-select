@@ -142,6 +142,7 @@ export function normalizeString(value: string): string {
     '[class.editable-text--editing]': 'editing()',
     '[class.editable-text--invalid]': 'errorsVisible()',
     '[class.editable-text--scoped]': 'hasHoverScope()',
+    '[class.editable-text--readonly]': 'readonly()',
 
     // Styles
     '[style.display]': 'hidden() ? "none" : null',

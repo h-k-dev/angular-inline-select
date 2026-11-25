@@ -46,6 +46,20 @@
     cursor: default;
   }
 
+  // READONLY reads as plain text: the family tokens switch the underline and
+  // the shape off, and the empty state's reserved border stays transparent —
+  // also under a click's focus, which a readonly input still takes. The
+  // inputs themselves leave the tab order in the templates.
+  &:has(input[readonly]) {
+    --editable-text-underline-line: none;
+    --editable-text-shape-color: transparent;
+
+    input[readonly] {
+      cursor: default;
+      border-bottom-color: transparent;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     &::after {
       transition: none;

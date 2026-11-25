@@ -1480,6 +1480,14 @@ describe('AngularInlineDate — primary actions', () => {
     expect(act()?.getAttribute('data-side')).toBe('end');
     expect(act()?.getAttribute('data-value')).toBe('2026-05-15');
   });
+
+  it('a readonly field reads as plain text: both inputs leave the tab order', () => {
+    const h = setupHost(DateActionsHost);
+
+    expect(h.start().readOnly).toBe(true);
+    expect(h.start().getAttribute('tabindex')).toBe('-1');
+    expect(h.end()!.getAttribute('tabindex')).toBe('-1');
+  });
 });
 
 // =============================================================================

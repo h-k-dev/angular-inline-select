@@ -55,6 +55,7 @@
     [placeholder]="effectivePlaceholder()"
     [disabled]="effectiveDisabled()"
     [readonly]="effectiveReadonly()"
+    [attr.tabindex]="effectiveReadonly() ? -1 : null"
     (input)="handleInput('start', startInput.value)"
     (pointerdown)="handleInputPointerdown()"
     (focusin)="handleFocusIn('start')"
@@ -85,6 +86,7 @@
       [placeholder]="effectiveEndPlaceholder()"
       [disabled]="effectiveDisabled()"
       [readonly]="effectiveReadonly()"
+      [attr.tabindex]="effectiveReadonly() ? -1 : null"
       (input)="handleInput('end', endInput.value)"
       (pointerdown)="handleInputPointerdown()"
       (focusin)="handleFocusIn('end')"
@@ -135,7 +137,7 @@
     <span class="inline-date__affix" aria-hidden="true">
       <ng-container [ngTemplateOutlet]="tpl" />
     </span>
-  } @else if (showCalendar() && showTrigger()) {
+  } @else if (showCalendar() && showTrigger() && !effectiveReadonly()) {
     <!--
       tabindex="-1", the ARIA combobox convention for auxiliary popup buttons:
       the calendar already opens on the input's own focus and ArrowDown hands

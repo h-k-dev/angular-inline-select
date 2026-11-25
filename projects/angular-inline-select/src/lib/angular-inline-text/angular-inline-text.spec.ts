@@ -1857,6 +1857,19 @@ describe('AngularInlineText — primary actions', () => {
     expect(open()).not.toBeNull();
   });
 
+  it('a readonly field reads as plain text: marked host, nothing to focus or edit', () => {
+    h.host.readonly.set(true);
+    h.fixture.detectChanges();
+
+    const host = h.fixture.nativeElement.querySelector('angular-inline-text') as HTMLElement;
+    expect(host.classList.contains('editable-text--readonly')).toBe(true);
+    expect(h.display().getAttribute('contenteditable')).toBe('false');
+
+    h.host.readonly.set(false);
+    h.fixture.detectChanges();
+    expect(host.classList.contains('editable-text--readonly')).toBe(false);
+  });
+
   it('showClear false keeps the actions', () => {
     h.host.showClear.set(false);
     h.fixture.detectChanges();

@@ -39,6 +39,7 @@
     [placeholder]="placeholderText()"
     [disabled]="effectiveDisabled()"
     [readonly]="effectiveReadonly()"
+    [attr.tabindex]="effectiveReadonly() ? -1 : null"
     (input)="handleInput(durationInput.value)"
     (focusin)="handleFocusIn()"
     (focusout)="handleFocusOut()"

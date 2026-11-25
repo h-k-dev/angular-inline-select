@@ -28,6 +28,7 @@ const codec = createLibphonenumberCodec(metadata, examples);
     <angular-inline-phone
       [(value)]="value"
       [codec]="codec"
+      [readonly]="readonly()"
       defaultCountry="DE"
       (savedModelChange)="saved.push($event)"
       (saved)="sessions.push($event)"
@@ -38,6 +39,7 @@ const codec = createLibphonenumberCodec(metadata, examples);
 class PhoneValueHost {
   codec = codec;
   value = signal<string | null>('+491712345678');
+  readonly = signal(false);
 
   saved: { value: string | null }[] = [];
   sessions: InlinePhoneSaved[] = [];
@@ -146,6 +148,19 @@ describe('AngularInlinePhone — [(value)] binding', () => {
       '.country-trigger',
     ) as HTMLButtonElement | null;
     expect(trigger?.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('a readonly field keeps the flag as a plain glyph — no picker to open', () => {
+    h.host.readonly.set(true);
+    h.fixture.detectChanges();
+
+    const flag = h.fixture.nativeElement.querySelector('.country-trigger') as HTMLElement | null;
+    expect(flag?.tagName).toBe('SPAN');
+    expect(flag?.textContent?.trim()).toBe('🇩🇪');
+
+    flag?.click();
+    h.fixture.detectChanges();
+    expect(document.querySelector('.country-picker')).toBeNull();
   });
 
   it('commits national input as E.164 through the codec round-trip', async () => {

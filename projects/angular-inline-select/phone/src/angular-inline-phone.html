@@ -9,20 +9,27 @@
   on its chrome. Click/touch focus still works. Gated on the menu actually
   being available: with `showCountryMenu` off the trigger IS the keyboard
   path and stays in the tab order.
+
+  A readonly or disabled field offers no picker: the flag stays as a plain
+  glyph in the same reserved box (the pending flag's class), so nothing moves.
 -->
 <ng-template #flagTpl>
-  <button
-    type="button"
-    class="country-trigger"
-    [attr.tabindex]="showCountryMenu() ? '-1' : null"
-    [attr.aria-label]="'Change country' + (country() ? ' (' + country() + ')' : '')"
-    aria-haspopup="listbox"
-    [attr.aria-expanded]="pickerOpen()"
-    (mousedown)="$event.preventDefault()"
-    (click)="openPicker($event)"
-  >
-    {{ flag() }}
-  </button>
+  @if (readonly() || disabled()) {
+    <span class="country-trigger country-trigger--pending" aria-hidden="true">{{ flag() }}</span>
+  } @else {
+    <button
+      type="button"
+      class="country-trigger"
+      [attr.tabindex]="showCountryMenu() ? '-1' : null"
+      [attr.aria-label]="'Change country' + (country() ? ' (' + country() + ')' : '')"
+      aria-haspopup="listbox"
+      [attr.aria-expanded]="pickerOpen()"
+      (mousedown)="$event.preventDefault()"
+      (click)="openPicker($event)"
+    >
+      {{ flag() }}
+    </button>
+  }
 </ng-template>
 
 <!--

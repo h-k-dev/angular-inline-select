@@ -25,6 +25,15 @@
   display: inline;
 }
 
+// READONLY reads as plain text: no resting underline, no hover or focus shape.
+// The display is already out of the tab order (`contenteditable="false"`) and
+// shows the default cursor (the locked-field rules below), so the two family
+// tokens are all that is left to switch off.
+:host(.editable-text--readonly) {
+  --editable-text-underline-line: none;
+  --editable-text-shape-color: transparent;
+}
+
 // -----------------------------------------------------------------------------
 // ELEMENT: in-flow field area (prefix + display + suffix) — THE INTERACTIVE UNIT
 //
